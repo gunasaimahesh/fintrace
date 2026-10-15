@@ -1,0 +1,106 @@
+{
+  "budget_ms": 1000,
+  "latency_ms": {
+    "path_between(novapay, vortex)": 34.8,
+    "explore(novapay, depth=1)": 1.9,
+    "explore(novapay, depth=5)": 230.4,
+    "explore(biggest hub, depth=5)": 364.3,
+    "trace_money_flow(volkov, out, 6)": 2.1,
+    "trace_money_flow(novapay, out, 6)": 4.4,
+    "exposure_flow(nova-ops + volkov)": 22.9,
+    "detect_ring(volkov)": 129.2,
+    "find_brokers(ring)": 6.9,
+    "GRAPH.COPY": 727.0
+  },
+  "novapay_depth5": {
+    "reached": 30110,
+    "sanctioned": 1,
+    "levels": [
+      {
+        "depth": 1,
+        "reached": 31,
+        "accounts": 31,
+        "devices": 0,
+        "ips": 0,
+        "flagged": 0
+      },
+      {
+        "depth": 2,
+        "reached": 194,
+        "accounts": 175,
+        "devices": 5,
+        "ips": 14,
+        "flagged": 1
+      },
+      {
+        "depth": 3,
+        "reached": 3648,
+        "accounts": 3547,
+        "devices": 48,
+        "ips": 53,
+        "flagged": 0
+      },
+      {
+        "depth": 4,
+        "reached": 8999,
+        "accounts": 7158,
+        "devices": 926,
+        "ips": 915,
+        "flagged": 0
+      },
+      {
+        "depth": 5,
+        "reached": 17238,
+        "accounts": 13365,
+        "devices": 1851,
+        "ips": 2022,
+        "flagged": 1
+      }
+    ]
+  },
+  "hub_depth5_reached": 45460,
+  "label_propagation_stability": "20/20",
+  "memory_mb": {
+    "total_graph_sz_mb": 94.0,
+    "label_matrices_sz_mb": 2.0,
+    "relation_matrices_sz_mb": 17.0,
+    "amortized_node_block_sz_mb": 0.0,
+    "amortized_node_attributes_by_label_sz_mb": {
+      "Entity": 13.0,
+      "Account": 0.0,
+      "Alert": 0.0,
+      "Case": 0.0,
+      "RiskNode": 0.0,
+      "IP": 0.0,
+      "Device": 0.0,
+      "Merchant": 0.0,
+      "Sanctioned": 0.0,
+      "Team": 0.0,
+      "Employee": 0.0,
+      "PolicyDoc": 0.0,
+      "Ticket": 0.0,
+      "Message": 0.0,
+      "Decision": 0.0,
+      "Meta": 0.0,
+      "BrokerScope_1": 0.0
+    },
+    "amortized_unlabeled_nodes_attributes_sz_mb": 0.0,
+    "amortized_edge_block_sz_mb": 4.0,
+    "amortized_edge_attributes_by_type_sz_mb": {
+      "TRANSFERRED": 36.0,
+      "LOGGED_FROM": 0.0,
+      "USED_DEVICE": 0.0,
+      "MEMBER_OF": 0.0,
+      "REPORTS_TO": 0.0,
+      "OWNED_BY": 0.0,
+      "OPENED": 0.0,
+      "AUTHORED": 0.0,
+      "APPROVED": 0.0,
+      "APPLIES_TO": 0.0,
+      "SOURCED_FROM": 0.0,
+      "GOVERNED_BY": 0.0,
+      "FLOWS_TO": 4.0
+    },
+    "indices_sz_mb": 13.0
+  }
+}

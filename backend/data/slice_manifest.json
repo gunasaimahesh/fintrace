@@ -1,0 +1,45 @@
+{
+  "source": "IBM Transactions for Anti Money Laundering (AML), HI-Small",
+  "created_at": "2026-10-15T12:50:47+00:00",
+  "params": {
+    "target_accounts": 40000,
+    "hop2_cap": 10,
+    "as_of": "2026-10-12T00:00:00+00:00",
+    "seed": 42
+  },
+  "time_shift_seconds": 128217600,
+  "time_shift_days": 1484,
+  "currency_units_per_usd": {
+    "Australian Dollar": 1.4127999999032184,
+    "Bitcoin": 8.421476396304773e-05,
+    "Brazil Real": 5.646500014079448,
+    "Canadian Dollar": 1.3193000000813846,
+    "Euro": 0.8533999996146164,
+    "Mexican Peso": 21.143100124082743,
+    "Ruble": 77.80400000215896,
+    "Rupee": 73.44400000744251,
+    "Saudi Riyal": 3.7511000009021407,
+    "Shekel": 3.3770000190347593,
+    "Swiss Franc": 0.9150000013681141,
+    "UK Pound": 0.7742000090084927,
+    "US Dollar": 1.0,
+    "Yen": 105.4000000149797,
+    "Yuan": 6.697600000854055
+  },
+  "counts": {
+    "source_transactions": 5078345,
+    "source_self_transfers_dropped": 591212,
+    "pattern_instances": 370,
+    "accounts_core": 3170,
+    "accounts_hop1": 9672,
+    "accounts_hop2": 27158,
+    "accounts_total": 40000,
+    "accounts_laundering_any": 3505,
+    "transfers": 428738,
+    "transfers_laundering": 3342
+  },
+  "ts_range": [
+    1790208000,
+    1791735480
+  ]
+}
