@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import queue
 import time
+import uuid
 from contextlib import contextmanager
 from typing import Iterator
 
@@ -21,6 +22,11 @@ KIND_NAMES = ("accounts", "devices", "ips")
 BROKER_SCOPE_LABELS = ("BrokerScope_1", "BrokerScope_2", "BrokerScope_3", "BrokerScope_4")
 HIDDEN_LABELS = {"Entity", "RiskNode", *BROKER_SCOPE_LABELS}
 FAR_FUTURE = 2**62
+LEGIT_TIERS = ("vip", "enterprise", "standard")
+FREEZE_ACTIONS = ("FREEZE",)
+PROFILE_KEYS = ("kind", "tier", "bank", "list", "risk_flags", "os", "address", "title", "clearance",
+                "on_call", "mcc", "source", "frozen_at", "frozen_by")
+DISPLAY_NAME = "coalesce(n.name, n.title, n.summary, n.address, n.os)"
 
 _EXPAND = f"""
 UNWIND $frontier AS nid
@@ -61,19 +67,40 @@ def _ms(started: float) -> float:
     return round((time.perf_counter() - started) * 1000, 1)
 
 
+def _visible(labels: list[str]) -> list[str]:
+    return [label for label in labels if label not in HIDDEN_LABELS]
+
+
+def _usd(cents: int | float | None) -> float | None:
+    return None if cents is None else round(cents / 100, 2)
+
+
+def dataset_meta(graph: Graph) -> dict:
+    rows = graph.ro_query("MATCH (m:Meta {key: 'dataset'}) RETURN m {.*}").result_set
+    return dict(rows[0][0]) if rows else {}
+
+
 def internal_id(graph: Graph, entity_id: str) -> int | None:
     rows = graph.ro_query("MATCH (n:Entity {id: $id}) RETURN ID(n)", {"id": entity_id}).result_set
     return rows[0][0] if rows else None
 
 
 def describe_nodes(graph: Graph, node_ids: list[int]) -> dict[int, dict]:
-    rows = graph.ro_query("""
+    rows = graph.ro_query(f"""
         UNWIND $ids AS nid
         MATCH (n) WHERE ID(n) = nid
-        RETURN nid, n.id, labels(n), n.name
+        RETURN nid, n.id, labels(n), {DISPLAY_NAME}
     """, {"ids": list(node_ids)}).result_set
-    return {nid: {"id": eid, "labels": [l for l in labels if l not in HIDDEN_LABELS], "name": name}
-            for nid, eid, labels, name in rows}
+    return {nid: {"id": eid, "labels": _visible(labels), "name": name} for nid, eid, labels, name in rows}
+
+
+def describe_entities(graph: Graph, entity_ids: list[str]) -> dict[str, dict]:
+    rows = graph.ro_query(f"""
+        UNWIND $ids AS eid
+        MATCH (n:Entity {{id: eid}})
+        RETURN n.id, labels(n), {DISPLAY_NAME}
+    """, {"ids": list(entity_ids)}).result_set
+    return {eid: {"id": eid, "labels": _visible(labels), "name": name} for eid, labels, name in rows}
 
 
 def describe_steps(graph: Graph, pairs: list[tuple[int, int]]) -> dict[tuple[int, int], dict]:
@@ -94,13 +121,29 @@ def describe_steps(graph: Graph, pairs: list[tuple[int, int]]) -> dict[tuple[int
 def resolve_entity(graph: Graph, entity_id: str) -> dict | None:
     rows = graph.ro_query("""
         MATCH (n:Entity {id: $id})
-        RETURN n.id, labels(n), n.name, n.status, n.topology_updated_at
+        OPTIONAL MATCH (n)-[o:FLOWS_TO]->()
+        WITH n, count(o) AS sends_to
+        OPTIONAL MATCH (n)<-[i:FLOWS_TO]-()
+        WITH n, sends_to, count(i) AS receives_from
+        OPTIONAL MATCH (n)-[x:USED_DEVICE|LOGGED_FROM]-()
+        RETURN n {.*}, labels(n), sends_to, receives_from, count(x)
     """, {"id": entity_id}).result_set
     if not rows:
         return None
-    eid, labels, name, status, topology_updated_at = rows[0]
-    return {"id": eid, "labels": [l for l in labels if l not in HIDDEN_LABELS], "name": name,
-            "status": status, "topology_updated_at": topology_updated_at}
+    props, labels, sends_to, receives_from, identity_links = rows[0]
+    profile = {key: props[key] for key in PROFILE_KEYS if props.get(key) is not None}
+    if props.get("monthly_volume") is not None:
+        profile["monthly_volume_usd"] = _usd(props["monthly_volume"])
+    return {
+        "id": props["id"],
+        "labels": _visible(labels),
+        "name": props.get("name") or props.get("title"),
+        "status": props.get("status"),
+        "topology_updated_at": props.get("topology_updated_at"),
+        "profile": profile,
+        "counterparties": {"sends_to": sends_to, "receives_from": receives_from},
+        "identity_links": identity_links,
+    }
 
 
 def _render_path(graph: Graph, node_ids: list[int]) -> dict:
@@ -110,17 +153,22 @@ def _render_path(graph: Graph, node_ids: list[int]) -> dict:
         "nodes": [nodes[n]["id"] for n in node_ids],
         "steps": [{"from": nodes[u]["id"], "to": nodes[v]["id"], **steps.get((u, v), {})}
                   for u, v in zip(node_ids, node_ids[1:])],
+        "entities": [nodes[n] for n in node_ids],
     }
 
 
-def explore_neighborhood(graph: Graph, entity_id: str, depth: int) -> dict | None:
-    """Per-depth counts of everything reached, plus the flagged or sanctioned entities and a path to each."""
+def explore_neighborhood(graph: Graph, entity_id: str, depth: int, neighbor_limit: int = 0) -> dict | None:
+    """Per-depth counts of everything reached, plus the flagged or sanctioned entities and a path to each.
+
+    With `neighbor_limit`, also lists up to that many direct neighbors and how each one connects.
+    """
     started = time.perf_counter()
     start = internal_id(graph, entity_id)
     if start is None:
         return None
     parents: dict[int, int | None] = {start: None}
     frontier = [start]
+    first_ring: list[int] = []
     levels, hits = [], []
     for d in range(1, depth + 1):
         if not frontier:
@@ -133,6 +181,8 @@ def explore_neighborhood(graph: Graph, entity_id: str, depth: int) -> dict | Non
                 parents[nid] = parent
                 frontier.append(nid)
                 counts[kind] += 1
+        if d == 1:
+            first_ring = frontier[:neighbor_limit]
         new = set(frontier)
         found = [nid for nid in risky if nid in new]
         hits.extend((nid, d) for nid in found)
@@ -149,19 +199,24 @@ def explore_neighborhood(graph: Graph, entity_id: str, depth: int) -> dict | Non
         info = describe_nodes(graph, [nid for nid, _ in hits])
         for item, (nid, _) in zip(flagged, hits):
             item["entity"] = info[nid]
-    return {
+    result = {
         "entity_id": entity_id,
         "depth": depth,
         "levels": levels,
         "total_reached": sum(level["reached"] for level in levels),
         "flagged": flagged,
-        "elapsed_ms": _ms(started),
     }
+    if first_ring:
+        info = describe_nodes(graph, [start, *first_ring])
+        steps = describe_steps(graph, [(start, n) for n in first_ring])
+        result["neighbors"] = [{"entity": info[n], **steps.get((start, n), {})} for n in first_ring]
+    result["elapsed_ms"] = _ms(started)
+    return result
 
 
 def trace_money_flow(graph: Graph, entity_id: str, direction: str = "out", max_hops: int = 6,
                      since_ts: int = 0, until_ts: int = FAR_FUTURE, min_amount: int = 0,
-                     frontier_cap: int = 300) -> dict | None:
+                     frontier_cap: int = 300, top_per_hop: int = 3) -> dict | None:
     """Time-respecting money paths, expanded hop by hop.
 
     Downstream ("out") keeps the earliest arrival time per account and only follows transfers made
@@ -177,7 +232,7 @@ def trace_money_flow(graph: Graph, entity_id: str, direction: str = "out", max_h
     best: dict[int, int] = {start: since_ts if downstream else until_ts}
     via: dict[int, list] = {}
     frontier = [[start, best[start]]]
-    hops, cycles = [], []
+    hops, cycles, tops = [], [], []
     for hop in range(1, max_hops + 1):
         if not frontier:
             break
@@ -195,29 +250,35 @@ def trace_money_flow(graph: Graph, entity_id: str, direction: str = "out", max_h
         improved.sort(key=lambda x: -x[2])
         improved = improved[:frontier_cap]
         frontier = [[nid, ts] for nid, ts, _ in improved]
+        tops.append([(nid, list(via[nid])) for nid, _, _ in improved[:top_per_hop]])
         hops.append({"hop": hop, "accounts": len(improved), "amount": sum(a for _, _, a in improved)})
 
     reached = list(via)
-    info = describe_nodes(graph, reached + [start]) if reached else {}
+    info = describe_nodes(graph, reached + [start] + [c["via"] for c in cycles]) if reached or cycles else {}
     sanctioned = [nid for nid in reached if "Sanctioned" in info[nid]["labels"]]
+
+    def render(nid: int, step: list) -> dict:
+        prev, tx_id, ts, amount = step
+        src, dst = (prev, nid) if downstream else (nid, prev)
+        return {"from": info[src]["id"], "to": info[dst]["id"], "tx_id": tx_id, "ts": ts, "amount": amount}
 
     def trail(nid: int) -> list[dict]:
         steps = []
         while nid in via:
-            prev, tx_id, ts, amount = via[nid]
-            src, dst = (prev, nid) if downstream else (nid, prev)
-            steps.append({"from": info[src]["id"], "to": info[dst]["id"], "tx_id": tx_id, "ts": ts,
-                          "amount": amount})
-            nid = prev
+            steps.append(render(nid, via[nid]))
+            nid = via[nid][0]
         return steps[::-1] if downstream else steps
 
+    for hop, top in zip(hops, tops):
+        hop["largest"] = [{"entity": info[nid], "transfer": render(nid, step)} for nid, step in top]
     return {
         "entity_id": entity_id,
         "direction": direction,
         "hops": hops,
         "accounts_reached": len(reached),
         "sanctioned": [{"entity": info[n], "trail": trail(n)} for n in sanctioned],
-        "round_trips": len(cycles),
+        "round_trips": [{"hop": c["hop"], "from": info[c["via"]]["id"], "tx_id": c["tx_id"], "ts": c["ts"],
+                         "amount": c["amount"]} for c in cycles],
         "elapsed_ms": _ms(started),
     }
 
@@ -287,6 +348,17 @@ def find_brokers(graph: Graph, member_ids: list[str]) -> dict:
     return {"scores": [{"id": eid, "score": score} for eid, score in rows], "elapsed_ms": _ms(started)}
 
 
+def accounts_sharing_devices(graph: Graph, account_ids: list[str]) -> dict[str, dict]:
+    """Other accounts that used the same device as any of `account_ids`, keyed by device."""
+    rows = graph.ro_query("""
+        UNWIND $ids AS aid
+        MATCH (a:Entity {id: aid})-[:USED_DEVICE]->(d:Device)<-[:USED_DEVICE]-(b:Account)
+        WHERE NOT b.id IN $ids
+        RETURN d.id, collect(DISTINCT a.id), collect(DISTINCT b.id)
+    """, {"ids": list(account_ids)}).result_set
+    return {device: {"used_by": sorted(used), "also_used_by": sorted(others)} for device, used, others in rows}
+
+
 def exposure_flow(graph: Graph, source_ids: list[str], target_id: str) -> dict | None:
     """Maximum dollars that could reach `target_id` from `source_ids` over FLOWS_TO capacities.
 
@@ -309,3 +381,338 @@ def exposure_flow(graph: Graph, source_ids: list[str], target_id: str) -> dict |
     used = [{"from": a, "to": b, "dollars": int(f)} for (a, b), f in zip(edges, flows) if f > 0]
     return {"source_ids": source_ids, "target_id": target_id, "max_flow_dollars": int(max_flow),
             "edges": used, "elapsed_ms": _ms(started)}
+
+
+def topology_fingerprint(graph: Graph, entity_id: str) -> dict | None:
+    """Cheap structural features around an entity, used to match playbooks (never labels)."""
+    rows = graph.ro_query("""
+        MATCH (x:Entity {id: $id})
+        OPTIONAL MATCH (x)-[:FLOWS_TO]->(o)
+        WITH x, count(DISTINCT o) AS fan_out
+        OPTIONAL MATCH (x)<-[:FLOWS_TO]-(i)
+        WITH x, fan_out, count(DISTINCT i) AS fan_in
+        OPTIONAL MATCH (x)-[:USED_DEVICE]->(:Device)<-[:USED_DEVICE]-(sd:Account)
+        WHERE sd <> x
+        WITH x, fan_out, fan_in, count(DISTINCT sd) AS shared_device
+        OPTIONAL MATCH (x)-[:LOGGED_FROM]->(:IP)<-[:LOGGED_FROM]-(si:Account)
+        WHERE si <> x
+        WITH x, fan_out, fan_in, shared_device, count(DISTINCT si) AS shared_ip
+        OPTIONAL MATCH (x)-[:FLOWS_TO]-(nb:Account)-[:USED_DEVICE]->(d:Device)<-[:USED_DEVICE]-(far:Account)
+        WHERE far <> nb AND far <> x
+        WITH x, fan_out, fan_in, shared_device, shared_ip, count(DISTINCT d) AS device_bridges
+        OPTIONAL MATCH (x)-[:FLOWS_TO]->(b)-[:FLOWS_TO]->(x)
+        RETURN fan_out, fan_in, shared_device, shared_ip, device_bridges, count(DISTINCT b)
+    """, {"id": entity_id}).result_set
+    if not rows:
+        return None
+    fan_out, fan_in, shared_device, shared_ip, device_bridges, two_cycles = rows[0]
+    fingerprint = {"fan_out": fan_out, "fan_in": fan_in, "accounts_sharing_device": shared_device,
+                   "accounts_sharing_ip": shared_ip, "device_bridges_one_hop": device_bridges,
+                   "two_step_cycles": two_cycles}
+    patterns = []
+    if shared_device or device_bridges:
+        patterns.append("device_bridge_layering")
+    if fan_in >= 8 and fan_out <= 2:
+        patterns.append("fan_in")
+    if fan_out >= 8 and fan_in <= 2:
+        patterns.append("fan_out")
+    if two_cycles:
+        patterns.append("cycle")
+    return {"features": fingerprint, "patterns": patterns}
+
+
+def recall_memory(graph: Graph, entity_id: str) -> dict | None:
+    """Prior episodes and facts about an entity, with facts marked STALE when their evidence changed."""
+    started = time.perf_counter()
+    fingerprint = topology_fingerprint(graph, entity_id)
+    if fingerprint is None:
+        return None
+    facts = graph.ro_query("""
+        MATCH (f:SemanticFact)-[:ABOUT]->(target:Entity {id: $id})
+        WHERE f.status IN ['CURRENT', 'STALE']
+        OPTIONAL MATCH (f)-[:DERIVED_FROM]->(ev:Entity)
+        WITH f, collect(ev.id) AS evidence_ids, collect(ev.topology_updated_at) AS evidence_ts
+        WITH f, evidence_ids, evidence_ts, any(x IN evidence_ts WHERE x > f.valid_from) AS is_stale
+        RETURN f.id, f.claim, f.verdict, f.valid_from, f.episode_id, evidence_ids,
+               [i IN range(0, size(evidence_ids) - 1) WHERE evidence_ts[i] > f.valid_from | evidence_ids[i]],
+               CASE WHEN is_stale THEN 'STALE' ELSE f.status END
+        ORDER BY f.valid_from DESC
+    """, {"id": entity_id}).result_set
+    episodes = graph.ro_query("""
+        MATCH (ep:Episode)-[:ABOUT]->(x:Entity {id: $id})
+        OPTIONAL MATCH (ep)-[:HAS_STEP]->(s:Step)
+        WITH ep, s ORDER BY s.seq
+        WITH ep, collect(s.tool) AS tools
+        RETURN ep.id, ep.created_at, ep.verdict, ep.answer_state, tools
+        ORDER BY ep.created_at DESC LIMIT 3
+    """, {"id": entity_id}).result_set
+    playbooks = graph.ro_query("""
+        UNWIND $patterns AS name
+        MATCH (pt:PatternType {name: name})<-[:FOR_PATTERN]-(pb:Playbook)-[:FIRST_STEP]->(first:PlaybookStep)
+        MATCH path = (first)-[:NEXT*0..12]->(s:PlaybookStep)
+        WITH pt, pb, s, length(path) AS pos ORDER BY pos
+        RETURN pt.name, pb.id, collect([s.tool, s.default_args])
+    """, {"patterns": fingerprint["patterns"]}).result_set
+    return {
+        "entity_id": entity_id,
+        "facts": [{"id": fid, "claim": claim, "verdict": verdict, "valid_from": valid_from, "episode_id": episode,
+                   "evidence_ids": evidence, "changed_evidence": changed, "status": status}
+                  for fid, claim, verdict, valid_from, episode, evidence, changed, status in facts],
+        "episodes": [{"id": eid, "created_at": created, "verdict": verdict, "answer_state": state, "tools": tools}
+                     for eid, created, verdict, state, tools in episodes],
+        "fingerprint": fingerprint,
+        "playbooks": [{"pattern": pattern, "id": pid, "steps": [{"tool": t, "default_args": a} for t, a in steps]}
+                      for pattern, pid, steps in playbooks],
+        "elapsed_ms": _ms(started),
+    }
+
+
+def _waiver_violations(decision: dict, approver: dict | None, policy: dict | None) -> list[dict]:
+    if not approver or not policy or policy.get("waiver_threshold_monthly") is None:
+        return []
+    volume = decision.get("merchant_monthly_volume") or 0
+    if volume <= policy["waiver_threshold_monthly"]:
+        return []
+    if (approver.get("clearance_level") or 0) >= (policy.get("required_clearance_level") or 0):
+        return []
+    return [{
+        "policy_id": policy["id"],
+        "rule": "waiver_clearance",
+        "detail": (f"{approver['id']} ({approver.get('clearance')}) approved a waiver for a merchant processing "
+                   f"${volume / 100:,.0f}/month; {policy['id']} requires {policy.get('required_clearance')} "
+                   f"above ${policy['waiver_threshold_monthly'] / 100:,.0f}/month"),
+    }]
+
+
+def trace_governance(graph: Graph, entity_id: str) -> dict | None:
+    """Decisions that apply to an entity, who approved them under which policy, and who can approve a freeze."""
+    started = time.perf_counter()
+    if internal_id(graph, entity_id) is None:
+        return None
+    rows = graph.ro_query("""
+        MATCH (x:Entity {id: $id})<-[:APPLIES_TO]-(d:Decision)
+        OPTIONAL MATCH (e:Employee)-[:APPROVED]->(d)
+        OPTIONAL MATCH (e)-[:MEMBER_OF]->(t:Team)
+        OPTIONAL MATCH (d)-[:GOVERNED_BY]->(p:PolicyDoc)
+        RETURN d {.*}, e {.id, .name, .title, .clearance, .clearance_level}, t {.id, .name},
+               p {.id, .title, .version, .text, .waiver_threshold_monthly, .required_clearance,
+                  .required_clearance_level, .required_clearance_for_freeze}
+    """, {"id": entity_id}).result_set
+    decisions = []
+    for d, approver, team, policy in rows:
+        d, approver, team, policy = (dict(x) if x else None for x in (d, approver, team, policy))
+        decisions.append({
+            "id": d["id"], "kind": d.get("kind"), "control": d.get("control"), "status": d.get("status"),
+            "summary": d.get("summary"), "approved_at": d.get("approved_at"),
+            "merchant_monthly_volume_usd": _usd(d.get("merchant_monthly_volume")),
+            "approved_by": approver, "team": team, "policy": policy,
+            "violations": _waiver_violations(d, approver, policy), "sources": [],
+        })
+
+    by_id = {d["id"]: d for d in decisions}
+    for did, src, labels, who, who_name, how in graph.ro_query("""
+        UNWIND $ids AS did
+        MATCH (d:Entity {id: did})-[:SOURCED_FROM]->(s:Entity)
+        OPTIONAL MATCH (w:Employee)-[r:OPENED|AUTHORED]->(s)
+        RETURN did, s {.id, .system, .title, .text, .status, .channel}, labels(s), w.id, w.name, type(r)
+    """, {"ids": list(by_id)}).result_set:
+        by_id[did]["sources"].append({**dict(src), "type": _visible(labels)[0],
+                                      "by": {"id": who, "name": who_name, "relation": how} if who else None})
+
+    approvers = sorted({d["approved_by"]["id"] for d in decisions if d["approved_by"]})
+    other_decisions = []
+    for aid, d, applies_to, labels, name, policy in graph.ro_query("""
+        UNWIND $ids AS aid
+        MATCH (e:Entity {id: aid})-[:APPROVED]->(d:Decision)-[:APPLIES_TO]->(m:Entity)
+        WHERE NOT d.id IN $seen
+        OPTIONAL MATCH (d)-[:GOVERNED_BY]->(p:PolicyDoc)
+        RETURN aid, d {.*}, m.id, labels(m), m.name,
+               p {.id, .waiver_threshold_monthly, .required_clearance, .required_clearance_level}
+    """, {"ids": approvers, "seen": list(by_id)}).result_set:
+        approver = next(x["approved_by"] for x in decisions if x["approved_by"] and x["approved_by"]["id"] == aid)
+        d = dict(d)
+        other_decisions.append({
+            "approved_by": aid, "decision_id": d["id"], "control": d.get("control"),
+            "applies_to": {"id": applies_to, "labels": _visible(labels), "name": name},
+            "merchant_monthly_volume_usd": _usd(d.get("merchant_monthly_volume")),
+            "policy_id": policy["id"] if policy else None,
+            "violations": _waiver_violations(d, approver, dict(policy) if policy else None),
+        })
+
+    policy_rows = graph.ro_query("""
+        MATCH (p:PolicyDoc) WHERE p.required_clearance_level_for_freeze IS NOT NULL
+        OPTIONAL MATCH (e:Employee)
+        WHERE e.on_call = true AND e.clearance_level >= p.required_clearance_level_for_freeze
+        OPTIONAL MATCH (e)-[:MEMBER_OF]->(t:Team)
+        RETURN p.id, p.title, p.required_clearance_for_freeze,
+               collect(CASE WHEN e IS NULL THEN NULL
+                            ELSE [e.id, e.name, e.title, e.clearance, t.id, t.name] END)
+    """).result_set
+    governing = {d["policy"]["id"] for d in decisions if d["policy"]}
+    policy_rows.sort(key=lambda r: r[0] not in governing)
+    freeze_policy, approvers_on_call = None, []
+    if policy_rows:
+        pid, title, clearance, people = policy_rows[0]
+        freeze_policy = {"id": pid, "title": title, "required_clearance": clearance}
+        approvers_on_call = [{"id": e, "name": n, "title": ti, "clearance": c, "team": {"id": tid, "name": tn}}
+                             for e, n, ti, c, tid, tn in people]
+    return {
+        "entity_id": entity_id,
+        "decisions": decisions,
+        "approver_other_decisions": other_decisions,
+        "freeze_policy": freeze_policy,
+        "on_call_approvers": approvers_on_call,
+        "elapsed_ms": _ms(started),
+    }
+
+
+def freeze_impact(graph: Graph, target_ids: list[str]) -> dict:
+    """Legitimate accounts outside `target_ids` that share a device or IP with them."""
+    started = time.perf_counter()
+    known = describe_entities(graph, target_ids)
+    rows = graph.ro_query("""
+        UNWIND $targets AS tid
+        MATCH (t:Entity {id: tid})-[r:USED_DEVICE|LOGGED_FROM]->(inf:Entity)
+        OPTIONAL MATCH (inf)<-[r2:USED_DEVICE|LOGGED_FROM]-(o:Account)
+        WHERE NOT o.id IN $targets
+        RETURN inf.id, labels(inf), inf.kind, collect(DISTINCT [t.id, type(r)]),
+               collect(DISTINCT CASE WHEN o IS NULL THEN NULL
+                                     ELSE [o.id, o.name, o.tier, o.status, o.monthly_volume, type(r2)] END)
+    """, {"targets": target_ids}).result_set
+    infrastructure, collateral = [], {}
+    for inf, labels, kind, users, outsiders in rows:
+        legit = [o for o in outsiders if o[3] == "ACTIVE" and o[2] in LEGIT_TIERS]
+        infrastructure.append({
+            "id": inf, "type": _visible(labels)[0], "kind": kind,
+            "used_by_targets": [{"id": u, "rel": rel} for u, rel in users],
+            "outside_accounts": [{"id": o[0], "rel": o[5]} for o in outsiders],
+            "safe_to_block": not legit,
+        })
+        for oid, name, tier, status, volume, rel in legit:
+            entry = collateral.setdefault(oid, {"id": oid, "name": name, "tier": tier, "status": status,
+                                                "monthly_volume_usd": _usd(volume), "shared_via": []})
+            entry["shared_via"].append(inf)
+    return {
+        "target_ids": target_ids,
+        "unknown_targets": [t for t in target_ids if t not in known],
+        "targets": [known[t] for t in target_ids if t in known],
+        "infrastructure": infrastructure,
+        "collateral": sorted(collateral.values(), key=lambda c: -(c["monthly_volume_usd"] or 0)),
+        "elapsed_ms": _ms(started),
+    }
+
+
+def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_ids: list[str], action_type: str,
+                   policy_id: str, approver_id: str, reason: str, requested_by: str,
+                   now: int | None = None) -> dict:
+    """Create a pending approval request. Raises ValueError with an explanation if it can't be routed."""
+    now = now or int(time.time())
+    action_type = action_type.upper()
+    if action_type not in FREEZE_ACTIONS:
+        raise ValueError(f"action_type must be one of {list(FREEZE_ACTIONS)}")
+    if overlap := sorted(set(target_ids) & set(excluded_ids)):
+        raise ValueError(f"{overlap} are both targeted and excluded")
+    entities = describe_entities(graph, [*target_ids, *excluded_ids])
+    if missing := [e for e in [*target_ids, *excluded_ids] if e not in entities]:
+        raise ValueError(f"unknown entities: {missing}")
+    if not_accounts := [t for t in target_ids if "Account" not in entities[t]["labels"]]:
+        raise ValueError(f"only accounts can be frozen; not accounts: {not_accounts}")
+
+    rows = graph.ro_query("""
+        MATCH (p:Entity {id: $policy}) WHERE p:PolicyDoc
+        MATCH (e:Entity {id: $approver}) WHERE e:Employee
+        RETURN p.required_clearance_level_for_freeze, p.required_clearance_for_freeze,
+               e.clearance_level, e.clearance, e.on_call, e.name
+    """, {"policy": policy_id, "approver": approver_id}).result_set
+    if not rows:
+        raise ValueError(f"{policy_id} is not a policy or {approver_id} is not an employee")
+    required_level, required, level, clearance, on_call, name = rows[0]
+    if required_level is None:
+        raise ValueError(f"{policy_id} does not govern freezes")
+    if (level or 0) < required_level or not on_call:
+        raise ValueError(f"{approver_id} ({clearance}, on call: {bool(on_call)}) cannot approve; {policy_id} "
+                         f"requires an on-call approver with {required}. Use trace_governance to find one.")
+
+    existing = graph.ro_query("""
+        MATCH (r:ApprovalRequest)-[:FOR_CASE]->(c:Entity {id: $case})
+        WHERE r.status = 'PENDING_L3'
+        RETURN r.id, r.target_ids
+    """, {"case": case_id}).result_set
+    for rid, targets in existing:
+        if sorted(targets) == sorted(target_ids):
+            return {"request_id": rid, "status": "PENDING_L3", "created": False, "case_id": case_id,
+                    "target_ids": target_ids, "excluded_ids": excluded_ids, "policy_id": policy_id,
+                    "approver": {"id": approver_id, "name": name, "clearance": clearance}, "entities": entities}
+
+    rid = f"apr-{uuid.uuid4().hex[:8]}"
+    graph.query("""
+        MERGE (c:Entity:Case {id: $case})
+        ON CREATE SET c.status = 'OPEN', c.created_at = $now, c.subject_id = $subject
+        WITH c
+        MATCH (p:Entity {id: $policy}), (e:Entity {id: $approver})
+        CREATE (r:Entity:ApprovalRequest {id: $rid, status: 'PENDING_L3', action_type: $action, reason: $reason,
+                                          created_at: $now, requested_by: $by, target_ids: $targets,
+                                          excluded_ids: $excluded, required_clearance: $required})
+        CREATE (r)-[:FOR_CASE]->(c), (r)-[:UNDER_POLICY]->(p), (r)-[:ROUTED_TO]->(e)
+    """, {"case": case_id, "now": now, "subject": target_ids[0], "policy": policy_id, "approver": approver_id,
+          "rid": rid, "action": action_type, "reason": reason, "by": requested_by, "targets": target_ids,
+          "excluded": excluded_ids, "required": required})
+    for rel, ids in (("TARGETS", target_ids), ("EXCLUDES", excluded_ids)):
+        if ids:
+            graph.query(f"""
+                MATCH (r:Entity {{id: $rid}})
+                UNWIND $ids AS eid
+                MATCH (t:Entity {{id: eid}})
+                CREATE (r)-[:{rel}]->(t)
+            """, {"rid": rid, "ids": ids})
+    return {"request_id": rid, "status": "PENDING_L3", "created": True, "case_id": case_id,
+            "target_ids": target_ids, "excluded_ids": excluded_ids, "policy_id": policy_id,
+            "approver": {"id": approver_id, "name": name, "clearance": clearance}, "entities": entities}
+
+
+def approve_action(graph: Graph, request_id: str, approver_id: str, now: int | None = None) -> dict:
+    """An approver signs off a pending request; its target accounts are frozen.
+
+    Freezing changes status only, so `topology_updated_at` (and the facts derived from it) stays put.
+    """
+    now = now or int(time.time())
+    rows = graph.ro_query("""
+        MATCH (r:Entity {id: $rid})-[:UNDER_POLICY]->(p:Entity)
+        MATCH (e:Entity {id: $approver}) WHERE e:Employee
+        RETURN r:ApprovalRequest, r.status, p.required_clearance_level_for_freeze, p.required_clearance_for_freeze,
+               e.clearance_level, e.clearance
+    """, {"rid": request_id, "approver": approver_id}).result_set
+    if not rows or not rows[0][0]:
+        raise ValueError(f"no approval request {request_id} (or {approver_id} is not an employee)")
+    _, status, required_level, required, level, clearance = rows[0]
+    if status != "PENDING_L3":
+        raise ValueError(f"{request_id} is already {status}")
+    if (level or 0) < (required_level or 0):
+        raise ValueError(f"{approver_id} has {clearance}; this action requires {required}")
+    frozen = graph.query("""
+        MATCH (r:Entity {id: $rid}), (e:Entity {id: $approver})
+        SET r.status = 'APPROVED', r.approved_by = $approver, r.approved_at = $now
+        CREATE (e)-[:SIGNED_OFF {at: $now}]->(r)
+        WITH r
+        MATCH (r)-[:TARGETS]->(t:Account)
+        SET t.status = 'FROZEN', t.frozen_at = $now, t.frozen_by = $rid
+        RETURN collect(t.id)
+    """, {"rid": request_id, "approver": approver_id, "now": now}).result_set[0][0]
+    spared = graph.ro_query("MATCH (r:Entity {id: $rid})-[:EXCLUDES]->(x) RETURN collect(x.id)",
+                            {"rid": request_id}).result_set[0][0]
+    return {"request_id": request_id, "status": "APPROVED", "approved_by": approver_id, "approved_at": now,
+            "frozen": sorted(frozen), "spared": sorted(spared)}
+
+
+def list_approvals(graph: Graph, status: str | None = None, limit: int = 50) -> list[dict]:
+    rows = graph.ro_query("""
+        MATCH (r:ApprovalRequest)
+        WHERE $status IS NULL OR r.status = $status
+        OPTIONAL MATCH (r)-[:ROUTED_TO]->(e:Employee)
+        OPTIONAL MATCH (r)-[:UNDER_POLICY]->(p:PolicyDoc)
+        OPTIONAL MATCH (r)-[:FOR_CASE]->(c:Case)
+        RETURN r {.*}, e {.id, .name, .title, .clearance}, p {.id, .title}, c {.id, .status, .subject_id}
+        ORDER BY r.created_at DESC LIMIT $limit
+    """, {"status": status, "limit": limit}).result_set
+    return [{**dict(r), "approver": dict(e) if e else None, "policy": dict(p) if p else None,
+             "case": dict(c) if c else None} for r, e, p, c in rows]

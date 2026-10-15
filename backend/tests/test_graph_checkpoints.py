@@ -7,6 +7,7 @@ and memory are written to backend/tests/checkpoint_report.json.
 from __future__ import annotations
 
 import json
+import statistics
 import time
 from pathlib import Path
 
@@ -128,10 +129,18 @@ def test_graph_copy_within_budget(graph):
     target = f"{source}:checkpoint-copy"
     if target in db.list_graphs():
         db.select_graph(target).delete()
-    try:
-        timed("GRAPH.COPY", db.connection.execute_command, "GRAPH.COPY", source, target)
-    finally:
-        db.select_graph(target).delete()
+    # Median of three: one copy can be slowed by FalkorDB still freeing graphs that earlier tests deleted.
+    samples = []
+    for _ in range(3):
+        started = time.perf_counter()
+        try:
+            db.connection.execute_command("GRAPH.COPY", source, target)
+            samples.append((time.perf_counter() - started) * 1000)
+        finally:
+            db.select_graph(target).delete()
+    elapsed = statistics.median(samples)
+    REPORT["latency_ms"]["GRAPH.COPY"] = round(elapsed, 1)
+    assert elapsed <= BUDGET_MS, f"GRAPH.COPY took {elapsed:.0f} ms, median of 3 (budget {BUDGET_MS} ms)"
 
 
 def test_unknown_and_isolated_entities(graph):
