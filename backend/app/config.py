@@ -28,6 +28,8 @@ class Settings:
     llm_api_key: str | None
     llm_base_url: str | None
     llm_model: str
+    llm_requests_per_minute: int
+    llm_max_retries: int
 
     @property
     def llm_enabled(self) -> bool:
@@ -46,4 +48,6 @@ def get_settings() -> Settings:
         llm_api_key=None if key in PLACEHOLDER_KEYS else key,
         llm_base_url=os.getenv("LLM_BASE_URL") or None,
         llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+        llm_requests_per_minute=int(os.getenv("LLM_REQUESTS_PER_MINUTE", "0")),
+        llm_max_retries=int(os.getenv("LLM_MAX_RETRIES", "4")),
     )

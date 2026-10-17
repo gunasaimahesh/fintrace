@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from redis.exceptions import ConnectionError as RedisConnectionError
 from sse_starlette.sse import EventSourceResponse
 
-from backend.app import agent
+from backend.app import agent, memory
 from backend.app import queries as q
 from backend.app import scenario as s
 from backend.app import tools as t
@@ -80,13 +80,13 @@ def scenarios() -> list[dict]:
 @app.get("/api/investigate")
 async def investigate(entity_id: str, mode: Literal["auto", "llm", "fallback"] = "auto",
                       max_steps: int = Query(agent.MAX_STEPS, ge=1, le=agent.MAX_STEPS),
-                      memory: bool = True) -> EventSourceResponse:
+                      memory: Literal["on", "procedures", "off"] = "on") -> EventSourceResponse:
     eid = _entity_id(entity_id)
 
     async def events():
         # Unnamed messages: a named "error" event would collide with EventSource's own error event.
         async for event in agent.investigate(eid, graph_key=_key(), worker_id="ui-investigator", mode=mode,
-                                             max_steps=max_steps, use_memory=memory):
+                                             max_steps=max_steps, memory_mode=memory):
             yield {"data": json.dumps(event, default=str)}
 
     return EventSourceResponse(events())
@@ -109,10 +109,12 @@ def approvals(status: Literal["PENDING_L3", "APPROVED", "STALE"] | None = None) 
 
 @app.post("/api/approvals/{request_id}/approve")
 def approve(request_id: str, body: Approval) -> dict:
+    graph, rid = _graph(), _entity_id(request_id)
     try:
-        return q.approve_action(_graph(), _entity_id(request_id), _entity_id(body.approver_id))
+        approved = q.approve_action(graph, rid, _entity_id(body.approver_id))
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from None
+    return {**approved, "playbook": memory.learn_playbook(graph, rid)}
 
 
 class UI(StaticFiles):

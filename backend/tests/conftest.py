@@ -39,3 +39,11 @@ def fresh_key() -> Iterator[str]:
     key = _copy_seeded_graph()
     yield key
     get_db().select_graph(key).delete()
+
+
+@pytest.fixture
+def other_key() -> Iterator[str]:
+    """A second private copy, for comparing two conditions side by side."""
+    key = _copy_seeded_graph()
+    yield key
+    get_db().select_graph(key).delete()

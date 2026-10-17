@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import threading
 import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -25,6 +26,7 @@ from mcp.types import CallToolResult
 
 from backend.app import guardrails as gr
 from backend.app import memory
+from backend.app import playbook as pb
 from backend.app import queries as q
 from backend.app.config import Settings, get_settings
 from backend.app.contracts import PRESCRIBED_DEPTH, VERDICT_PREDICATES, current_rev
@@ -39,6 +41,7 @@ RING_TARGET_LIMIT = 25
 BROKER_SCOPE_LIMIT = 50
 
 Mode = Literal["auto", "llm", "fallback"]
+MemoryMode = Literal["on", "procedures", "off"]
 Emit = Callable[[dict], Awaitable[None]]
 
 SYSTEM_PROMPT = """\
@@ -50,7 +53,8 @@ checked: those results are in the alert message.
 Rules:
 - Memory: facts that recall_memory marks CURRENT still hold, so use them without re-running their tools. Each \
 STALE fact says why, and under rerun gives the call that produced it: repeat that call. If a route or a finding of \
-no route is STALE, investigate again from the start.
+no route is STALE, investigate again from the start. If a learned playbook already ran steps for this alert, their \
+results are in the alert message too: don't repeat them.
 - Exposure means money from the alert entity could reach a sanctioned entity. explore_neighborhood reports \
 these as eligible_routes and says how much of the graph each search covered. Anything reached only by ignoring \
 transfer direction, or through a shared IP, is association, not exposure.
@@ -101,6 +105,8 @@ class Investigation:
     results: list[dict] = field(default_factory=list)
     ledger: EvidenceLedger = field(default_factory=EvidenceLedger)
     llm_ms: list[float] = field(default_factory=list)
+    llm_wait_s: float = 0.0
+    playbook: dict | None = None
 
     @property
     def steps_left(self) -> int:
@@ -191,10 +197,28 @@ def replay(call: Any) -> dict:
             "function": {"name": call.function.name, "arguments": call.function.arguments}, **extra}
 
 
+_pace_lock = threading.Lock()
+_next_request_at = 0.0
+
+
+async def pace(per_minute: int) -> float:
+    """Wait for this process's next LLM request slot; returns the seconds waited."""
+    global _next_request_at
+    if per_minute <= 0:
+        return 0.0
+    with _pace_lock:
+        now = time.monotonic()
+        slot = max(now, _next_request_at)
+        _next_request_at = slot + 60 / per_minute
+    await asyncio.sleep(slot - now)
+    return slot - now
+
+
 async def llm_plan(inv: Investigation, settings: Settings) -> dict:
     from openai import AsyncOpenAI
 
-    llm = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url, timeout=60, max_retries=1)
+    llm = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url, timeout=60,
+                      max_retries=settings.llm_max_retries)
     try:
         return await _converse(inv, settings, llm)
     finally:
@@ -207,6 +231,10 @@ async def _converse(inv: Investigation, settings: Settings, llm: Any) -> dict:
                                                "parameters": t.input_schema}} for t in listed.tools]
     # The harness's own calls go in the alert text: providers that sign tool calls reject unsigned injected ones.
     harness = "\n".join(f"{r['tool']}({json.dumps(r['args'])}) returned: {for_model(r)}" for r in inv.results)
+    if inv.playbook:
+        harness += (f"\n\nLearned playbook {inv.playbook['id']} ran the calls after recall_memory on this alert's own "
+                    f"evidence" + (f", then stopped: {inv.playbook['stopped']}" if inv.playbook["stopped"] else "")
+                    + ". Check its results and finish the case.")
     messages: list[dict] = [
         {"role": "system", "content": system_prompt(inv.case_id, inv.max_steps)},
         {"role": "user", "content": f"Alert: investigate {inv.entity_id}.\n\nAlready run:\n{harness}"},
@@ -218,6 +246,7 @@ async def _converse(inv: Investigation, settings: Settings, llm: Any) -> dict:
             messages.append({"role": "user", "content": f"All {inv.max_steps} tool calls are used. "
                                                         "Reply now with the final JSON object."})
         tool_args = {} if out_of_calls else {"tools": specs, "tool_choice": "auto"}
+        inv.llm_wait_s += await pace(settings.llm_requests_per_minute)
         asked = time.perf_counter()
         response = await llm.chat.completions.create(model=settings.llm_model, messages=messages, temperature=0,
                                                      **tool_args)
@@ -257,6 +286,50 @@ async def refresh_stale(inv: Investigation, remembered: dict) -> None:
         if call["tool"] == "find_brokers" and ring:
             args["community_ids"] = [m["id"] for m in ring["members"]]
         await inv.ensure(call["tool"], args, f"Re-run {call['tool']}: the remembered result went stale ({why}).")
+
+
+def choose_playbook(inv: Investigation) -> dict | None:
+    """The best-supported matching playbook, unless remembered findings already answer the alert."""
+    remembered = inv.latest("recall_memory")
+    if not remembered or not remembered["playbooks"]:
+        return None
+    verdicts = [f for f in remembered["facts"] if f["predicate"] in VERDICT_PREDICATES]
+    if verdicts and all(f["status"] == "CURRENT" for f in verdicts):
+        return None
+    return remembered["playbooks"][0]
+
+
+async def apply_playbook(inv: Investigation, playbook: dict) -> None:
+    """Run a learned playbook's investigative steps on this alert's own live evidence. Each argument is bound to
+    the role it played when the playbook was learned; the playbook stops at the first role this alert lacks, and
+    leaves any freeze request to the planner."""
+    source = playbook["derived_from"][0]
+    inv.playbook = {"id": playbook["id"], "family": playbook["family"], "derived_from": playbook["derived_from"],
+                    "steps": len(playbook["steps"]), "ran": 0, "stopped": None}
+    await inv.notice(f"Playbook {playbook['id']} ({playbook['family']}) matches this alert's topology. It was learned "
+                     f"from {source['episode_id']} on {source['subject_id']}, whose freeze {source['approved_by']} "
+                     f"approved. Its steps run on {inv.entity_id}'s own evidence, and any freeze is decided afresh.")
+    for n, step in enumerate(playbook["steps"], 1):
+        if step["tool"] in pb.ACTION_TOOLS:
+            inv.playbook["stopped"] = f"step {n} ({step['tool']}) is an action, so it is left to the planner"
+            break
+        values = pb.roles(inv.results, inv.entity_id, inv.case_id)
+        if step["tool"] == "find_brokers" and len(values.get("ring.members") or []) > BROKER_SCOPE_LIMIT:
+            continue
+        if hit := pb.route(inv.results):
+            values["freeze.targets"] = freeze_targets(inv, hit, inv.latest("trace_money_flow"),
+                                                      inv.latest("detect_ring"))
+        args, missing = pb.bind(step["args"], values)
+        if args is None:
+            inv.playbook["stopped"] = (f"step {n} ({step['tool']}) needs {pb.ROLE_NAMES.get(missing, missing)}, "
+                                       f"which {inv.entity_id}'s evidence does not establish")
+            await inv.notice(f"Playbook {playbook['id']} stops: {inv.playbook['stopped']}.")
+            break
+        if await inv.ensure(step["tool"], args, f"Playbook {playbook['id']}, step {n} of {len(playbook['steps'])}.") is None:
+            inv.playbook["stopped"] = f"step {n} ({step['tool']}) failed or the tool budget ran out"
+            await inv.notice(f"Playbook {playbook['id']} stops: {inv.playbook['stopped']}.")
+            break
+        inv.playbook["ran"] += 1
 
 
 async def fallback_plan(inv: Investigation) -> None:
@@ -390,20 +463,23 @@ def finalize(inv: Investigation, answer: dict | None, model: str | None, started
         "budget_exhausted": inv.steps_left <= 0,
         "planner": inv.planner,
         "model": model,
+        "playbook": inv.playbook,
         "llm_ms": inv.llm_ms,
+        "llm_wait_ms": round(inv.llm_wait_s * 1000, 1),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
     }
 
 
 async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: int, mode: Mode,
-               case_id: str | None, use_memory: bool) -> None:
+               case_id: str | None, memory_mode: MemoryMode) -> None:
     settings = get_settings()
     use_llm = mode == "llm" or (mode == "auto" and settings.llm_enabled)
+    remember = memory_mode != "off"
     started = time.perf_counter()
     graph = get_db().select_graph(key)
     case_id = case_id or f"case-{uuid.uuid4().hex[:8]}"
     start_rev = await asyncio.to_thread(current_rev, graph)
-    if use_memory:
+    if remember:
         await asyncio.to_thread(memory.open_case, graph, case_id, entity_id, worker_id)
     async with Client(build_server(key, worker_id)) as client:
         inv = Investigation(entity_id=entity_id, case_id=case_id, max_steps=max_steps, worker_id=worker_id,
@@ -417,8 +493,13 @@ async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: 
         if not resolved["ok"]:
             await inv.notice(f"Could not resolve {entity_id}: {resolved['error']}")
         elif not inv.unknown:
-            if use_memory:
+            if memory_mode == "on":
                 await inv.call("recall_memory", {"entity_id": entity_id}, "Check memory for earlier findings.")
+            elif memory_mode == "procedures":
+                await inv.call("recall_memory", {"entity_id": entity_id, "facts": False},
+                               "Check procedural memory only: playbooks that fit this alert's topology.")
+            if playbook := choose_playbook(inv):
+                await apply_playbook(inv, playbook)
             if use_llm and not settings.llm_enabled:
                 await inv.notice("No LLM is configured (set LLM_API_KEY in .env), so the deterministic planner runs.")
                 use_llm, model, inv.planner = False, None, "fallback"
@@ -436,7 +517,7 @@ async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: 
         statuses = await asyncio.to_thread(q.approval_statuses, graph, requests) if requests else {}
         final = finalize(inv, answer, model, started, statuses)
         final["memory"] = None
-        if use_memory:
+        if remember:
             request = inv.latest("request_action")
             if request:
                 basis = [f for f in final["facts"] if f["id"] in final["verdict_basis"]]
@@ -444,21 +525,25 @@ async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: 
                                         request["target_ids"] + [d for f in basis for d in f["depends_on"]])
             final["memory"] = await asyncio.to_thread(
                 memory.persist_run, graph, case_id=case_id, entity_id=entity_id, worker_id=worker_id,
-                planner=inv.planner, model=model, start_rev=start_rev, results=inv.results, final=final)
+                planner=inv.planner, model=model, start_rev=start_rev, results=inv.results, final=final,
+                playbook_id=inv.playbook["id"] if inv.playbook else None)
         await emit(final)
 
 
 async def investigate(entity_id: str, *, graph_key: str | None = None, worker_id: str = "investigator",
                       max_steps: int = MAX_STEPS, mode: Mode = "auto", case_id: str | None = None,
-                      use_memory: bool = True) -> AsyncIterator[dict]:
-    """Stream investigation events: run_started, tool_call, tool_result, notice, then final (or error)."""
+                      memory_mode: MemoryMode = "on") -> AsyncIterator[dict]:
+    """Stream investigation events: run_started, tool_call, tool_result, notice, then final (or error).
+
+    memory_mode "on" reuses remembered findings and learned playbooks; "procedures" uses only playbooks, never
+    findings about the subject; "off" neither reads nor writes memory."""
     key = graph_key or tenant_graph_key(get_settings().default_tenant)
     queue: asyncio.Queue[dict | None] = asyncio.Queue()
 
     async def produce() -> None:
         try:
             await _run(queue.put, entity_id.strip(), key, worker_id, max(1, min(max_steps, MAX_STEPS)), mode, case_id,
-                       use_memory)
+                       memory_mode)
         except Exception as exc:
             await queue.put({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
         finally:

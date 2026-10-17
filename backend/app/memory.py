@@ -9,6 +9,9 @@ Staleness is worked out on every recall:
   STALE when an entity or edge it depends on is gone, or an entity was touched after the fact's revision.
 - Graph-wide: a CLEAR finding (no route) and aggregates (max flow, ring, broker rank) depend on the whole
   graph, so they go STALE on any later revision.
+
+Procedural memory is separate: a run that ends in a freeze request keeps its parameterized steps, and they
+become a Playbook only once a human approves that request.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ import uuid
 
 from falkordb import Graph
 
+from backend.app import playbook as pb
 from backend.app import queries as q
 from backend.app.contracts import PERSISTED_KINDS, VERDICT_PREDICATES, current_rev
 from backend.app.guardrails import search_clears
@@ -74,20 +78,25 @@ def _fact(props: dict, rev: int, graph: Graph) -> dict:
     return fact
 
 
-def recall(graph: Graph, entity_id: str) -> dict | None:
+def recall(graph: Graph, entity_id: str, facts: bool = True) -> dict | None:
     """What memory holds about an entity: facts (CURRENT, or STALE with the reason and the call that would
-    refresh them), recent episodes, approval requests with their status read now, and matching playbooks."""
+    refresh them), recent episodes, approval requests with their status read now, and matching playbooks.
+    With `facts` false, only the playbooks: procedural memory without remembered findings."""
     started = time.perf_counter()
     fingerprint = q.topology_fingerprint(graph, entity_id)
     if fingerprint is None:
         return None
     rev = current_rev(graph)
+    if not facts:
+        return {"entity_id": entity_id, "rev": rev, "facts": [], "episodes": [], "approvals": [],
+                "fingerprint": fingerprint, "playbooks": q.playbooks_for(graph, fingerprint["patterns"]),
+                "elapsed_ms": round((time.perf_counter() - started) * 1000, 1)}
     rows = graph.ro_query("""
         MATCH (f:SemanticFact)-[:ABOUT]->(:Entity {id: $id})
         WHERE f.status IN ['CURRENT', 'STALE']
         RETURN f ORDER BY f.created_at DESC, f.source_step
     """, {"id": entity_id}).result_set
-    facts = [_fact(node.properties, rev, graph) for (node,) in rows]
+    remembered = [_fact(node.properties, rev, graph) for (node,) in rows]
     episodes = graph.ro_query("""
         MATCH (ep:Episode)-[:ABOUT]->(:Entity {id: $id})
         OPTIONAL MATCH (ep)-[:HAS_STEP]->(s:Step)
@@ -108,7 +117,7 @@ def recall(graph: Graph, entity_id: str) -> dict | None:
     return {
         "entity_id": entity_id,
         "rev": rev,
-        "facts": facts,
+        "facts": remembered,
         "episodes": [{"id": eid, "case_id": case, "created_at": created, "verdict": verdict, "answer_state": state,
                       "planner": planner, "evidence_rev": ev_rev, "facts_cached": cached, "tools": tools}
                      for eid, case, created, verdict, state, planner, ev_rev, cached, tools in episodes],
@@ -122,31 +131,55 @@ def recall(graph: Graph, entity_id: str) -> dict | None:
     }
 
 
+def procedure_of(graph: Graph, entity_id: str, case_id: str, results: list[dict], final: dict) -> dict | None:
+    """The parameterized steps of a fresh SUSPICIOUS run that crossed a shared device and ended in a freeze
+    request, with the subject's topology fingerprint; None if the run does not fit the playbook family."""
+    if (final["verdict"], final["answer_state"]) != ("SUSPICIOUS", "answered_with_path") or not final["approval_request"]:
+        return None
+    if "route.after_device" not in pb.roles(results, entity_id, case_id):
+        return None
+    fingerprint = q.topology_fingerprint(graph, entity_id)
+    steps = pb.parameterize(results, entity_id, case_id)
+    if not steps or not fingerprint or not pb.required_patterns(fingerprint):
+        return None
+    return {"steps": steps, "fingerprint": fingerprint}
+
+
 def persist_run(graph: Graph, *, case_id: str, entity_id: str, worker_id: str, planner: str, model: str | None,
-                start_rev: int, results: list[dict], final: dict, now: float | None = None) -> dict:
+                start_rev: int, results: list[dict], final: dict, playbook_id: str | None = None,
+                now: float | None = None) -> dict:
     """Write the episode and its steps, then the run's facts if the graph is still at `start_rev`."""
     now = now or time.time()
     episode = f"ep-{uuid.uuid4().hex[:10]}"
     steps = [{"seq": i, "tool": r["tool"], "args": json.dumps(r["args"], default=str), "ok": r["ok"],
               "ms": r["meta"]["elapsed_ms"], "rows": r["meta"]["rows"], "error": r["error"] or ""}
              for i, r in enumerate(results, start=1)]
+    procedure = procedure_of(graph, entity_id, case_id, results, final)
     graph.query("""
         MERGE (c:Entity:Case {id: $case})
         ON CREATE SET c.status = 'OPEN', c.created_at = $now, c.subject_id = $entity
         CREATE (ep:Episode {id: $ep, case_id: $case, entity_id: $entity, created_at: $now, worker_id: $worker,
                             planner: $planner, model: $model, verdict: $verdict, answer_state: $state,
                             evidence_rev: $rev, tool_calls: $calls, elapsed_ms: $ms})
+        SET ep.request_id = $request, ep.procedure = $procedure, ep.playbook_id = $playbook
         CREATE (ep)-[:FOR_CASE]->(c)
         WITH ep
         OPTIONAL MATCH (x:Entity {id: $entity}) WHERE NOT x:Case
         FOREACH (_ IN CASE WHEN x IS NULL THEN [] ELSE [1] END | CREATE (ep)-[:ABOUT]->(x))
+        WITH ep
+        OPTIONAL MATCH (p:Playbook {id: $playbook})
+        FOREACH (_ IN CASE WHEN p IS NULL THEN [] ELSE [1] END |
+            CREATE (ep)-[:USED_PLAYBOOK]->(p)
+            SET p.uses = coalesce(p.uses, 0) + 1, p.last_used_at = $now)
         WITH ep
         UNWIND $steps AS s
         CREATE (ep)-[:HAS_STEP]->(:Step {seq: s.seq, tool: s.tool, args: s.args, ok: s.ok, elapsed_ms: s.ms,
                                          rows: s.rows, error: s.error})
     """, {"case": case_id, "now": now, "entity": entity_id, "ep": episode, "worker": worker_id, "planner": planner,
           "model": model or "", "verdict": final["verdict"], "state": final["answer_state"], "rev": start_rev,
-          "calls": final["tool_calls"], "ms": final["elapsed_ms"], "steps": steps})
+          "calls": final["tool_calls"], "ms": final["elapsed_ms"], "steps": steps,
+          "request": (final["approval_request"] or {}).get("request_id"),
+          "procedure": json.dumps(procedure) if procedure else None, "playbook": playbook_id})
 
     def claim(fact_id: str) -> str:
         return next((s["text"] for s in final["statements"] if fact_id in s["facts"]), "")
@@ -210,6 +243,33 @@ def persist_run(graph: Graph, *, case_id: str, entity_id: str, worker_id: str, p
         """, {"stale": stale})
     return {"episode_id": episode, "case_id": case_id, "facts_written": written, "cached": note is None,
             "note": note, "superseded": sorted(superseded), "marked_stale": [s[0] for s in stale]}
+
+
+def learn_playbook(graph: Graph, request_id: str, now: float | None = None) -> dict | None:
+    """Promote the procedure of the run behind an approved freeze request to a playbook, or add that run to the
+    playbook's support if the same procedure was learned before. None if the run left no procedure."""
+    rows = graph.ro_query("""
+        MATCH (r:ApprovalRequest {id: $rid}) WHERE r.status = 'APPROVED'
+        MATCH (ep:Episode {request_id: $rid}) WHERE ep.procedure IS NOT NULL
+        RETURN ep.id, ep.procedure, r.approved_by ORDER BY ep.created_at DESC LIMIT 1
+    """, {"rid": request_id}).result_set
+    if not rows:
+        return None
+    episode_id, procedure, approver = rows[0]
+    procedure = json.loads(procedure)
+    required = pb.required_patterns(procedure["fingerprint"])
+    playbook_id = f"pb-{pb.signature(procedure['steps'], required)}"
+    graph.query("""
+        MATCH (ep:Episode {id: $ep})
+        MERGE (p:Playbook {id: $id})
+        ON CREATE SET p.family = $family, p.steps = $steps, p.required_patterns = $required,
+                      p.fingerprint = $fingerprint, p.created_at = $now, p.uses = 0
+        MERGE (p)-[d:DERIVED_FROM]->(ep)
+        ON CREATE SET d.request_id = $rid, d.approved_by = $approver, d.at = $now
+    """, {"ep": episode_id, "id": playbook_id, "family": pb.FAMILY, "steps": json.dumps(procedure["steps"]),
+          "required": required, "fingerprint": json.dumps(procedure["fingerprint"]), "now": now or time.time(),
+          "rid": request_id, "approver": approver})
+    return next(p for p in q.playbooks_for(graph, required) if p["id"] == playbook_id)
 
 
 def attach_request_evidence(graph: Graph, request_id: str, rev: int, depends_on: list[str]) -> None:

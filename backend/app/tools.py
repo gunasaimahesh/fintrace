@@ -219,10 +219,10 @@ def resolve_entity(ctx: ToolContext, g: RecordingGraph, ev: Evidence, entity_id:
 
 
 @tool
-def recall_memory(ctx: ToolContext, g: RecordingGraph, ev: Evidence, entity_id: str):
+def recall_memory(ctx: ToolContext, g: RecordingGraph, ev: Evidence, entity_id: str, facts: bool = True):
     """Remembered facts (CURRENT, or STALE with the reason), recent episodes, approval requests and playbooks."""
     entity_id = _id(entity_id)
-    result = memory.recall(g, entity_id)
+    result = memory.recall(g, entity_id, facts=facts)
     if result is None:
         raise ToolError(f"{entity_id} is not in the graph")
     nodes = {d for fact in result["facts"] for d in fact["depends_on"] if "|" not in d} | {entity_id}

@@ -108,7 +108,7 @@ def test_deleting_a_route_node_stales_the_route_through_a_missing_dependency(fre
 
 def test_a_change_in_the_same_second_as_the_fact_still_stales_it(fresh_key):
     graph = get_db().select_graph(fresh_key)
-    events, final = run(s.NOVAPAY, fresh_key, use_memory=False)
+    events, final = run(s.NOVAPAY, fresh_key, memory_mode="off")
     results = [e for e in events if e["type"] == "tool_result"]
     second = 1_800_000_000
     memory.persist_run(graph, case_id="case-same-second", entity_id=s.NOVAPAY, worker_id="pytest",
@@ -204,7 +204,7 @@ def test_identity_and_sanction_changes_bump_the_revision(fresh_key):
     graph = get_db().select_graph(fresh_key)
     before = current_rev(graph)
     m.add_identity_link(graph, s.ISOLATED, s.SHARED_DEVICE, "USED_DEVICE")
-    _, linked = run(s.ISOLATED, fresh_key, use_memory=False)
+    _, linked = run(s.ISOLATED, fresh_key, memory_mode="off")
     assert linked["verdict"] == "SUSPICIOUS"
     m.set_sanctioned(graph, s.LUMEN, True, "OFAC-SDN")
     m.set_sanctioned(graph, s.LUMEN, False)

@@ -23,7 +23,7 @@ from .db import get_db, graph_key
 from .scenario import DAY, HOUR, GraphSpec, build_scenario
 
 INDEXES = [("Entity", "id"), ("Account", "id"), ("Alert", "status"), ("Case", "status"), ("Episode", "id"),
-           ("SemanticFact", "id")]
+           ("SemanticFact", "id"), ("Playbook", "id")]
 FIXTURE_VERSION = "base-3"
 BATCH = 5_000
 WRITE_TIMEOUT_MS = 120_000

@@ -47,11 +47,13 @@ def build_server(key: str | None = None, worker_id: str = "mcp-client") -> MCPSe
         return t.resolve_entity(ctx, entity_id=entity_id)
 
     @server.tool(annotations=READ)
-    def recall_memory(entity_id: EntityId) -> dict[str, Any]:
+    def recall_memory(entity_id: EntityId, facts: bool = True) -> dict[str, Any]:
         """Prior investigations of this entity: typed facts that are CURRENT (still hold; reuse them) or STALE
         (with the reason, and the tool call that produced them, under `rerun`), recent episodes, approval
-        requests with their status now, and playbooks that match the entity's topology fingerprint."""
-        return t.recall_memory(ctx, entity_id=entity_id)
+        requests with their status now, and playbooks that match the entity's topology fingerprint. Playbooks
+        are procedures learned from investigations a human verified: ordered tool steps whose arguments are
+        roles to bind from this entity's own results. With facts=false, only the playbooks are returned."""
+        return t.recall_memory(ctx, entity_id=entity_id, facts=facts)
 
     @server.tool(annotations=READ)
     def explore_neighborhood(

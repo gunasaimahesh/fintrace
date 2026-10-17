@@ -8,6 +8,7 @@ edges, so none of them can count a depth-5 undirected neighborhood within a seco
 
 from __future__ import annotations
 
+import json
 import queue
 import time
 import uuid
@@ -552,14 +553,16 @@ def topology_fingerprint(graph: Graph, entity_id: str) -> dict | None:
                    "accounts_sharing_ip": shared_ip, "device_bridges_one_hop": device_bridges,
                    "two_step_cycles": two_cycles}
     patterns = []
-    if shared_device or device_bridges:
-        patterns.append("device_bridge_layering")
+    if shared_device:
+        patterns.append("shares_device")
+    if device_bridges:
+        patterns.append("counterparty_shares_device")
     if fan_in >= 8 and fan_out <= 2:
         patterns.append("fan_in")
     if fan_out >= 8 and fan_in <= 2:
         patterns.append("fan_out")
     if two_cycles:
-        patterns.append("cycle")
+        patterns.append("two_step_cycle")
     return {"features": fingerprint, "patterns": patterns}
 
 
@@ -606,15 +609,17 @@ def describe_change(missing: list[str], touched: list[str], rev: int) -> str:
 
 
 def playbooks_for(graph: Graph, patterns: list[str]) -> list[dict]:
+    """Learned playbooks whose required topology patterns the entity has, best supported first."""
     rows = graph.ro_query("""
-        UNWIND $patterns AS name
-        MATCH (pt:PatternType {name: name})<-[:FOR_PATTERN]-(pb:Playbook)-[:FIRST_STEP]->(first:PlaybookStep)
-        MATCH path = (first)-[:NEXT*0..12]->(s:PlaybookStep)
-        WITH pt, pb, s, length(path) AS pos ORDER BY pos
-        RETURN pt.name, pb.id, collect([s.tool, s.default_args])
+        MATCH (pb:Playbook)
+        WHERE size(pb.required_patterns) > 0 AND all(p IN pb.required_patterns WHERE p IN $patterns)
+        MATCH (pb)-[d:DERIVED_FROM]->(ep:Episode)
+        WITH pb, collect({episode_id: ep.id, case_id: ep.case_id, subject_id: ep.entity_id,
+                          request_id: d.request_id, approved_by: d.approved_by, at: d.at}) AS sources
+        RETURN pb {.id, .family, .steps, .required_patterns, .uses, .created_at, .last_used_at}, sources
+        ORDER BY size(sources) DESC, pb.created_at DESC
     """, {"patterns": patterns}).result_set
-    return [{"pattern": pattern, "id": pid, "steps": [{"tool": t, "default_args": a} for t, a in steps]}
-            for pattern, pid, steps in rows]
+    return [{**dict(pb), "steps": json.loads(pb["steps"]), "derived_from": sources} for pb, sources in rows]
 
 
 def _waiver_violations(decision: dict, approver: dict | None, policy: dict | None) -> list[dict]:
