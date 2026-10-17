@@ -21,6 +21,7 @@ from .db import get_db, graph_key
 from .scenario import DAY, HOUR, GraphSpec, build_scenario
 
 INDEXES = [("Entity", "id"), ("Account", "id"), ("Alert", "status"), ("Case", "status")]
+FIXTURE_VERSION = "base-2"
 BATCH = 5_000
 WRITE_TIMEOUT_MS = 120_000
 DEVICE_SHARE = 0.25
@@ -188,9 +189,9 @@ def seed(tenant: str, reset: bool) -> None:
 
     graph.query("""
         CREATE (:Meta {key: 'dataset', source: $source, as_of_ts: $as_of, window_start: $start,
-                       scenario_base_ts: $base, loaded_at: $loaded_at})
+                       scenario_base_ts: $base, loaded_at: $loaded_at, rev: 0, fixture_version: $fixture})
     """, {"source": manifest["source"], "as_of": window[1], "start": window[0], "base": base_ts,
-          "loaded_at": loaded_at})
+          "loaded_at": loaded_at, "fixture": FIXTURE_VERSION})
 
     nodes = graph.ro_query("MATCH (n) RETURN count(n)").result_set[0][0]
     edges = graph.ro_query("MATCH ()-[e]->() RETURN count(e)").result_set[0][0]

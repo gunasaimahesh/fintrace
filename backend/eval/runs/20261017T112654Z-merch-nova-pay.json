@@ -1,0 +1,2227 @@
+{
+ "entity_id": "merch-nova-pay",
+ "started_at": "20261017T112654Z",
+ "model": "gemini-3.1-flash-lite",
+ "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+ "graph": "fintrace:live-8c2db5",
+ "seconds": 22.18,
+ "expected_verdict": "SUSPICIOUS",
+ "verdict": "SUSPICIOUS",
+ "planner": "llm",
+ "tool_calls": 6,
+ "model_answer": {
+  "proposed_verdict": "SUSPICIOUS",
+  "agrees": true,
+  "rationale": "NovaPay Digital Goods has an eligible route to a sanctioned entity (Vortex Holdings Ltd) via a shared device (dev-fp-8821). Furthermore, the merchant's onboarding waiver for device attestation was approved by an employee (Rohan Mehta) who lacked the required L3 clearance for a merchant of this volume, violating AML policy pol-aml-sec-4.",
+  "rationale_check": {
+   "ids_checked": 2,
+   "unknown_ids": [],
+   "rejected_claims": [],
+   "passed": true
+  },
+  "statements": [
+   {
+    "statement": {
+     "subject": "merch-nova-pay",
+     "predicate": "eligible_route_hops",
+     "object": "acct-vortex-holdings",
+     "value": 5
+    },
+    "status": "bound",
+    "fact": "F3"
+   },
+   {
+    "statement": {
+     "subject": "dec-waiver-77",
+     "predicate": "approved_by",
+     "object": "emp-rohan-mehta"
+    },
+    "status": "bound",
+    "fact": "F8"
+   },
+   {
+    "statement": {
+     "subject": "dec-waiver-77",
+     "predicate": "waiver_compliance",
+     "value": "BREACH"
+    },
+    "status": "bound",
+    "fact": "F11"
+   }
+  ]
+ },
+ "failure": null,
+ "events": [
+  {
+   "type": "run_started",
+   "entity_id": "merch-nova-pay",
+   "case_id": "case-4b0cbdae",
+   "graph": "fintrace:live-8c2db5",
+   "planner": "llm",
+   "model": "gemini-3.1-flash-lite",
+   "max_steps": 12,
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_call",
+   "step": 1,
+   "tool": "resolve_entity",
+   "args": {
+    "entity_id": "merch-nova-pay"
+   },
+   "thought": "Resolve the alert entity before reasoning about it.",
+   "planner": "llm",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 1,
+   "tool": "resolve_entity",
+   "ok": true,
+   "args": {
+    "entity_id": "merch-nova-pay"
+   },
+   "data": {
+    "found": true,
+    "id": "merch-nova-pay",
+    "labels": [
+     "Account",
+     "Merchant"
+    ],
+    "name": "NovaPay Digital Goods",
+    "status": "ACTIVE",
+    "topology_updated_at": 1792235048,
+    "profile": {
+     "kind": "Corporation",
+     "tier": "enterprise",
+     "bank": "FinTrace Demo Bank",
+     "mcc": "5816",
+     "source": "planted",
+     "monthly_volume_usd": 410000.0
+    },
+    "counterparties": {
+     "sends_to": 13,
+     "receives_from": 18
+    },
+    "identity_links": 0
+   },
+   "evidence": {
+    "nodes": {
+     "merch-nova-pay": {
+      "labels": [
+       "Account",
+       "Merchant"
+      ],
+      "name": "NovaPay Digital Goods"
+     }
+    },
+    "edges": []
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 2.5,
+    "rows": 1,
+    "queries": [
+     {
+      "cypher": "MATCH (n:Entity {id: $id})\nOPTIONAL MATCH (n)-[o:FLOWS_TO]->()\nWITH n, count(o) AS sends_to\nOPTIONAL MATCH (n)<-[i:FLOWS_TO]-()\nWITH n, sends_to, count(i) AS receives_from\nOPTIONAL MATCH (n)-[x:USED_DEVICE|LOGGED_FROM]-()\nRETURN n {.*}, labels(n), sends_to, receives_from, count(x)",
+      "params": [
+       "id"
+      ],
+      "ms": 2.5,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "tool_call",
+   "step": 2,
+   "tool": "recall_memory",
+   "args": {
+    "entity_id": "merch-nova-pay"
+   },
+   "thought": "Check memory for earlier findings.",
+   "planner": "llm",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 2,
+   "tool": "recall_memory",
+   "ok": true,
+   "args": {
+    "entity_id": "merch-nova-pay"
+   },
+   "data": {
+    "entity_id": "merch-nova-pay",
+    "facts": [],
+    "episodes": [],
+    "fingerprint": {
+     "features": {
+      "fan_out": 13,
+      "fan_in": 18,
+      "accounts_sharing_device": 0,
+      "accounts_sharing_ip": 0,
+      "device_bridges_one_hop": 1,
+      "two_step_cycles": 0
+     },
+     "patterns": [
+      "device_bridge_layering"
+     ]
+    },
+    "playbooks": [],
+    "elapsed_ms": 6.4
+   },
+   "evidence": {
+    "nodes": {
+     "merch-nova-pay": {
+      "labels": [
+       "Account",
+       "Merchant"
+      ],
+      "name": "NovaPay Digital Goods"
+     }
+    },
+    "edges": []
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 7.2,
+    "rows": 0,
+    "queries": [
+     {
+      "cypher": "MATCH (x:Entity {id: $id})\nOPTIONAL MATCH (x)-[:FLOWS_TO]->(o)\nWITH x, count(DISTINCT o) AS fan_out\nOPTIONAL MATCH (x)<-[:FLOWS_TO]-(i)\nWITH x, fan_out, count(DISTINCT i) AS fan_in\nOPTIONAL MATCH (x)-[:USED_DEVICE]->(:Device)<-[:USED_DEVICE]-(sd:Account)\nWHERE sd <> x\nWITH x, fan_out, fan_in, count(DISTINCT sd) AS shared_device\nOPTIONAL MATCH (x)-[:LOGGED_FROM]->(:IP)<-[:LOGGED_FROM]-(si:Account)\nWHERE si <> x\nWITH x, fan_out, fan_in, shared_device, count(DISTINCT si) AS shared_ip\nOPTIONAL MATCH (x)-[:FLOWS_TO]-(nb:Account)-[:USED_DEVICE]->(d:Device)<-[:USED_DEVICE]-(far:Account)\nWHERE far <> nb AND far <> x\nWITH x, fan_out, fan_in, shared_device, shared_ip, count(DISTINCT d) AS device_bridges\nOPTIONAL MATCH (x)-[:FLOWS_TO]->(b)-[:FLOWS_TO]->(x)\nRETURN fan_out, fan_in, shared_device, shared_ip, device_bridges, count(DISTINCT b)",
+      "params": [
+       "id"
+      ],
+      "ms": 2.9,
+      "calls": 1
+     },
+     {
+      "cypher": "MATCH (f:SemanticFact)-[:ABOUT]->(target:Entity {id: $id})\nWHERE f.status IN ['CURRENT', 'STALE']\nOPTIONAL MATCH (f)-[:DERIVED_FROM]->(ev:Entity)\nWITH f, collect(ev.id) AS evidence_ids, collect(ev.topology_updated_at) AS evidence_ts\nWITH f, evidence_ids, evidence_ts, any(x IN evidence_ts WHERE x > f.valid_from) AS is_stale\nRETURN f.id, f.claim, f.verdict, f.valid_from, f.episode_id, evidence_ids,\n       [i IN range(0, size(evidence_ids) - 1) WHERE evidence_ts[i] > f.valid_from | evidence_ids[i]],\n       CASE WHEN is_stale THEN 'STALE' ELSE f.status END\nORDER BY f.valid_from DESC",
+      "params": [
+       "id"
+      ],
+      "ms": 1.4,
+      "calls": 1
+     },
+     {
+      "cypher": "MATCH (ep:Episode)-[:ABOUT]->(x:Entity {id: $id})\nOPTIONAL MATCH (ep)-[:HAS_STEP]->(s:Step)\nWITH ep, s ORDER BY s.seq\nWITH ep, collect(s.tool) AS tools\nRETURN ep.id, ep.created_at, ep.verdict, ep.answer_state, tools\nORDER BY ep.created_at DESC LIMIT 3",
+      "params": [
+       "id"
+      ],
+      "ms": 1.1,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $patterns AS name\nMATCH (pt:PatternType {name: name})<-[:FOR_PATTERN]-(pb:Playbook)-[:FIRST_STEP]->(first:PlaybookStep)\nMATCH path = (first)-[:NEXT*0..12]->(s:PlaybookStep)\nWITH pt, pb, s, length(path) AS pos ORDER BY pos\nRETURN pt.name, pb.id, collect([s.tool, s.default_args])",
+      "params": [
+       "patterns"
+      ],
+      "ms": 1.1,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $ids AS eid\nMATCH (n:Entity {id: eid})\nRETURN n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 0.7,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "tool_call",
+   "step": 3,
+   "tool": "explore_neighborhood",
+   "args": {
+    "depth": 6,
+    "entity_id": "merch-nova-pay"
+   },
+   "thought": null,
+   "planner": "llm",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 3,
+   "tool": "explore_neighborhood",
+   "ok": true,
+   "args": {
+    "entity_id": "merch-nova-pay",
+    "depth": 6
+   },
+   "data": {
+    "entity_id": "merch-nova-pay",
+    "depth": 6,
+    "levels": [
+     {
+      "depth": 1,
+      "reached": 31,
+      "accounts": 31,
+      "devices": 0,
+      "ips": 0,
+      "flagged": 0
+     },
+     {
+      "depth": 2,
+      "reached": 194,
+      "accounts": 175,
+      "devices": 5,
+      "ips": 14,
+      "flagged": 1
+     },
+     {
+      "depth": 3,
+      "reached": 3648,
+      "accounts": 3547,
+      "devices": 48,
+      "ips": 53,
+      "flagged": 0
+     },
+     {
+      "depth": 4,
+      "reached": 8999,
+      "accounts": 7158,
+      "devices": 926,
+      "ips": 915,
+      "flagged": 0
+     },
+     {
+      "depth": 5,
+      "reached": 17238,
+      "accounts": 13365,
+      "devices": 1851,
+      "ips": 2022,
+      "flagged": 1
+     },
+     {
+      "depth": 6,
+      "reached": 16587,
+      "accounts": 10051,
+      "devices": 3378,
+      "ips": 3158,
+      "flagged": 0
+     }
+    ],
+    "total_reached": 46697,
+    "flagged": [
+     {
+      "entity": {
+       "id": "dev-fp-8821",
+       "labels": [
+        "Device"
+       ],
+       "name": "Headless Linux Chromium"
+      },
+      "depth": 2,
+      "path": {
+       "nodes": [
+        "merch-nova-pay",
+        "acct-nova-ops",
+        "dev-fp-8821"
+       ],
+       "steps": [
+        {
+         "from": "merch-nova-pay",
+         "to": "acct-nova-ops",
+         "rel": "FLOWS_TO",
+         "forward": true
+        },
+        {
+         "from": "acct-nova-ops",
+         "to": "dev-fp-8821",
+         "rel": "USED_DEVICE",
+         "forward": true
+        }
+       ]
+      },
+      "identity_hops": [
+       {
+        "id": "dev-fp-8821",
+        "type": "Device",
+        "accounts_on_path": [
+         "acct-nova-ops"
+        ]
+       }
+      ]
+     },
+     {
+      "entity": {
+       "id": "acct-vortex-holdings",
+       "labels": [
+        "Account",
+        "Sanctioned"
+       ],
+       "name": "Vortex Holdings Ltd"
+      },
+      "depth": 5,
+      "path": {
+       "nodes": [
+        "merch-nova-pay",
+        "acct-nova-ops",
+        "dev-fp-8821",
+        "acct-volkov-clearing",
+        "acct-baltic-trade",
+        "acct-vortex-holdings"
+       ],
+       "steps": [
+        {
+         "from": "merch-nova-pay",
+         "to": "acct-nova-ops",
+         "rel": "FLOWS_TO",
+         "forward": true
+        },
+        {
+         "from": "acct-nova-ops",
+         "to": "dev-fp-8821",
+         "rel": "USED_DEVICE",
+         "forward": true
+        },
+        {
+         "from": "dev-fp-8821",
+         "to": "acct-volkov-clearing",
+         "rel": "USED_DEVICE",
+         "forward": false
+        },
+        {
+         "from": "acct-volkov-clearing",
+         "to": "acct-baltic-trade",
+         "rel": "FLOWS_TO",
+         "forward": true
+        },
+        {
+         "from": "acct-baltic-trade",
+         "to": "acct-vortex-holdings",
+         "rel": "FLOWS_TO",
+         "forward": true
+        }
+       ]
+      },
+      "identity_hops": [
+       {
+        "id": "dev-fp-8821",
+        "type": "Device",
+        "accounts_on_path": [
+         "acct-nova-ops",
+         "acct-volkov-clearing"
+        ]
+       }
+      ]
+     }
+    ],
+    "scope": {
+     "requested_depth": 6,
+     "completed_depth": 6,
+     "exhausted": false,
+     "reached": 46697,
+     "truncated": false,
+     "timed_out": false,
+     "complete": true,
+     "elapsed_ms": 458.3
+    },
+    "eligible_routes": {
+     "rule": "transfers followed in their own direction; identity hops only through a shared device (account -> device <- account, counted as 2 hops); shared IPs are never followed",
+     "scope": {
+      "requested_depth": 6,
+      "completed_depth": 6,
+      "exhausted": false,
+      "reached": 416,
+      "truncated": false,
+      "timed_out": false,
+      "complete": true,
+      "elapsed_ms": 6.4
+     },
+     "routes": [
+      {
+       "entity": {
+        "id": "acct-vortex-holdings",
+        "labels": [
+         "Account",
+         "Sanctioned"
+        ],
+        "name": "Vortex Holdings Ltd"
+       },
+       "hops": 5,
+       "path": {
+        "nodes": [
+         "merch-nova-pay",
+         "acct-nova-ops",
+         "dev-fp-8821",
+         "acct-volkov-clearing",
+         "acct-baltic-trade",
+         "acct-vortex-holdings"
+        ],
+        "steps": [
+         {
+          "from": "merch-nova-pay",
+          "to": "acct-nova-ops",
+          "rel": "FLOWS_TO",
+          "forward": true
+         },
+         {
+          "from": "acct-nova-ops",
+          "to": "dev-fp-8821",
+          "rel": "USED_DEVICE",
+          "forward": true
+         },
+         {
+          "from": "dev-fp-8821",
+          "to": "acct-volkov-clearing",
+          "rel": "USED_DEVICE",
+          "forward": false
+         },
+         {
+          "from": "acct-volkov-clearing",
+          "to": "acct-baltic-trade",
+          "rel": "FLOWS_TO",
+          "forward": true
+         },
+         {
+          "from": "acct-baltic-trade",
+          "to": "acct-vortex-holdings",
+          "rel": "FLOWS_TO",
+          "forward": true
+         }
+        ]
+       },
+       "identity_hops": [
+        {
+         "id": "dev-fp-8821",
+         "type": "Device",
+         "accounts_on_path": [
+          "acct-nova-ops",
+          "acct-volkov-clearing"
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    "coverage": "Exploration: 46,697 entities, 6 of 6 hop(s). Eligible-route search: 416 entities, 6 of 6 hop(s), complete; 1 route(s) to a sanctioned account."
+   },
+   "evidence": {
+    "nodes": {
+     "merch-nova-pay": {
+      "labels": [
+       "Account",
+       "Merchant"
+      ],
+      "name": "NovaPay Digital Goods"
+     },
+     "acct-nova-ops": {
+      "labels": [
+       "Account"
+      ],
+      "name": "NovaPay Treasury Ops"
+     },
+     "dev-fp-8821": {
+      "labels": [
+       "Device"
+      ],
+      "name": "Headless Linux Chromium"
+     },
+     "acct-volkov-clearing": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Volkov Clearing LLC"
+     },
+     "acct-baltic-trade": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Baltic Trade Settlement"
+     },
+     "acct-vortex-holdings": {
+      "labels": [
+       "Account",
+       "Sanctioned"
+      ],
+      "name": "Vortex Holdings Ltd"
+     }
+    },
+    "edges": [
+     [
+      "acct-baltic-trade",
+      "FLOWS_TO",
+      "acct-vortex-holdings"
+     ],
+     [
+      "acct-nova-ops",
+      "USED_DEVICE",
+      "dev-fp-8821"
+     ],
+     [
+      "acct-volkov-clearing",
+      "FLOWS_TO",
+      "acct-baltic-trade"
+     ],
+     [
+      "acct-volkov-clearing",
+      "USED_DEVICE",
+      "dev-fp-8821"
+     ],
+     [
+      "merch-nova-pay",
+      "FLOWS_TO",
+      "acct-nova-ops"
+     ]
+    ]
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 467.5,
+    "rows": 46697,
+    "queries": [
+     {
+      "cypher": "MATCH (n:Entity {id: $id}) RETURN ID(n)",
+      "params": [
+       "id"
+      ],
+      "ms": 1.5,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $frontier AS nid\nMATCH (a) WHERE ID(a) = nid\nMATCH (a)-[:FLOWS_TO|USED_DEVICE|LOGGED_FROM]-(b)\nWITH b, min(ID(a)) AS parent\nRETURN collect(ID(b)), collect(parent),\n       collect(CASE WHEN b:Device THEN 1 WHEN b:IP THEN 2 ELSE 0 END),\n       collect(CASE WHEN b:Sanctioned OR b.risk_flags IS NOT NULL THEN ID(b) END)",
+      "params": [
+       "frontier"
+      ],
+      "ms": 447.1,
+      "calls": 6
+     },
+     {
+      "cypher": "UNWIND $ids AS nid\nMATCH (n) WHERE ID(n) = nid\nRETURN nid, n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 2.1,
+      "calls": 4
+     },
+     {
+      "cypher": "UNWIND $pairs AS p\nMATCH (u) WHERE ID(u) = p[0]\nMATCH (v) WHERE ID(v) = p[1]\nMATCH (u)-[r:FLOWS_TO|USED_DEVICE|LOGGED_FROM]-(v)\nRETURN p[0], p[1], type(r), ID(startNode(r)) = p[0]",
+      "params": [
+       "pairs"
+      ],
+      "ms": 3.7,
+      "calls": 2
+     },
+     {
+      "cypher": "MATCH (n) WHERE ID(n) = $id RETURN n:Device",
+      "params": [
+       "id"
+      ],
+      "ms": 0.3,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $frontier AS nid\nMATCH (a) WHERE ID(a) = nid\nMATCH (a)-[:FLOWS_TO|USED_DEVICE]->(b)\nWITH b, min(ID(a)) AS parent\nRETURN collect(ID(b)), collect(parent),\n       collect(CASE WHEN b:Device THEN 1 ELSE 0 END),\n       collect(CASE WHEN b:Sanctioned THEN ID(b) END)",
+      "params": [
+       "frontier"
+      ],
+      "ms": 3.9,
+      "calls": 6
+     },
+     {
+      "cypher": "UNWIND $frontier AS nid\nMATCH (d) WHERE ID(d) = nid\nMATCH (d)<-[:USED_DEVICE]-(b)\nWITH b, min(ID(d)) AS parent\nRETURN collect(ID(b)), collect(parent),\n       collect(CASE WHEN b:Device THEN 1 ELSE 0 END),\n       collect(CASE WHEN b:Sanctioned THEN ID(b) END)",
+      "params": [
+       "frontier"
+      ],
+      "ms": 1.6,
+      "calls": 4
+     },
+     {
+      "cypher": "UNWIND $ids AS eid\nMATCH (n:Entity {id: eid})\nRETURN n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 0.3,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "tool_call",
+   "step": 4,
+   "tool": "trace_money_flow",
+   "args": {
+    "entity_id": "merch-nova-pay",
+    "max_hops": 6,
+    "direction": "out"
+   },
+   "thought": null,
+   "planner": "llm",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 4,
+   "tool": "trace_money_flow",
+   "ok": true,
+   "args": {
+    "entity_id": "merch-nova-pay",
+    "direction": "out",
+    "max_hops": 6
+   },
+   "data": {
+    "entity_id": "merch-nova-pay",
+    "direction": "out",
+    "window": null,
+    "accounts_reached": 58,
+    "hops": [
+     {
+      "hop": 1,
+      "accounts": 13,
+      "amount_usd": 427610.15,
+      "largest": [
+       {
+        "to": "acct-nova-ops",
+        "name": "NovaPay Treasury Ops",
+        "transfer": {
+         "from": "merch-nova-pay",
+         "to": "acct-nova-ops",
+         "tx_id": "nova-0065",
+         "amount_usd": 145000.0,
+         "time": "2026-10-09 09:40 UTC"
+        }
+       },
+       {
+        "to": "acct-800FC8040",
+        "name": "Corporation #2026",
+        "transfer": {
+         "from": "merch-nova-pay",
+         "to": "acct-800FC8040",
+         "tx_id": "nova-0047",
+         "amount_usd": 43878.55,
+         "time": "2026-10-03 14:28 UTC"
+        }
+       },
+       {
+        "to": "acct-80024F4A0",
+        "name": "Partnership #4237",
+        "transfer": {
+         "from": "merch-nova-pay",
+         "to": "acct-80024F4A0",
+         "tx_id": "nova-0055",
+         "amount_usd": 37413.34,
+         "time": "2026-10-08 11:26 UTC"
+        }
+       }
+      ]
+     },
+     {
+      "hop": 2,
+      "accounts": 14,
+      "amount_usd": 154510.61,
+      "largest": [
+       {
+        "to": "acct-813F2C2A0",
+        "name": "Sole Proprietorship #52345",
+        "transfer": {
+         "from": "acct-8125A6080",
+         "to": "acct-813F2C2A0",
+         "tx_id": "ibm-4317930",
+         "amount_usd": 112512.35,
+         "time": "2026-10-02 03:01 UTC"
+        }
+       },
+       {
+        "to": "acct-806E9FF40",
+        "name": "Sole Proprietorship #20042",
+        "transfer": {
+         "from": "acct-806BB3B50",
+         "to": "acct-806E9FF40",
+         "tx_id": "ibm-4839667",
+         "amount_usd": 31731.77,
+         "time": "2026-10-02 22:35 UTC"
+        }
+       },
+       {
+        "to": "acct-800FC97B0",
+        "name": "Corporation #19270",
+        "transfer": {
+         "from": "acct-800FC8040",
+         "to": "acct-800FC97B0",
+         "tx_id": "ibm-5042333",
+         "amount_usd": 4959.33,
+         "time": "2026-10-03 19:31 UTC"
+        }
+       }
+      ]
+     },
+     {
+      "hop": 3,
+      "accounts": 2,
+      "amount_usd": 1046.56,
+      "largest": [
+       {
+        "to": "acct-80A5355A0",
+        "name": "Sole Proprietorship #26449",
+        "transfer": {
+         "from": "acct-800F96DF0",
+         "to": "acct-80A5355A0",
+         "tx_id": "ibm-4463675",
+         "amount_usd": 633.41,
+         "time": "2026-10-02 08:42 UTC"
+        }
+       },
+       {
+        "to": "acct-800815560",
+        "name": "Sole Proprietorship #1271",
+        "transfer": {
+         "from": "acct-8006E5960",
+         "to": "acct-800815560",
+         "tx_id": "ibm-1940755",
+         "amount_usd": 413.15,
+         "time": "2026-09-26 07:02 UTC"
+        }
+       }
+      ]
+     },
+     {
+      "hop": 4,
+      "accounts": 4,
+      "amount_usd": 4832.27,
+      "largest": [
+       {
+        "to": "acct-8027BA7C0",
+        "name": "Sole Proprietorship #15027",
+        "transfer": {
+         "from": "acct-800815560",
+         "to": "acct-8027BA7C0",
+         "tx_id": "ibm-2104675",
+         "amount_usd": 3002.03,
+         "time": "2026-09-27 01:35 UTC"
+        }
+       },
+       {
+        "to": "acct-80087CE10",
+        "name": "Partnership #15471",
+        "transfer": {
+         "from": "acct-800815560",
+         "to": "acct-80087CE10",
+         "tx_id": "ibm-2622402",
+         "amount_usd": 723.82,
+         "time": "2026-09-28 16:36 UTC"
+        }
+       },
+       {
+        "to": "acct-800EE6B70",
+        "name": "Partnership #2418",
+        "transfer": {
+         "from": "acct-800815560",
+         "to": "acct-800EE6B70",
+         "tx_id": "ibm-2738660",
+         "amount_usd": 669.51,
+         "time": "2026-09-28 22:48 UTC"
+        }
+       }
+      ]
+     },
+     {
+      "hop": 5,
+      "accounts": 11,
+      "amount_usd": 90490.87,
+      "largest": [
+       {
+        "to": "acct-801847600",
+        "name": "Corporation #3015",
+        "transfer": {
+         "from": "acct-800EE6B70",
+         "to": "acct-801847600",
+         "tx_id": "ibm-2332861",
+         "amount_usd": 19603.57,
+         "time": "2026-09-29 13:58 UTC"
+        }
+       },
+       {
+        "to": "acct-80044A5D0",
+        "name": "Partnership #53152",
+        "transfer": {
+         "from": "acct-800EE6B70",
+         "to": "acct-80044A5D0",
+         "tx_id": "ibm-2332855",
+         "amount_usd": 18721.78,
+         "time": "2026-09-29 08:41 UTC"
+        }
+       },
+       {
+        "to": "acct-801EC18E0",
+        "name": "Sole Proprietorship #23355",
+        "transfer": {
+         "from": "acct-800EE6B70",
+         "to": "acct-801EC18E0",
+         "tx_id": "ibm-2332871",
+         "amount_usd": 14243.85,
+         "time": "2026-09-29 21:08 UTC"
+        }
+       }
+      ]
+     },
+     {
+      "hop": 6,
+      "accounts": 14,
+      "amount_usd": 178841.61,
+      "largest": [
+       {
+        "to": "acct-812D8F030",
+        "name": "Corporation #36539",
+        "transfer": {
+         "from": "acct-8000DBF20",
+         "to": "acct-812D8F030",
+         "tx_id": "ibm-4855833",
+         "amount_usd": 89772.0,
+         "time": "2026-10-02 23:14 UTC"
+        }
+       },
+       {
+        "to": "acct-802561BA0",
+        "name": "Sole Proprietorship #3590",
+        "transfer": {
+         "from": "acct-80255E6A0",
+         "to": "acct-802561BA0",
+         "tx_id": "ibm-4050229",
+         "amount_usd": 32540.39,
+         "time": "2026-10-01 15:34 UTC"
+        }
+       },
+       {
+        "to": "acct-811F2F280",
+        "name": "Partnership #1305",
+        "transfer": {
+         "from": "acct-8000DBF20",
+         "to": "acct-811F2F280",
+         "tx_id": "ibm-3576637",
+         "amount_usd": 28327.2,
+         "time": "2026-09-30 15:30 UTC"
+        }
+       }
+      ]
+     }
+    ],
+    "sanctioned": [],
+    "round_trips": [],
+    "capped_hops": []
+   },
+   "evidence": {
+    "nodes": {
+     "acct-8000DBF20": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #36537"
+     },
+     "acct-80024F4A0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #4237"
+     },
+     "acct-80044A5D0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #53152"
+     },
+     "acct-8006E5960": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #2300"
+     },
+     "acct-800815560": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #1271"
+     },
+     "acct-80087CE10": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #15471"
+     },
+     "acct-800EE6B70": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #2418"
+     },
+     "acct-800F96DF0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #20663"
+     },
+     "acct-800FC8040": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #2026"
+     },
+     "acct-800FC97B0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #19270"
+     },
+     "acct-801847600": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #3015"
+     },
+     "acct-801EC18E0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #23355"
+     },
+     "acct-80255E6A0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #39871"
+     },
+     "acct-802561BA0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #3590"
+     },
+     "acct-8027BA7C0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #15027"
+     },
+     "acct-806BB3B50": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #810"
+     },
+     "acct-806E9FF40": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #20042"
+     },
+     "acct-80A5355A0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #26449"
+     },
+     "acct-811F2F280": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #1305"
+     },
+     "acct-8125A6080": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #27169"
+     },
+     "acct-812D8F030": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #36539"
+     },
+     "acct-813F2C2A0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #52345"
+     },
+     "acct-nova-ops": {
+      "labels": [
+       "Account"
+      ],
+      "name": "NovaPay Treasury Ops"
+     },
+     "merch-nova-pay": {
+      "labels": [
+       "Account",
+       "Merchant"
+      ],
+      "name": "NovaPay Digital Goods"
+     }
+    },
+    "edges": [
+     [
+      "acct-8000DBF20",
+      "TRANSFERRED",
+      "acct-811F2F280"
+     ],
+     [
+      "acct-8000DBF20",
+      "TRANSFERRED",
+      "acct-812D8F030"
+     ],
+     [
+      "acct-8006E5960",
+      "TRANSFERRED",
+      "acct-800815560"
+     ],
+     [
+      "acct-800815560",
+      "TRANSFERRED",
+      "acct-80087CE10"
+     ],
+     [
+      "acct-800815560",
+      "TRANSFERRED",
+      "acct-800EE6B70"
+     ],
+     [
+      "acct-800815560",
+      "TRANSFERRED",
+      "acct-8027BA7C0"
+     ],
+     [
+      "acct-800EE6B70",
+      "TRANSFERRED",
+      "acct-80044A5D0"
+     ],
+     [
+      "acct-800EE6B70",
+      "TRANSFERRED",
+      "acct-801847600"
+     ],
+     [
+      "acct-800EE6B70",
+      "TRANSFERRED",
+      "acct-801EC18E0"
+     ],
+     [
+      "acct-800F96DF0",
+      "TRANSFERRED",
+      "acct-80A5355A0"
+     ],
+     [
+      "acct-800FC8040",
+      "TRANSFERRED",
+      "acct-800FC97B0"
+     ],
+     [
+      "acct-80255E6A0",
+      "TRANSFERRED",
+      "acct-802561BA0"
+     ],
+     [
+      "acct-806BB3B50",
+      "TRANSFERRED",
+      "acct-806E9FF40"
+     ],
+     [
+      "acct-8125A6080",
+      "TRANSFERRED",
+      "acct-813F2C2A0"
+     ],
+     [
+      "merch-nova-pay",
+      "TRANSFERRED",
+      "acct-80024F4A0"
+     ],
+     [
+      "merch-nova-pay",
+      "TRANSFERRED",
+      "acct-800FC8040"
+     ],
+     [
+      "merch-nova-pay",
+      "TRANSFERRED",
+      "acct-nova-ops"
+     ]
+    ]
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 26.1,
+    "rows": 58,
+    "queries": [
+     {
+      "cypher": "MATCH (n:Entity {id: $id}) RETURN ID(n)",
+      "params": [
+       "id"
+      ],
+      "ms": 3.6,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $frontier AS f\nMATCH (a) WHERE ID(a) = f[0]\nMATCH (a)-[t:TRANSFERRED]->(b)\nWHERE t.ts >= f[1] AND t.ts <= $until AND t.amount >= $min_amount\nWITH b, collect([t.ts, ID(a), t.amount, t.tx_id]) AS options\nRETURN collect(ID(b)),\n       collect(reduce(best = head(options), o IN options | CASE WHEN o[0] < best[0] THEN o ELSE best END))",
+      "params": [
+       "frontier",
+       "min_amount",
+       "since",
+       "until"
+      ],
+      "ms": 18.2,
+      "calls": 6
+     },
+     {
+      "cypher": "UNWIND $ids AS nid\nMATCH (n) WHERE ID(n) = nid\nRETURN nid, n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 1.4,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $ids AS eid\nMATCH (n:Entity {id: eid})\nRETURN n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 1.5,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "tool_call",
+   "step": 5,
+   "tool": "exposure_flow",
+   "args": {
+    "source_ids": [
+     "merch-nova-pay"
+    ],
+    "target_id": "acct-vortex-holdings"
+   },
+   "thought": null,
+   "planner": "llm",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 5,
+   "tool": "exposure_flow",
+   "ok": true,
+   "args": {
+    "source_ids": [
+     "merch-nova-pay"
+    ],
+    "target_id": "acct-vortex-holdings",
+    "include_shared_device_accounts": true
+   },
+   "data": {
+    "source_ids": [
+     "merch-nova-pay"
+    ],
+    "added_via_shared_device": {},
+    "target_id": "acct-vortex-holdings",
+    "max_flow_usd": 0,
+    "edges": [],
+    "note": "upper bound over aggregated transfers; ignores timing"
+   },
+   "evidence": {
+    "nodes": {
+     "merch-nova-pay": {
+      "labels": [
+       "Account",
+       "Merchant"
+      ],
+      "name": "NovaPay Digital Goods"
+     },
+     "acct-vortex-holdings": {
+      "labels": [
+       "Account",
+       "Sanctioned"
+      ],
+      "name": "Vortex Holdings Ltd"
+     }
+    },
+    "edges": []
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 48.3,
+    "rows": 0,
+    "queries": [
+     {
+      "cypher": "UNWIND $ids AS eid\nMATCH (n:Entity {id: eid})\nRETURN n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 1.3,
+      "calls": 2
+     },
+     {
+      "cypher": "UNWIND $ids AS aid\nMATCH (a:Entity {id: aid})-[:USED_DEVICE]->(d:Device)<-[:USED_DEVICE]-(b:Account)\nWHERE NOT b.id IN $ids\nRETURN d.id, collect(DISTINCT a.id), collect(DISTINCT b.id)",
+      "params": [
+       "ids"
+      ],
+      "ms": 27.9,
+      "calls": 1
+     },
+     {
+      "cypher": "MATCH (s:Entity) WHERE s.id IN $sources AND s:Account\nWITH collect(s) AS sources\nMATCH (t:Entity {id: $target})\nCALL algo.maxFlow({sourceNodes: sources, targetNodes: [t], nodeLabels: ['Account'],\n                   relationshipTypes: ['FLOWS_TO'], capacityProperty: 'capacity'})\nYIELD edges, edgeFlows, maxFlow\nRETURN maxFlow, [e IN edges | [startNode(e).id, endNode(e).id]], edgeFlows",
+      "params": [
+       "sources",
+       "target"
+      ],
+      "ms": 19.0,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "tool_call",
+   "step": 6,
+   "tool": "trace_governance",
+   "args": {
+    "entity_id": "merch-nova-pay"
+   },
+   "thought": null,
+   "planner": "llm",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 6,
+   "tool": "trace_governance",
+   "ok": true,
+   "args": {
+    "entity_id": "merch-nova-pay"
+   },
+   "data": {
+    "entity_id": "merch-nova-pay",
+    "decisions": [
+     {
+      "id": "dec-waiver-77",
+      "kind": "onboarding_waiver",
+      "control": "device_attestation",
+      "status": "ACTIVE",
+      "summary": "Device attestation waived for NovaPay onboarding",
+      "approved_at": 1789718400,
+      "merchant_monthly_volume_usd": 410000.0,
+      "approved_by": {
+       "id": "emp-rohan-mehta",
+       "name": "Rohan Mehta",
+       "title": "Merchant Onboarding Manager",
+       "clearance": "L2",
+       "clearance_level": 2
+      },
+      "team": {
+       "id": "team-merchant-onboarding",
+       "name": "Merchant Onboarding"
+      },
+      "policy": {
+       "id": "pol-aml-sec-4",
+       "title": "AML Policy Section 4: Waivers and Account Restrictions",
+       "version": "2026.2",
+       "text": "4.2 Waiving an onboarding control for a merchant that processes more than $250,000 per month requires approval from an officer with L3 clearance. 4.5 Freezing a live merchant or a linked ring of accounts requires L3 approval, and infrastructure shared with unrelated customers must be excluded from the freeze.",
+       "required_clearance": "L3",
+       "required_clearance_level": 3,
+       "required_clearance_for_freeze": "L3",
+       "waiver_threshold_monthly_usd": 250000.0
+      },
+      "violations": [
+       {
+        "policy_id": "pol-aml-sec-4",
+        "rule": "waiver_clearance",
+        "detail": "emp-rohan-mehta (L2) approved a waiver for a merchant processing $410,000/month; pol-aml-sec-4 requires L3 above $250,000/month"
+       }
+      ],
+      "sources": [
+       {
+        "id": "tick-risk-408",
+        "system": "Jira",
+        "title": "NovaPay onboarding: device attestation failing",
+        "text": "Attestation fails for most NovaPay admin sessions: headless Chromium fingerprints (fp-8821). Recommend holding go-live until resolved.",
+        "status": "CLOSED",
+        "channel": null,
+        "type": "Ticket",
+        "by": {
+         "id": "emp-aisha-khan",
+         "name": "Aisha Khan",
+         "relation": "OPENED"
+        }
+       },
+       {
+        "id": "msg-slack-9921",
+        "system": "Slack",
+        "title": null,
+        "text": "Approving the device attestation waiver for NovaPay so they can go live this week. I'll own the risk.",
+        "status": null,
+        "channel": "#merchant-onboarding",
+        "type": "Message",
+        "by": {
+         "id": "emp-rohan-mehta",
+         "name": "Rohan Mehta",
+         "relation": "AUTHORED"
+        }
+       }
+      ]
+     }
+    ],
+    "approver_other_decisions": [
+     {
+      "approved_by": "emp-rohan-mehta",
+      "decision_id": "dec-waiver-81",
+      "control": "kyb_document_refresh",
+      "applies_to": {
+       "id": "merch-lumen-games",
+       "labels": [
+        "Account",
+        "Merchant"
+       ],
+       "name": "Lumen Games Studio"
+      },
+      "merchant_monthly_volume_usd": 180000.0,
+      "policy_id": "pol-aml-sec-4",
+      "violations": []
+     }
+    ],
+    "freeze_policy": {
+     "id": "pol-aml-sec-4",
+     "title": "AML Policy Section 4: Waivers and Account Restrictions",
+     "required_clearance": "L3"
+    },
+    "on_call_approvers": [
+     {
+      "id": "emp-priya-nair",
+      "name": "Priya Nair",
+      "title": "AML Compliance Lead",
+      "clearance": "L3",
+      "team": {
+       "id": "team-aml-compliance",
+       "name": "AML Compliance"
+      }
+     }
+    ],
+    "elapsed_ms": 4.7
+   },
+   "evidence": {
+    "nodes": {
+     "merch-nova-pay": {
+      "labels": [
+       "Account",
+       "Merchant"
+      ],
+      "name": "NovaPay Digital Goods"
+     },
+     "dec-waiver-77": {
+      "labels": [
+       "Decision"
+      ],
+      "name": "Device attestation waived for NovaPay onboarding"
+     },
+     "emp-rohan-mehta": {
+      "labels": [
+       "Employee"
+      ],
+      "name": "Rohan Mehta"
+     },
+     "team-merchant-onboarding": {
+      "labels": [
+       "Team"
+      ],
+      "name": "Merchant Onboarding"
+     },
+     "pol-aml-sec-4": {
+      "labels": [
+       "PolicyDoc"
+      ],
+      "name": "AML Policy Section 4: Waivers and Account Restrictions"
+     },
+     "tick-risk-408": {
+      "labels": [
+       "Ticket"
+      ],
+      "name": "NovaPay onboarding: device attestation failing"
+     },
+     "emp-aisha-khan": {
+      "labels": [
+       "Employee"
+      ],
+      "name": "Aisha Khan"
+     },
+     "msg-slack-9921": {
+      "labels": [
+       "Message"
+      ],
+      "name": "Approving the device attestation waiver for NovaPay so they "
+     },
+     "dec-waiver-81": {
+      "labels": [
+       "Decision"
+      ],
+      "name": "kyb_document_refresh"
+     },
+     "merch-lumen-games": {
+      "labels": [
+       "Account",
+       "Merchant"
+      ],
+      "name": "Lumen Games Studio"
+     },
+     "emp-priya-nair": {
+      "labels": [
+       "Employee"
+      ],
+      "name": "Priya Nair"
+     },
+     "team-aml-compliance": {
+      "labels": [
+       "Team"
+      ],
+      "name": "AML Compliance"
+     }
+    },
+    "edges": [
+     [
+      "dec-waiver-77",
+      "APPLIES_TO",
+      "merch-nova-pay"
+     ],
+     [
+      "dec-waiver-77",
+      "GOVERNED_BY",
+      "pol-aml-sec-4"
+     ],
+     [
+      "dec-waiver-77",
+      "SOURCED_FROM",
+      "msg-slack-9921"
+     ],
+     [
+      "dec-waiver-77",
+      "SOURCED_FROM",
+      "tick-risk-408"
+     ],
+     [
+      "dec-waiver-81",
+      "APPLIES_TO",
+      "merch-lumen-games"
+     ],
+     [
+      "emp-aisha-khan",
+      "OPENED",
+      "tick-risk-408"
+     ],
+     [
+      "emp-priya-nair",
+      "MEMBER_OF",
+      "team-aml-compliance"
+     ],
+     [
+      "emp-rohan-mehta",
+      "APPROVED",
+      "dec-waiver-77"
+     ],
+     [
+      "emp-rohan-mehta",
+      "APPROVED",
+      "dec-waiver-81"
+     ],
+     [
+      "emp-rohan-mehta",
+      "AUTHORED",
+      "msg-slack-9921"
+     ],
+     [
+      "emp-rohan-mehta",
+      "MEMBER_OF",
+      "team-merchant-onboarding"
+     ]
+    ]
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 5.2,
+    "rows": 3,
+    "queries": [
+     {
+      "cypher": "MATCH (n:Entity {id: $id}) RETURN ID(n)",
+      "params": [
+       "id"
+      ],
+      "ms": 0.9,
+      "calls": 1
+     },
+     {
+      "cypher": "MATCH (x:Entity {id: $id})<-[:APPLIES_TO]-(d:Decision)\nOPTIONAL MATCH (e:Employee)-[:APPROVED]->(d)\nOPTIONAL MATCH (e)-[:MEMBER_OF]->(t:Team)\nOPTIONAL MATCH (d)-[:GOVERNED_BY]->(p:PolicyDoc)\nRETURN d {.*}, e {.id, .name, .title, .clearance, .clearance_level}, t {.id, .name},\n       p {.id, .title, .version, .text, .waiver_threshold_monthly, .required_clearance,\n          .required_clearance_level, .required_clearance_for_freeze}",
+      "params": [
+       "id"
+      ],
+      "ms": 1.2,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $ids AS did\nMATCH (d:Entity {id: did})-[:SOURCED_FROM]->(s:Entity)\nOPTIONAL MATCH (w:Employee)-[r:OPENED|AUTHORED]->(s)\nRETURN did, s {.id, .system, .title, .text, .status, .channel}, labels(s), w.id, w.name, type(r)",
+      "params": [
+       "ids"
+      ],
+      "ms": 0.9,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $ids AS aid\nMATCH (e:Entity {id: aid})-[:APPROVED]->(d:Decision)-[:APPLIES_TO]->(m:Entity)\nWHERE NOT d.id IN $seen\nOPTIONAL MATCH (d)-[:GOVERNED_BY]->(p:PolicyDoc)\nRETURN aid, d {.*}, m.id, labels(m), m.name,\n       p {.id, .waiver_threshold_monthly, .required_clearance, .required_clearance_level}",
+      "params": [
+       "ids",
+       "seen"
+      ],
+      "ms": 0.8,
+      "calls": 1
+     },
+     {
+      "cypher": "MATCH (p:PolicyDoc) WHERE p.required_clearance_level_for_freeze IS NOT NULL\nOPTIONAL MATCH (e:Employee)\nWHERE e.on_call = true AND e.clearance_level >= p.required_clearance_level_for_freeze\nOPTIONAL MATCH (e)-[:MEMBER_OF]->(t:Team)\nRETURN p.id, p.title, p.required_clearance_for_freeze,\n       collect(CASE WHEN e IS NULL THEN NULL\n                    ELSE [e.id, e.name, e.title, e.clearance, t.id, t.name] END)",
+      "params": [],
+      "ms": 0.7,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $ids AS eid\nMATCH (n:Entity {id: eid})\nRETURN n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 0.4,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "final",
+   "entity_id": "merch-nova-pay",
+   "case_id": "case-4b0cbdae",
+   "answer_state": "answered_with_path",
+   "verdict": "SUSPICIOUS",
+   "verdict_basis": [
+    "F3"
+   ],
+   "statements": [
+    {
+     "text": "NovaPay Digital Goods (merch-nova-pay) has an eligible route to sanctioned Vortex Holdings Ltd (acct-vortex-holdings) in 5 hops: merch-nova-pay \u2192 acct-nova-ops \u2192 dev-fp-8821 \u2192 acct-volkov-clearing \u2192 acct-baltic-trade \u2192 acct-vortex-holdings.",
+     "facts": [
+      "F3"
+     ]
+    },
+    {
+     "text": "The route crosses shared device dev-fp-8821, used by acct-nova-ops and acct-volkov-clearing; that hop is an identity link, not a transfer.",
+     "facts": [
+      "F3"
+     ]
+    },
+    {
+     "text": "It reaches flagged Headless Linux Chromium (dev-fp-8821) at depth 2.",
+     "facts": [
+      "F4"
+     ]
+    },
+    {
+     "text": "Up to $0 could reach Vortex Holdings Ltd (acct-vortex-holdings) from merch-nova-pay (max flow over aggregated transfers: an upper bound that ignores timing).",
+     "facts": [
+      "F6"
+     ]
+    },
+    {
+     "text": "dec-waiver-77 waived device_attestation for NovaPay Digital Goods (merch-nova-pay), approved by Rohan Mehta (emp-rohan-mehta) with L2 clearance (sources: tick-risk-408 and msg-slack-9921).",
+     "facts": [
+      "F7",
+      "F8"
+     ]
+    },
+    {
+     "text": "That breaks pol-aml-sec-4: emp-rohan-mehta (L2) approved a waiver for a merchant processing $410,000/month; pol-aml-sec-4 requires L3 above $250,000/month.",
+     "facts": [
+      "F11",
+      "F10",
+      "F9"
+     ]
+    },
+    {
+     "text": "emp-rohan-mehta also approved dec-waiver-81 for Lumen Games Studio (merch-lumen-games), within policy.",
+     "facts": [
+      "F12"
+     ]
+    }
+   ],
+   "summary": "NovaPay Digital Goods (merch-nova-pay) has an eligible route to sanctioned Vortex Holdings Ltd (acct-vortex-holdings) in 5 hops: merch-nova-pay \u2192 acct-nova-ops \u2192 dev-fp-8821 \u2192 acct-volkov-clearing \u2192 acct-baltic-trade \u2192 acct-vortex-holdings. The route crosses shared device dev-fp-8821, used by acct-nova-ops and acct-volkov-clearing; that hop is an identity link, not a transfer. It reaches flagged Headless Linux Chromium (dev-fp-8821) at depth 2. Up to $0 could reach Vortex Holdings Ltd (acct-vortex-holdings) from merch-nova-pay (max flow over aggregated transfers: an upper bound that ignores timing). dec-waiver-77 waived device_attestation for NovaPay Digital Goods (merch-nova-pay), approved by Rohan Mehta (emp-rohan-mehta) with L2 clearance (sources: tick-risk-408 and msg-slack-9921). That breaks pol-aml-sec-4: emp-rohan-mehta (L2) approved a waiver for a merchant processing $410,000/month; pol-aml-sec-4 requires L3 above $250,000/month. emp-rohan-mehta also approved dec-waiver-81 for Lumen Games Studio (merch-lumen-games), within policy.",
+   "badge": "7 statements, each rendered from a cited tool result",
+   "facts": [
+    {
+     "id": "F1",
+     "kind": "profile",
+     "subject": "merch-nova-pay",
+     "predicate": "status",
+     "object": null,
+     "value": "ACTIVE",
+     "unit": null,
+     "source": {
+      "tool": "resolve_entity",
+      "step": 1,
+      "result_key": "data.status"
+     },
+     "scope": {},
+     "evidence_rev": 0,
+     "depends_on": [
+      "merch-nova-pay"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F2",
+     "kind": "profile",
+     "subject": "merch-nova-pay",
+     "predicate": "monthly_volume",
+     "object": null,
+     "value": 410000.0,
+     "unit": "USD/month",
+     "source": {
+      "tool": "resolve_entity",
+      "step": 1,
+      "result_key": "data.profile.monthly_volume_usd"
+     },
+     "scope": {},
+     "evidence_rev": 0,
+     "depends_on": [
+      "merch-nova-pay"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F3",
+     "kind": "sanctions_exposure",
+     "subject": "merch-nova-pay",
+     "predicate": "eligible_route_hops",
+     "object": "acct-vortex-holdings",
+     "value": 5,
+     "unit": "hops",
+     "source": {
+      "tool": "explore_neighborhood",
+      "step": 3,
+      "result_key": "data.eligible_routes.routes[0]"
+     },
+     "scope": {
+      "path": {
+       "nodes": [
+        "merch-nova-pay",
+        "acct-nova-ops",
+        "dev-fp-8821",
+        "acct-volkov-clearing",
+        "acct-baltic-trade",
+        "acct-vortex-holdings"
+       ],
+       "steps": [
+        {
+         "from": "merch-nova-pay",
+         "to": "acct-nova-ops",
+         "rel": "FLOWS_TO",
+         "forward": true
+        },
+        {
+         "from": "acct-nova-ops",
+         "to": "dev-fp-8821",
+         "rel": "USED_DEVICE",
+         "forward": true
+        },
+        {
+         "from": "dev-fp-8821",
+         "to": "acct-volkov-clearing",
+         "rel": "USED_DEVICE",
+         "forward": false
+        },
+        {
+         "from": "acct-volkov-clearing",
+         "to": "acct-baltic-trade",
+         "rel": "FLOWS_TO",
+         "forward": true
+        },
+        {
+         "from": "acct-baltic-trade",
+         "to": "acct-vortex-holdings",
+         "rel": "FLOWS_TO",
+         "forward": true
+        }
+       ]
+      },
+      "identity_hops": [
+       {
+        "id": "dev-fp-8821",
+        "type": "Device",
+        "accounts_on_path": [
+         "acct-nova-ops",
+         "acct-volkov-clearing"
+        ]
+       }
+      ],
+      "search": {
+       "requested_depth": 6,
+       "completed_depth": 6,
+       "exhausted": false,
+       "reached": 416,
+       "truncated": false,
+       "timed_out": false,
+       "complete": true,
+       "elapsed_ms": 6.4
+      }
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "merch-nova-pay",
+      "acct-nova-ops",
+      "dev-fp-8821",
+      "acct-volkov-clearing",
+      "acct-baltic-trade",
+      "acct-vortex-holdings",
+      "merch-nova-pay|FLOWS_TO|acct-nova-ops",
+      "acct-nova-ops|USED_DEVICE|dev-fp-8821",
+      "acct-volkov-clearing|USED_DEVICE|dev-fp-8821",
+      "acct-volkov-clearing|FLOWS_TO|acct-baltic-trade",
+      "acct-baltic-trade|FLOWS_TO|acct-vortex-holdings"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F4",
+     "kind": "sanctions_exposure",
+     "subject": "merch-nova-pay",
+     "predicate": "risk_flag_within_reach",
+     "object": "dev-fp-8821",
+     "value": 2,
+     "unit": "hops",
+     "source": {
+      "tool": "explore_neighborhood",
+      "step": 3,
+      "result_key": "data.flagged[0]"
+     },
+     "scope": {
+      "path": {
+       "nodes": [
+        "merch-nova-pay",
+        "acct-nova-ops",
+        "dev-fp-8821"
+       ],
+       "steps": [
+        {
+         "from": "merch-nova-pay",
+         "to": "acct-nova-ops",
+         "rel": "FLOWS_TO",
+         "forward": true
+        },
+        {
+         "from": "acct-nova-ops",
+         "to": "dev-fp-8821",
+         "rel": "USED_DEVICE",
+         "forward": true
+        }
+       ]
+      },
+      "breaks": []
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "merch-nova-pay",
+      "acct-nova-ops",
+      "dev-fp-8821",
+      "merch-nova-pay|FLOWS_TO|acct-nova-ops",
+      "acct-nova-ops|USED_DEVICE|dev-fp-8821"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F5",
+     "kind": "sanctions_exposure",
+     "subject": "merch-nova-pay",
+     "predicate": "sanctioned_within_reach",
+     "object": "acct-vortex-holdings",
+     "value": 5,
+     "unit": "hops",
+     "source": {
+      "tool": "explore_neighborhood",
+      "step": 3,
+      "result_key": "data.flagged[1]"
+     },
+     "scope": {
+      "path": {
+       "nodes": [
+        "merch-nova-pay",
+        "acct-nova-ops",
+        "dev-fp-8821",
+        "acct-volkov-clearing",
+        "acct-baltic-trade",
+        "acct-vortex-holdings"
+       ],
+       "steps": [
+        {
+         "from": "merch-nova-pay",
+         "to": "acct-nova-ops",
+         "rel": "FLOWS_TO",
+         "forward": true
+        },
+        {
+         "from": "acct-nova-ops",
+         "to": "dev-fp-8821",
+         "rel": "USED_DEVICE",
+         "forward": true
+        },
+        {
+         "from": "dev-fp-8821",
+         "to": "acct-volkov-clearing",
+         "rel": "USED_DEVICE",
+         "forward": false
+        },
+        {
+         "from": "acct-volkov-clearing",
+         "to": "acct-baltic-trade",
+         "rel": "FLOWS_TO",
+         "forward": true
+        },
+        {
+         "from": "acct-baltic-trade",
+         "to": "acct-vortex-holdings",
+         "rel": "FLOWS_TO",
+         "forward": true
+        }
+       ]
+      },
+      "breaks": []
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "merch-nova-pay",
+      "acct-nova-ops",
+      "dev-fp-8821",
+      "acct-volkov-clearing",
+      "acct-baltic-trade",
+      "acct-vortex-holdings",
+      "merch-nova-pay|FLOWS_TO|acct-nova-ops",
+      "acct-nova-ops|USED_DEVICE|dev-fp-8821",
+      "acct-volkov-clearing|USED_DEVICE|dev-fp-8821",
+      "acct-volkov-clearing|FLOWS_TO|acct-baltic-trade",
+      "acct-baltic-trade|FLOWS_TO|acct-vortex-holdings"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F6",
+     "kind": "sanctions_exposure",
+     "subject": "merch-nova-pay",
+     "predicate": "max_flow_capacity",
+     "object": "acct-vortex-holdings",
+     "value": 0,
+     "unit": "USD",
+     "source": {
+      "tool": "exposure_flow",
+      "step": 5,
+      "result_key": "data.max_flow_usd"
+     },
+     "scope": {
+      "sources": [
+       "merch-nova-pay"
+      ],
+      "added_via_shared_device": {}
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "merch-nova-pay",
+      "acct-vortex-holdings"
+     ],
+     "aggregate": true
+    },
+    {
+     "id": "F7",
+     "kind": "waiver_compliance",
+     "subject": "dec-waiver-77",
+     "predicate": "waiver_applies_to",
+     "object": "merch-nova-pay",
+     "value": "device_attestation",
+     "unit": null,
+     "source": {
+      "tool": "trace_governance",
+      "step": 6,
+      "result_key": "data.decisions[0]"
+     },
+     "scope": {
+      "sources": [
+       "tick-risk-408",
+       "msg-slack-9921"
+      ]
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "dec-waiver-77",
+      "merch-nova-pay"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F8",
+     "kind": "waiver_compliance",
+     "subject": "dec-waiver-77",
+     "predicate": "approved_by",
+     "object": "emp-rohan-mehta",
+     "value": "L2",
+     "unit": null,
+     "source": {
+      "tool": "trace_governance",
+      "step": 6,
+      "result_key": "data.decisions[0].approved_by"
+     },
+     "scope": {},
+     "evidence_rev": 0,
+     "depends_on": [
+      "dec-waiver-77",
+      "emp-rohan-mehta"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F9",
+     "kind": "waiver_compliance",
+     "subject": "merch-nova-pay",
+     "predicate": "monthly_volume",
+     "object": null,
+     "value": 410000.0,
+     "unit": "USD/month",
+     "source": {
+      "tool": "trace_governance",
+      "step": 6,
+      "result_key": "data.decisions[0].merchant_monthly_volume_usd"
+     },
+     "scope": {
+      "recorded_on": "dec-waiver-77"
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "dec-waiver-77"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F10",
+     "kind": "waiver_compliance",
+     "subject": "pol-aml-sec-4",
+     "predicate": "policy_threshold",
+     "object": null,
+     "value": 250000.0,
+     "unit": "USD/month",
+     "source": {
+      "tool": "trace_governance",
+      "step": 6,
+      "result_key": "data.decisions[0].policy.waiver_threshold_monthly_usd"
+     },
+     "scope": {
+      "version": "2026.2",
+      "required_clearance": "L3"
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "pol-aml-sec-4"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F11",
+     "kind": "waiver_compliance",
+     "subject": "dec-waiver-77",
+     "predicate": "waiver_compliance",
+     "object": "pol-aml-sec-4",
+     "value": "BREACH",
+     "unit": null,
+     "source": {
+      "tool": "trace_governance",
+      "step": 6,
+      "result_key": "data.decisions[0].violations"
+     },
+     "scope": {
+      "details": [
+       "emp-rohan-mehta (L2) approved a waiver for a merchant processing $410,000/month; pol-aml-sec-4 requires L3 above $250,000/month"
+      ],
+      "policy_version": "2026.2"
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "dec-waiver-77",
+      "merch-nova-pay",
+      "emp-rohan-mehta",
+      "pol-aml-sec-4"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F12",
+     "kind": "waiver_compliance",
+     "subject": "dec-waiver-81",
+     "predicate": "waiver_compliance",
+     "object": "pol-aml-sec-4",
+     "value": "COMPLIANT",
+     "unit": null,
+     "source": {
+      "tool": "trace_governance",
+      "step": 6,
+      "result_key": "data.approver_other_decisions[0]"
+     },
+     "scope": {
+      "approved_by": "emp-rohan-mehta",
+      "applies_to": "merch-lumen-games",
+      "other": true
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "dec-waiver-81",
+      "emp-rohan-mehta",
+      "merch-lumen-games"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F13",
+     "kind": "action",
+     "subject": "pol-aml-sec-4",
+     "predicate": "on_call_approver",
+     "object": "emp-priya-nair",
+     "value": "L3",
+     "unit": null,
+     "source": {
+      "tool": "trace_governance",
+      "step": 6,
+      "result_key": "data.on_call_approvers[0]"
+     },
+     "scope": {},
+     "evidence_rev": 0,
+     "depends_on": [
+      "pol-aml-sec-4",
+      "emp-priya-nair"
+     ],
+     "aggregate": false
+    }
+   ],
+   "claims": [
+    {
+     "subject": "merch-nova-pay",
+     "relation": "TRANSFERRED",
+     "object": "acct-nova-ops"
+    },
+    {
+     "subject": "acct-nova-ops",
+     "relation": "USED_DEVICE",
+     "object": "dev-fp-8821"
+    },
+    {
+     "subject": "acct-volkov-clearing",
+     "relation": "USED_DEVICE",
+     "object": "dev-fp-8821"
+    },
+    {
+     "subject": "acct-volkov-clearing",
+     "relation": "TRANSFERRED",
+     "object": "acct-baltic-trade"
+    },
+    {
+     "subject": "acct-baltic-trade",
+     "relation": "TRANSFERRED",
+     "object": "acct-vortex-holdings"
+    },
+    {
+     "subject": "dec-waiver-77",
+     "relation": "APPLIES_TO",
+     "object": "merch-nova-pay"
+    },
+    {
+     "subject": "emp-rohan-mehta",
+     "relation": "APPROVED",
+     "object": "dec-waiver-77"
+    },
+    {
+     "subject": "dec-waiver-77",
+     "relation": "GOVERNED_BY",
+     "object": "pol-aml-sec-4"
+    }
+   ],
+   "model_answer": {
+    "proposed_verdict": "SUSPICIOUS",
+    "agrees": true,
+    "rationale": "NovaPay Digital Goods has an eligible route to a sanctioned entity (Vortex Holdings Ltd) via a shared device (dev-fp-8821). Furthermore, the merchant's onboarding waiver for device attestation was approved by an employee (Rohan Mehta) who lacked the required L3 clearance for a merchant of this volume, violating AML policy pol-aml-sec-4.",
+    "rationale_check": {
+     "ids_checked": 2,
+     "unknown_ids": [],
+     "rejected_claims": [],
+     "passed": true
+    },
+    "statements": [
+     {
+      "statement": {
+       "subject": "merch-nova-pay",
+       "predicate": "eligible_route_hops",
+       "object": "acct-vortex-holdings",
+       "value": 5
+      },
+      "status": "bound",
+      "fact": "F3"
+     },
+     {
+      "statement": {
+       "subject": "dec-waiver-77",
+       "predicate": "approved_by",
+       "object": "emp-rohan-mehta"
+      },
+      "status": "bound",
+      "fact": "F8"
+     },
+     {
+      "statement": {
+       "subject": "dec-waiver-77",
+       "predicate": "waiver_compliance",
+       "value": "BREACH"
+      },
+      "status": "bound",
+      "fact": "F11"
+     }
+    ]
+   },
+   "freeze_targets": [
+    "merch-nova-pay",
+    "acct-nova-ops"
+   ],
+   "excluded": [],
+   "approval_request": null,
+   "coverage": {
+    "depth": 6,
+    "exploration": {
+     "requested_depth": 6,
+     "completed_depth": 6,
+     "exhausted": false,
+     "reached": 46697,
+     "truncated": false,
+     "timed_out": false,
+     "complete": true,
+     "elapsed_ms": 458.3
+    },
+    "eligible": {
+     "requested_depth": 6,
+     "completed_depth": 6,
+     "exhausted": false,
+     "reached": 416,
+     "truncated": false,
+     "timed_out": false,
+     "complete": true,
+     "elapsed_ms": 6.4
+    }
+   },
+   "evidence_rev": 0,
+   "tool_calls": 6,
+   "max_steps": 12,
+   "budget_exhausted": false,
+   "planner": "llm",
+   "model": "gemini-3.1-flash-lite",
+   "elapsed_ms": 22176.6
+  }
+ ]
+}

@@ -1,0 +1,1472 @@
+{
+ "entity_id": "acct-tier1-payroll",
+ "started_at": "20261017T112359Z",
+ "model": "gemini-3.1-flash-lite",
+ "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+ "graph": "fintrace:live-34136e",
+ "seconds": 1.39,
+ "expected_verdict": "CLEAR",
+ "verdict": "CLEAR",
+ "planner": "llm+fallback",
+ "tool_calls": 4,
+ "model_answer": null,
+ "failure": "The LLM failed (BadRequestError: Error code: 400 - [{'error': {'code': 400, 'message': 'Function call is missing a thought_signature in functionCall parts. This is required for tools to work correctly, and missing thought_signature m). The deterministic planner continues from the 2 tool results so far.",
+ "events": [
+  {
+   "type": "run_started",
+   "entity_id": "acct-tier1-payroll",
+   "case_id": "case-4a509f06",
+   "graph": "fintrace:live-34136e",
+   "planner": "llm",
+   "model": "gemini-3.1-flash-lite",
+   "max_steps": 12,
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_call",
+   "step": 1,
+   "tool": "resolve_entity",
+   "args": {
+    "entity_id": "acct-tier1-payroll"
+   },
+   "thought": "Resolve the alert entity before reasoning about it.",
+   "planner": "llm",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 1,
+   "tool": "resolve_entity",
+   "ok": true,
+   "args": {
+    "entity_id": "acct-tier1-payroll"
+   },
+   "data": {
+    "found": true,
+    "id": "acct-tier1-payroll",
+    "labels": [
+     "Account"
+    ],
+    "name": "Tier-1 Enterprise Payroll",
+    "status": "ACTIVE",
+    "topology_updated_at": 1792235048,
+    "profile": {
+     "kind": "Corporation",
+     "tier": "vip",
+     "bank": "FinTrace Demo Bank",
+     "source": "planted",
+     "monthly_volume_usd": 2400000.0
+    },
+    "counterparties": {
+     "sends_to": 22,
+     "receives_from": 0
+    },
+    "identity_links": 1
+   },
+   "evidence": {
+    "nodes": {
+     "acct-tier1-payroll": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Tier-1 Enterprise Payroll"
+     }
+    },
+    "edges": []
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 0.8,
+    "rows": 1,
+    "queries": [
+     {
+      "cypher": "MATCH (n:Entity {id: $id})\nOPTIONAL MATCH (n)-[o:FLOWS_TO]->()\nWITH n, count(o) AS sends_to\nOPTIONAL MATCH (n)<-[i:FLOWS_TO]-()\nWITH n, sends_to, count(i) AS receives_from\nOPTIONAL MATCH (n)-[x:USED_DEVICE|LOGGED_FROM]-()\nRETURN n {.*}, labels(n), sends_to, receives_from, count(x)",
+      "params": [
+       "id"
+      ],
+      "ms": 0.8,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "tool_call",
+   "step": 2,
+   "tool": "recall_memory",
+   "args": {
+    "entity_id": "acct-tier1-payroll"
+   },
+   "thought": "Check memory for earlier findings.",
+   "planner": "llm",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 2,
+   "tool": "recall_memory",
+   "ok": true,
+   "args": {
+    "entity_id": "acct-tier1-payroll"
+   },
+   "data": {
+    "entity_id": "acct-tier1-payroll",
+    "facts": [],
+    "episodes": [],
+    "fingerprint": {
+     "features": {
+      "fan_out": 22,
+      "fan_in": 0,
+      "accounts_sharing_device": 0,
+      "accounts_sharing_ip": 1,
+      "device_bridges_one_hop": 0,
+      "two_step_cycles": 0
+     },
+     "patterns": [
+      "fan_out"
+     ]
+    },
+    "playbooks": [],
+    "elapsed_ms": 2.9
+   },
+   "evidence": {
+    "nodes": {
+     "acct-tier1-payroll": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Tier-1 Enterprise Payroll"
+     }
+    },
+    "edges": []
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 3.2,
+    "rows": 0,
+    "queries": [
+     {
+      "cypher": "MATCH (x:Entity {id: $id})\nOPTIONAL MATCH (x)-[:FLOWS_TO]->(o)\nWITH x, count(DISTINCT o) AS fan_out\nOPTIONAL MATCH (x)<-[:FLOWS_TO]-(i)\nWITH x, fan_out, count(DISTINCT i) AS fan_in\nOPTIONAL MATCH (x)-[:USED_DEVICE]->(:Device)<-[:USED_DEVICE]-(sd:Account)\nWHERE sd <> x\nWITH x, fan_out, fan_in, count(DISTINCT sd) AS shared_device\nOPTIONAL MATCH (x)-[:LOGGED_FROM]->(:IP)<-[:LOGGED_FROM]-(si:Account)\nWHERE si <> x\nWITH x, fan_out, fan_in, shared_device, count(DISTINCT si) AS shared_ip\nOPTIONAL MATCH (x)-[:FLOWS_TO]-(nb:Account)-[:USED_DEVICE]->(d:Device)<-[:USED_DEVICE]-(far:Account)\nWHERE far <> nb AND far <> x\nWITH x, fan_out, fan_in, shared_device, shared_ip, count(DISTINCT d) AS device_bridges\nOPTIONAL MATCH (x)-[:FLOWS_TO]->(b)-[:FLOWS_TO]->(x)\nRETURN fan_out, fan_in, shared_device, shared_ip, device_bridges, count(DISTINCT b)",
+      "params": [
+       "id"
+      ],
+      "ms": 1.5,
+      "calls": 1
+     },
+     {
+      "cypher": "MATCH (f:SemanticFact)-[:ABOUT]->(target:Entity {id: $id})\nWHERE f.status IN ['CURRENT', 'STALE']\nOPTIONAL MATCH (f)-[:DERIVED_FROM]->(ev:Entity)\nWITH f, collect(ev.id) AS evidence_ids, collect(ev.topology_updated_at) AS evidence_ts\nWITH f, evidence_ids, evidence_ts, any(x IN evidence_ts WHERE x > f.valid_from) AS is_stale\nRETURN f.id, f.claim, f.verdict, f.valid_from, f.episode_id, evidence_ids,\n       [i IN range(0, size(evidence_ids) - 1) WHERE evidence_ts[i] > f.valid_from | evidence_ids[i]],\n       CASE WHEN is_stale THEN 'STALE' ELSE f.status END\nORDER BY f.valid_from DESC",
+      "params": [
+       "id"
+      ],
+      "ms": 0.7,
+      "calls": 1
+     },
+     {
+      "cypher": "MATCH (ep:Episode)-[:ABOUT]->(x:Entity {id: $id})\nOPTIONAL MATCH (ep)-[:HAS_STEP]->(s:Step)\nWITH ep, s ORDER BY s.seq\nWITH ep, collect(s.tool) AS tools\nRETURN ep.id, ep.created_at, ep.verdict, ep.answer_state, tools\nORDER BY ep.created_at DESC LIMIT 3",
+      "params": [
+       "id"
+      ],
+      "ms": 0.4,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $patterns AS name\nMATCH (pt:PatternType {name: name})<-[:FOR_PATTERN]-(pb:Playbook)-[:FIRST_STEP]->(first:PlaybookStep)\nMATCH path = (first)-[:NEXT*0..12]->(s:PlaybookStep)\nWITH pt, pb, s, length(path) AS pos ORDER BY pos\nRETURN pt.name, pb.id, collect([s.tool, s.default_args])",
+      "params": [
+       "patterns"
+      ],
+      "ms": 0.4,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $ids AS eid\nMATCH (n:Entity {id: eid})\nRETURN n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 0.3,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "notice",
+   "message": "The LLM failed (BadRequestError: Error code: 400 - [{'error': {'code': 400, 'message': 'Function call is missing a thought_signature in functionCall parts. This is required for tools to work correctly, and missing thought_signature m). The deterministic planner continues from the 2 tool results so far."
+  },
+  {
+   "type": "tool_call",
+   "step": 3,
+   "tool": "explore_neighborhood",
+   "args": {
+    "entity_id": "acct-tier1-payroll",
+    "depth": 1
+   },
+   "thought": "Start with direct counterparties and devices.",
+   "planner": "llm+fallback",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 3,
+   "tool": "explore_neighborhood",
+   "ok": true,
+   "args": {
+    "entity_id": "acct-tier1-payroll",
+    "depth": 1
+   },
+   "data": {
+    "entity_id": "acct-tier1-payroll",
+    "depth": 1,
+    "levels": [
+     {
+      "depth": 1,
+      "reached": 23,
+      "accounts": 22,
+      "devices": 0,
+      "ips": 1,
+      "flagged": 0
+     }
+    ],
+    "total_reached": 23,
+    "flagged": [],
+    "scope": {
+     "requested_depth": 1,
+     "completed_depth": 1,
+     "exhausted": false,
+     "reached": 23,
+     "truncated": false,
+     "timed_out": false,
+     "complete": true,
+     "elapsed_ms": 3.6
+    },
+    "eligible_routes": {
+     "rule": "transfers followed in their own direction; identity hops only through a shared device (account -> device <- account, counted as 2 hops); shared IPs are never followed",
+     "scope": {
+      "requested_depth": 1,
+      "completed_depth": 1,
+      "exhausted": false,
+      "reached": 22,
+      "truncated": false,
+      "timed_out": false,
+      "complete": true,
+      "elapsed_ms": 3.7
+     },
+     "routes": []
+    },
+    "coverage": "Exploration: 23 entities, 1 of 1 hop(s). Eligible-route search: 22 entities, 1 of 1 hop(s), complete; 0 route(s) to a sanctioned account.",
+    "neighbors": [
+     {
+      "id": "acct-811BEB960",
+      "name": "Partnership #31120",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-800E607A0",
+      "name": "Sole Proprietorship #22379",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-80C080190",
+      "name": "Sole Proprietorship #14123",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-8102ECCB0",
+      "name": "Corporation #25469",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "ip-185-220-101-7",
+      "name": "185.220.101.7",
+      "labels": [
+       "IP"
+      ],
+      "rel": "LOGGED_FROM",
+      "direction": "out"
+     },
+     {
+      "id": "acct-80663F4D0",
+      "name": "Corporation #15420",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-8021A6570",
+      "name": "Sole Proprietorship #3072",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-80C9C7480",
+      "name": "Partnership #10023",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-8007F9FA0",
+      "name": "Corporation #18120",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-80C0169B0",
+      "name": "Sole Proprietorship #51925",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-800F2EDF0",
+      "name": "Partnership #39593",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-808A8F2D0",
+      "name": "Sole Proprietorship #6696",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-8007F9D50",
+      "name": "Sole Proprietorship #22426",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-806663690",
+      "name": "Partnership #3652",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-800F6D300",
+      "name": "Sole Proprietorship #42413",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-800602EA0",
+      "name": "Sole Proprietorship #3072",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-80CDF99A0",
+      "name": "Corporation #20888",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-80685EDB0",
+      "name": "Sole Proprietorship #51633",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-80AC0C410",
+      "name": "Corporation #53231",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-806C5F540",
+      "name": "Corporation #2568",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-800714220",
+      "name": "Partnership #1211",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-80B0E5700",
+      "name": "Partnership #18750",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     },
+     {
+      "id": "acct-812E94240",
+      "name": "Partnership #28873",
+      "labels": [
+       "Account"
+      ],
+      "rel": "FLOWS_TO",
+      "direction": "out"
+     }
+    ],
+    "neighbors_shown": "23 of 23"
+   },
+   "evidence": {
+    "nodes": {
+     "acct-tier1-payroll": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Tier-1 Enterprise Payroll"
+     },
+     "acct-811BEB960": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #31120"
+     },
+     "acct-800E607A0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #22379"
+     },
+     "acct-80C080190": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #14123"
+     },
+     "acct-8102ECCB0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #25469"
+     },
+     "ip-185-220-101-7": {
+      "labels": [
+       "IP"
+      ],
+      "name": "185.220.101.7"
+     },
+     "acct-80663F4D0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #15420"
+     },
+     "acct-8021A6570": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #3072"
+     },
+     "acct-80C9C7480": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #10023"
+     },
+     "acct-8007F9FA0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #18120"
+     },
+     "acct-80C0169B0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #51925"
+     },
+     "acct-800F2EDF0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #39593"
+     },
+     "acct-808A8F2D0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #6696"
+     },
+     "acct-8007F9D50": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #22426"
+     },
+     "acct-806663690": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #3652"
+     },
+     "acct-800F6D300": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #42413"
+     },
+     "acct-800602EA0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #3072"
+     },
+     "acct-80CDF99A0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #20888"
+     },
+     "acct-80685EDB0": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Sole Proprietorship #51633"
+     },
+     "acct-80AC0C410": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #53231"
+     },
+     "acct-806C5F540": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Corporation #2568"
+     },
+     "acct-800714220": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #1211"
+     },
+     "acct-80B0E5700": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #18750"
+     },
+     "acct-812E94240": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Partnership #28873"
+     }
+    },
+    "edges": [
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-800602EA0"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-800714220"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-8007F9D50"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-8007F9FA0"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-800E607A0"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-800F2EDF0"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-800F6D300"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-8021A6570"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-80663F4D0"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-806663690"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-80685EDB0"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-806C5F540"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-808A8F2D0"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-80AC0C410"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-80B0E5700"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-80C0169B0"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-80C080190"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-80C9C7480"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-80CDF99A0"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-8102ECCB0"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-811BEB960"
+     ],
+     [
+      "acct-tier1-payroll",
+      "FLOWS_TO",
+      "acct-812E94240"
+     ],
+     [
+      "acct-tier1-payroll",
+      "LOGGED_FROM",
+      "ip-185-220-101-7"
+     ]
+    ]
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 17.0,
+    "rows": 23,
+    "queries": [
+     {
+      "cypher": "MATCH (n:Entity {id: $id}) RETURN ID(n)",
+      "params": [
+       "id"
+      ],
+      "ms": 1.9,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $frontier AS nid\nMATCH (a) WHERE ID(a) = nid\nMATCH (a)-[:FLOWS_TO|USED_DEVICE|LOGGED_FROM]-(b)\nWITH b, min(ID(a)) AS parent\nRETURN collect(ID(b)), collect(parent),\n       collect(CASE WHEN b:Device THEN 1 WHEN b:IP THEN 2 ELSE 0 END),\n       collect(CASE WHEN b:Sanctioned OR b.risk_flags IS NOT NULL THEN ID(b) END)",
+      "params": [
+       "frontier"
+      ],
+      "ms": 3.5,
+      "calls": 1
+     },
+     {
+      "cypher": "MATCH (n) WHERE ID(n) = $id RETURN n:Device",
+      "params": [
+       "id"
+      ],
+      "ms": 1.4,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $frontier AS nid\nMATCH (a) WHERE ID(a) = nid\nMATCH (a)-[:FLOWS_TO|USED_DEVICE]->(b)\nWITH b, min(ID(a)) AS parent\nRETURN collect(ID(b)), collect(parent),\n       collect(CASE WHEN b:Device THEN 1 ELSE 0 END),\n       collect(CASE WHEN b:Sanctioned THEN ID(b) END)",
+      "params": [
+       "frontier"
+      ],
+      "ms": 2.2,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $ids AS nid\nMATCH (n) WHERE ID(n) = nid\nRETURN nid, n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 2.6,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $pairs AS p\nMATCH (u) WHERE ID(u) = p[0]\nMATCH (v) WHERE ID(v) = p[1]\nMATCH (u)-[r:FLOWS_TO|USED_DEVICE|LOGGED_FROM]-(v)\nRETURN p[0], p[1], type(r), ID(startNode(r)) = p[0]",
+      "params": [
+       "pairs"
+      ],
+      "ms": 4.1,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $ids AS eid\nMATCH (n:Entity {id: eid})\nRETURN n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 0.9,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "tool_call",
+   "step": 4,
+   "tool": "explore_neighborhood",
+   "args": {
+    "entity_id": "acct-tier1-payroll",
+    "depth": 6
+   },
+   "thought": "Widen to 6 hops, and search the routes money could actually take.",
+   "planner": "llm+fallback",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 4,
+   "tool": "explore_neighborhood",
+   "ok": true,
+   "args": {
+    "entity_id": "acct-tier1-payroll",
+    "depth": 6
+   },
+   "data": {
+    "entity_id": "acct-tier1-payroll",
+    "depth": 6,
+    "levels": [
+     {
+      "depth": 1,
+      "reached": 23,
+      "accounts": 22,
+      "devices": 0,
+      "ips": 1,
+      "flagged": 0
+     },
+     {
+      "depth": 2,
+      "reached": 123,
+      "accounts": 107,
+      "devices": 2,
+      "ips": 14,
+      "flagged": 0
+     },
+     {
+      "depth": 3,
+      "reached": 3235,
+      "accounts": 3161,
+      "devices": 30,
+      "ips": 44,
+      "flagged": 1
+     },
+     {
+      "depth": 4,
+      "reached": 8143,
+      "accounts": 6495,
+      "devices": 825,
+      "ips": 823,
+      "flagged": 1
+     },
+     {
+      "depth": 5,
+      "reached": 16595,
+      "accounts": 13092,
+      "devices": 1696,
+      "ips": 1807,
+      "flagged": 0
+     },
+     {
+      "depth": 6,
+      "reached": 16888,
+      "accounts": 10384,
+      "devices": 3306,
+      "ips": 3198,
+      "flagged": 0
+     }
+    ],
+    "total_reached": 45007,
+    "flagged": [
+     {
+      "entity": {
+       "id": "dev-fp-8821",
+       "labels": [
+        "Device"
+       ],
+       "name": "Headless Linux Chromium"
+      },
+      "depth": 3,
+      "path": {
+       "nodes": [
+        "acct-tier1-payroll",
+        "ip-185-220-101-7",
+        "acct-volkov-clearing",
+        "dev-fp-8821"
+       ],
+       "steps": [
+        {
+         "from": "acct-tier1-payroll",
+         "to": "ip-185-220-101-7",
+         "rel": "LOGGED_FROM",
+         "forward": true
+        },
+        {
+         "from": "ip-185-220-101-7",
+         "to": "acct-volkov-clearing",
+         "rel": "LOGGED_FROM",
+         "forward": false
+        },
+        {
+         "from": "acct-volkov-clearing",
+         "to": "dev-fp-8821",
+         "rel": "USED_DEVICE",
+         "forward": true
+        }
+       ]
+      },
+      "identity_hops": [
+       {
+        "id": "ip-185-220-101-7",
+        "type": "IP",
+        "accounts_on_path": [
+         "acct-tier1-payroll",
+         "acct-volkov-clearing"
+        ]
+       },
+       {
+        "id": "dev-fp-8821",
+        "type": "Device",
+        "accounts_on_path": [
+         "acct-volkov-clearing"
+        ]
+       }
+      ]
+     },
+     {
+      "entity": {
+       "id": "acct-vortex-holdings",
+       "labels": [
+        "Account",
+        "Sanctioned"
+       ],
+       "name": "Vortex Holdings Ltd"
+      },
+      "depth": 4,
+      "path": {
+       "nodes": [
+        "acct-tier1-payroll",
+        "ip-185-220-101-7",
+        "acct-volkov-clearing",
+        "acct-baltic-trade",
+        "acct-vortex-holdings"
+       ],
+       "steps": [
+        {
+         "from": "acct-tier1-payroll",
+         "to": "ip-185-220-101-7",
+         "rel": "LOGGED_FROM",
+         "forward": true
+        },
+        {
+         "from": "ip-185-220-101-7",
+         "to": "acct-volkov-clearing",
+         "rel": "LOGGED_FROM",
+         "forward": false
+        },
+        {
+         "from": "acct-volkov-clearing",
+         "to": "acct-baltic-trade",
+         "rel": "FLOWS_TO",
+         "forward": true
+        },
+        {
+         "from": "acct-baltic-trade",
+         "to": "acct-vortex-holdings",
+         "rel": "FLOWS_TO",
+         "forward": true
+        }
+       ]
+      },
+      "identity_hops": [
+       {
+        "id": "ip-185-220-101-7",
+        "type": "IP",
+        "accounts_on_path": [
+         "acct-tier1-payroll",
+         "acct-volkov-clearing"
+        ]
+       }
+      ]
+     }
+    ],
+    "scope": {
+     "requested_depth": 6,
+     "completed_depth": 6,
+     "exhausted": false,
+     "reached": 45007,
+     "truncated": false,
+     "timed_out": false,
+     "complete": true,
+     "elapsed_ms": 455.7
+    },
+    "eligible_routes": {
+     "rule": "transfers followed in their own direction; identity hops only through a shared device (account -> device <- account, counted as 2 hops); shared IPs are never followed",
+     "scope": {
+      "requested_depth": 6,
+      "completed_depth": 6,
+      "exhausted": false,
+      "reached": 193,
+      "truncated": false,
+      "timed_out": false,
+      "complete": true,
+      "elapsed_ms": 4.5
+     },
+     "routes": []
+    },
+    "coverage": "Exploration: 45,007 entities, 6 of 6 hop(s). Eligible-route search: 193 entities, 6 of 6 hop(s), complete; 0 route(s) to a sanctioned account."
+   },
+   "evidence": {
+    "nodes": {
+     "acct-tier1-payroll": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Tier-1 Enterprise Payroll"
+     },
+     "ip-185-220-101-7": {
+      "labels": [
+       "IP"
+      ],
+      "name": "185.220.101.7"
+     },
+     "acct-volkov-clearing": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Volkov Clearing LLC"
+     },
+     "dev-fp-8821": {
+      "labels": [
+       "Device"
+      ],
+      "name": "Headless Linux Chromium"
+     },
+     "acct-baltic-trade": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Baltic Trade Settlement"
+     },
+     "acct-vortex-holdings": {
+      "labels": [
+       "Account",
+       "Sanctioned"
+      ],
+      "name": "Vortex Holdings Ltd"
+     }
+    },
+    "edges": [
+     [
+      "acct-baltic-trade",
+      "FLOWS_TO",
+      "acct-vortex-holdings"
+     ],
+     [
+      "acct-tier1-payroll",
+      "LOGGED_FROM",
+      "ip-185-220-101-7"
+     ],
+     [
+      "acct-volkov-clearing",
+      "FLOWS_TO",
+      "acct-baltic-trade"
+     ],
+     [
+      "acct-volkov-clearing",
+      "LOGGED_FROM",
+      "ip-185-220-101-7"
+     ],
+     [
+      "acct-volkov-clearing",
+      "USED_DEVICE",
+      "dev-fp-8821"
+     ]
+    ]
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 462.5,
+    "rows": 45007,
+    "queries": [
+     {
+      "cypher": "MATCH (n:Entity {id: $id}) RETURN ID(n)",
+      "params": [
+       "id"
+      ],
+      "ms": 0.9,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $frontier AS nid\nMATCH (a) WHERE ID(a) = nid\nMATCH (a)-[:FLOWS_TO|USED_DEVICE|LOGGED_FROM]-(b)\nWITH b, min(ID(a)) AS parent\nRETURN collect(ID(b)), collect(parent),\n       collect(CASE WHEN b:Device THEN 1 WHEN b:IP THEN 2 ELSE 0 END),\n       collect(CASE WHEN b:Sanctioned OR b.risk_flags IS NOT NULL THEN ID(b) END)",
+      "params": [
+       "frontier"
+      ],
+      "ms": 448.5,
+      "calls": 6
+     },
+     {
+      "cypher": "UNWIND $ids AS nid\nMATCH (n) WHERE ID(n) = nid\nRETURN nid, n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 1.2,
+      "calls": 3
+     },
+     {
+      "cypher": "UNWIND $pairs AS p\nMATCH (u) WHERE ID(u) = p[0]\nMATCH (v) WHERE ID(v) = p[1]\nMATCH (u)-[r:FLOWS_TO|USED_DEVICE|LOGGED_FROM]-(v)\nRETURN p[0], p[1], type(r), ID(startNode(r)) = p[0]",
+      "params": [
+       "pairs"
+      ],
+      "ms": 0.9,
+      "calls": 2
+     },
+     {
+      "cypher": "MATCH (n) WHERE ID(n) = $id RETURN n:Device",
+      "params": [
+       "id"
+      ],
+      "ms": 0.2,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $frontier AS nid\nMATCH (a) WHERE ID(a) = nid\nMATCH (a)-[:FLOWS_TO|USED_DEVICE]->(b)\nWITH b, min(ID(a)) AS parent\nRETURN collect(ID(b)), collect(parent),\n       collect(CASE WHEN b:Device THEN 1 ELSE 0 END),\n       collect(CASE WHEN b:Sanctioned THEN ID(b) END)",
+      "params": [
+       "frontier"
+      ],
+      "ms": 2.7,
+      "calls": 6
+     },
+     {
+      "cypher": "UNWIND $frontier AS nid\nMATCH (d) WHERE ID(d) = nid\nMATCH (d)<-[:USED_DEVICE]-(b)\nWITH b, min(ID(d)) AS parent\nRETURN collect(ID(b)), collect(parent),\n       collect(CASE WHEN b:Device THEN 1 ELSE 0 END),\n       collect(CASE WHEN b:Sanctioned THEN ID(b) END)",
+      "params": [
+       "frontier"
+      ],
+      "ms": 1.5,
+      "calls": 4
+     },
+     {
+      "cypher": "UNWIND $ids AS eid\nMATCH (n:Entity {id: eid})\nRETURN n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 0.3,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "notice",
+   "message": "A sanctioned entity is within reach, but no eligible route leads there, so the investigation stops at association."
+  },
+  {
+   "type": "final",
+   "entity_id": "acct-tier1-payroll",
+   "case_id": "case-4a509f06",
+   "answer_state": "not_in_graph",
+   "verdict": "CLEAR",
+   "verdict_basis": [
+    "F4"
+   ],
+   "statements": [
+    {
+     "text": "No eligible route from Tier-1 Enterprise Payroll (acct-tier1-payroll) to a sanctioned entity was found within 6 hops (193 entities reached). That is not proof the account is safe.",
+     "facts": [
+      "F4"
+     ]
+    },
+    {
+     "text": "Sanctioned Vortex Holdings Ltd (acct-vortex-holdings) is 4 hops away if direction is ignored (acct-tier1-payroll \u2192 ip-185-220-101-7 \u2192 acct-volkov-clearing \u2192 acct-baltic-trade \u2192 acct-vortex-holdings), but money from Tier-1 Enterprise Payroll (acct-tier1-payroll) cannot follow that path: ip-185-220-101-7 is a shared IP, not a shared device. That is an association, not exposure.",
+     "facts": [
+      "F6"
+     ]
+    },
+    {
+     "text": "It reaches flagged Headless Linux Chromium (dev-fp-8821) at depth 3.",
+     "facts": [
+      "F5"
+     ]
+    }
+   ],
+   "summary": "No eligible route from Tier-1 Enterprise Payroll (acct-tier1-payroll) to a sanctioned entity was found within 6 hops (193 entities reached). That is not proof the account is safe. Sanctioned Vortex Holdings Ltd (acct-vortex-holdings) is 4 hops away if direction is ignored (acct-tier1-payroll \u2192 ip-185-220-101-7 \u2192 acct-volkov-clearing \u2192 acct-baltic-trade \u2192 acct-vortex-holdings), but money from Tier-1 Enterprise Payroll (acct-tier1-payroll) cannot follow that path: ip-185-220-101-7 is a shared IP, not a shared device. That is an association, not exposure. It reaches flagged Headless Linux Chromium (dev-fp-8821) at depth 3.",
+   "badge": "3 statements, each rendered from a cited tool result",
+   "facts": [
+    {
+     "id": "F1",
+     "kind": "profile",
+     "subject": "acct-tier1-payroll",
+     "predicate": "status",
+     "object": null,
+     "value": "ACTIVE",
+     "unit": null,
+     "source": {
+      "tool": "resolve_entity",
+      "step": 1,
+      "result_key": "data.status"
+     },
+     "scope": {},
+     "evidence_rev": 0,
+     "depends_on": [
+      "acct-tier1-payroll"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F2",
+     "kind": "profile",
+     "subject": "acct-tier1-payroll",
+     "predicate": "monthly_volume",
+     "object": null,
+     "value": 2400000.0,
+     "unit": "USD/month",
+     "source": {
+      "tool": "resolve_entity",
+      "step": 1,
+      "result_key": "data.profile.monthly_volume_usd"
+     },
+     "scope": {},
+     "evidence_rev": 0,
+     "depends_on": [
+      "acct-tier1-payroll"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F3",
+     "kind": "sanctions_exposure",
+     "subject": "acct-tier1-payroll",
+     "predicate": "no_eligible_route",
+     "object": null,
+     "value": 22,
+     "unit": "entities",
+     "source": {
+      "tool": "explore_neighborhood",
+      "step": 3,
+      "result_key": "data.eligible_routes.scope"
+     },
+     "scope": {
+      "requested_depth": 1,
+      "completed_depth": 1,
+      "exhausted": false,
+      "reached": 22,
+      "truncated": false,
+      "timed_out": false,
+      "complete": true,
+      "elapsed_ms": 3.7
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "acct-tier1-payroll"
+     ],
+     "aggregate": true
+    },
+    {
+     "id": "F4",
+     "kind": "sanctions_exposure",
+     "subject": "acct-tier1-payroll",
+     "predicate": "no_eligible_route",
+     "object": null,
+     "value": 193,
+     "unit": "entities",
+     "source": {
+      "tool": "explore_neighborhood",
+      "step": 4,
+      "result_key": "data.eligible_routes.scope"
+     },
+     "scope": {
+      "requested_depth": 6,
+      "completed_depth": 6,
+      "exhausted": false,
+      "reached": 193,
+      "truncated": false,
+      "timed_out": false,
+      "complete": true,
+      "elapsed_ms": 4.5
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "acct-tier1-payroll"
+     ],
+     "aggregate": true
+    },
+    {
+     "id": "F5",
+     "kind": "sanctions_exposure",
+     "subject": "acct-tier1-payroll",
+     "predicate": "risk_flag_within_reach",
+     "object": "dev-fp-8821",
+     "value": 3,
+     "unit": "hops",
+     "source": {
+      "tool": "explore_neighborhood",
+      "step": 4,
+      "result_key": "data.flagged[0]"
+     },
+     "scope": {
+      "path": {
+       "nodes": [
+        "acct-tier1-payroll",
+        "ip-185-220-101-7",
+        "acct-volkov-clearing",
+        "dev-fp-8821"
+       ],
+       "steps": [
+        {
+         "from": "acct-tier1-payroll",
+         "to": "ip-185-220-101-7",
+         "rel": "LOGGED_FROM",
+         "forward": true
+        },
+        {
+         "from": "ip-185-220-101-7",
+         "to": "acct-volkov-clearing",
+         "rel": "LOGGED_FROM",
+         "forward": false
+        },
+        {
+         "from": "acct-volkov-clearing",
+         "to": "dev-fp-8821",
+         "rel": "USED_DEVICE",
+         "forward": true
+        }
+       ]
+      },
+      "breaks": [
+       "ip-185-220-101-7 is a shared IP, not a shared device"
+      ]
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "acct-tier1-payroll",
+      "ip-185-220-101-7",
+      "acct-volkov-clearing",
+      "dev-fp-8821",
+      "acct-tier1-payroll|LOGGED_FROM|ip-185-220-101-7",
+      "acct-volkov-clearing|LOGGED_FROM|ip-185-220-101-7",
+      "acct-volkov-clearing|USED_DEVICE|dev-fp-8821"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F6",
+     "kind": "sanctions_exposure",
+     "subject": "acct-tier1-payroll",
+     "predicate": "sanctioned_within_reach",
+     "object": "acct-vortex-holdings",
+     "value": 4,
+     "unit": "hops",
+     "source": {
+      "tool": "explore_neighborhood",
+      "step": 4,
+      "result_key": "data.flagged[1]"
+     },
+     "scope": {
+      "path": {
+       "nodes": [
+        "acct-tier1-payroll",
+        "ip-185-220-101-7",
+        "acct-volkov-clearing",
+        "acct-baltic-trade",
+        "acct-vortex-holdings"
+       ],
+       "steps": [
+        {
+         "from": "acct-tier1-payroll",
+         "to": "ip-185-220-101-7",
+         "rel": "LOGGED_FROM",
+         "forward": true
+        },
+        {
+         "from": "ip-185-220-101-7",
+         "to": "acct-volkov-clearing",
+         "rel": "LOGGED_FROM",
+         "forward": false
+        },
+        {
+         "from": "acct-volkov-clearing",
+         "to": "acct-baltic-trade",
+         "rel": "FLOWS_TO",
+         "forward": true
+        },
+        {
+         "from": "acct-baltic-trade",
+         "to": "acct-vortex-holdings",
+         "rel": "FLOWS_TO",
+         "forward": true
+        }
+       ]
+      },
+      "breaks": [
+       "ip-185-220-101-7 is a shared IP, not a shared device"
+      ]
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "acct-tier1-payroll",
+      "ip-185-220-101-7",
+      "acct-volkov-clearing",
+      "acct-baltic-trade",
+      "acct-vortex-holdings",
+      "acct-tier1-payroll|LOGGED_FROM|ip-185-220-101-7",
+      "acct-volkov-clearing|LOGGED_FROM|ip-185-220-101-7",
+      "acct-volkov-clearing|FLOWS_TO|acct-baltic-trade",
+      "acct-baltic-trade|FLOWS_TO|acct-vortex-holdings"
+     ],
+     "aggregate": false
+    }
+   ],
+   "claims": [
+    {
+     "subject": "acct-tier1-payroll",
+     "relation": "LOGGED_FROM",
+     "object": "ip-185-220-101-7"
+    },
+    {
+     "subject": "acct-volkov-clearing",
+     "relation": "LOGGED_FROM",
+     "object": "ip-185-220-101-7"
+    },
+    {
+     "subject": "acct-volkov-clearing",
+     "relation": "TRANSFERRED",
+     "object": "acct-baltic-trade"
+    },
+    {
+     "subject": "acct-baltic-trade",
+     "relation": "TRANSFERRED",
+     "object": "acct-vortex-holdings"
+    }
+   ],
+   "model_answer": null,
+   "freeze_targets": [],
+   "excluded": [],
+   "approval_request": null,
+   "coverage": {
+    "depth": 6,
+    "exploration": {
+     "requested_depth": 6,
+     "completed_depth": 6,
+     "exhausted": false,
+     "reached": 45007,
+     "truncated": false,
+     "timed_out": false,
+     "complete": true,
+     "elapsed_ms": 455.7
+    },
+    "eligible": {
+     "requested_depth": 6,
+     "completed_depth": 6,
+     "exhausted": false,
+     "reached": 193,
+     "truncated": false,
+     "timed_out": false,
+     "complete": true,
+     "elapsed_ms": 4.5
+    }
+   },
+   "evidence_rev": 0,
+   "tool_calls": 4,
+   "max_steps": 12,
+   "budget_exhausted": false,
+   "planner": "llm+fallback",
+   "model": "gemini-3.1-flash-lite",
+   "elapsed_ms": 1384.6
+  }
+ ]
+}

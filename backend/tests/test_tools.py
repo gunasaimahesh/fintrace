@@ -39,11 +39,26 @@ def test_results_carry_parameterized_cypher_and_evidence(ctx):
     assert [s.VOLKOV, "USED_DEVICE", s.SHARED_DEVICE] in result["evidence"]["edges"]
 
 
+def test_eligible_routes_keep_direction_and_a_device_bridge_costs_two_hops(ctx):
+    result = t.explore_neighborhood(ctx, entity_id=s.NOVAPAY, depth=5)
+    eligible = result["data"]["eligible_routes"]
+    [route] = eligible["routes"]
+    assert (route["entity"]["id"], route["hops"]) == (s.VORTEX, 5)
+    assert [(st["rel"], st.get("forward", True)) for st in route["path"]["steps"]] == [
+        ("FLOWS_TO", True), ("USED_DEVICE", True), ("USED_DEVICE", False), ("FLOWS_TO", True), ("FLOWS_TO", True)]
+    assert route["identity_hops"] == [{"id": s.SHARED_DEVICE, "type": "Device", "accounts_on_path": [s.NOVA_OPS, s.VOLKOV]}]
+    assert eligible["scope"]["complete"]
+    assert "Eligible-route search: " in result["data"]["coverage"] and "1 route(s)" in result["data"]["coverage"]
+    shallow = t.explore_neighborhood(ctx, entity_id=s.NOVAPAY, depth=4)["data"]["eligible_routes"]
+    assert shallow["routes"] == [] and shallow["scope"]["completed_depth"] == 4
+
+
 def test_money_trail_is_time_ordered(ctx):
     data = t.trace_money_flow(ctx, entity_id=s.VOLKOV, direction="out", max_hops=4)["data"]
     trail = data["sanctioned"][0]["trail"]
     assert [(leg["from"], leg["to"]) for leg in trail] == [(s.VOLKOV, s.BALTIC), (s.BALTIC, s.VORTEX)]
     assert trail[0]["time"] <= trail[1]["time"]
+    assert data["capped_hops"] == []
 
 
 def test_governance_finds_the_breach_and_the_on_call_approver(ctx):
@@ -54,6 +69,8 @@ def test_governance_finds_the_breach_and_the_on_call_approver(ctx):
     assert {src["id"] for src in waiver["sources"]} == {s.TICKET, s.MESSAGE}
     assert [(o["decision_id"], o["violations"]) for o in data["approver_other_decisions"]] == [("dec-waiver-81", [])]
     assert [p["id"] for p in data["on_call_approvers"]] == [s.PRIYA]
+    assert waiver["policy"]["waiver_threshold_monthly_usd"] == 250_000
+    assert not any("cents" in key for key in waiver["policy"])
 
 
 def test_freeze_impact_protects_the_vip_and_keeps_the_proxy_ip_open(ctx):
@@ -61,6 +78,16 @@ def test_freeze_impact_protects_the_vip_and_keeps_the_proxy_ip_open(ctx):
     assert [c["id"] for c in data["collateral"]] == [s.VIP]
     safe = {inf["id"]: inf["safe_to_block"] for inf in data["infrastructure"]}
     assert safe[s.SHARED_DEVICE] is True and safe[s.PROXY_IP] is False
+    assert data["also_exposed"] == []
+
+
+def test_freeze_impact_does_not_protect_a_device_co_user_with_its_own_route(ctx):
+    data = t.freeze_impact(ctx, target_ids=[s.NOVAPAY, s.NOVA_OPS])["data"]
+    assert data["collateral"] == []
+    assert [(a["id"], a["sanctioned"], a["route_hops"], a["shared_via"]) for a in data["also_exposed"]] == [
+        (s.VOLKOV, s.VORTEX, 2, [s.SHARED_DEVICE])]
+    assert {inf["id"]: inf["safe_to_block"] for inf in data["infrastructure"]}[s.SHARED_DEVICE] is True
+    assert "Add them to the freeze." in data["recommendation"]
 
 
 def test_a_freeze_needs_an_on_call_l3_and_happens_only_on_sign_off(fresh_key):

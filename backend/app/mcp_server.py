@@ -25,7 +25,8 @@ policies, tickets and approval decisions. Start with resolve_entity. Paths that 
 are identity links, not money. Freezes require an approver with the clearance the policy demands: use \
 trace_governance to find them and request_action to ask; nothing is frozen until they sign off."""
 
-EntityId = Annotated[str, Field(description="Entity ID, e.g. merch-nova-pay, acct-mule-volkov or dev-fp-8821")]
+EntityId = Annotated[str, Field(description="Entity ID exactly as a tool returned it (prefixes: acct-, merch-, "
+                                             "dev-, ip-, emp-, dec-, pol-, tick-, msg-, case-, apr-)")]
 EntityIds = Annotated[list[str], Field(description="Entity IDs", min_length=1, max_length=t.MAX_IDS)]
 
 READ = ToolAnnotations(read_only_hint=True, open_world_hint=False)
@@ -56,10 +57,15 @@ def build_server(key: str | None = None, worker_id: str = "mcp-client") -> MCPSe
         entity_id: EntityId,
         depth: Annotated[int, Field(ge=1, le=t.MAX_DEPTH, description="Hops to search, 1 to 6")] = 2,
     ) -> dict[str, Any]:
-        """Everything connected to an entity within `depth` hops, over transfers and shared devices/IPs in
-        either direction: a count per depth, plus each sanctioned or risk-flagged entity reached with its
-        shortest path (and any shared device/IP on that path). Depth 1 also lists the direct neighbors.
-        Start shallow and go deeper only if needed."""
+        """Two searches from one entity, each reporting the scope it covered (requested and completed depth,
+        entities reached, whether the reachable frontier was exhausted, truncated or timed out).
+        1. Exploration: everything connected within `depth` hops over transfers and shared devices/IPs in
+           either direction, with a count per depth and each sanctioned or risk-flagged entity reached, with its
+           shortest path. Reaching something this way is association, not exposure.
+        2. eligible_routes: sanctioned accounts that money from the entity could reach. Transfers are followed
+           only in their own direction; identity hops only through a shared device (account -> device <-
+           account, counted as 2 hops); shared IPs are never followed.
+        Depth 1 also lists the direct neighbors."""
         return t.explore_neighborhood(ctx, entity_id=entity_id, depth=depth)
 
     @server.tool(annotations=READ)
@@ -120,8 +126,9 @@ def build_server(key: str | None = None, worker_id: str = "mcp-client") -> MCPSe
 
     @server.tool(annotations=READ)
     def freeze_impact(target_ids: EntityIds) -> dict[str, Any]:
-        """Before freezing: legitimate customers outside `target_ids` that share a device or IP with them, and
-        which shared devices/IPs are safe to block. Exclude collateral accounts and shared infrastructure."""
+        """Before freezing: accounts outside `target_ids` that share a device or IP with them, split into
+        legitimate collateral (leave them and the infrastructure they share untouched) and accounts with an
+        eligible route of their own to a sanctioned account (add those to the freeze)."""
         return t.freeze_impact(ctx, target_ids=target_ids)
 
     @server.tool(annotations=WRITE)

@@ -1,0 +1,125 @@
+{
+ "entity_id": "acct-ghost-999",
+ "started_at": "20261017T112904Z",
+ "model": "gemini-3.1-flash-lite",
+ "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+ "graph": "fintrace:live-8c2db5",
+ "seconds": 0.03,
+ "expected_verdict": "INSUFFICIENT",
+ "verdict": "INSUFFICIENT",
+ "planner": "llm",
+ "tool_calls": 1,
+ "model_answer": null,
+ "failure": null,
+ "events": [
+  {
+   "type": "run_started",
+   "entity_id": "acct-ghost-999",
+   "case_id": "case-b0eeb3a8",
+   "graph": "fintrace:live-8c2db5",
+   "planner": "llm",
+   "model": "gemini-3.1-flash-lite",
+   "max_steps": 12,
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_call",
+   "step": 1,
+   "tool": "resolve_entity",
+   "args": {
+    "entity_id": "acct-ghost-999"
+   },
+   "thought": "Resolve the alert entity before reasoning about it.",
+   "planner": "llm",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 1,
+   "tool": "resolve_entity",
+   "ok": true,
+   "args": {
+    "entity_id": "acct-ghost-999"
+   },
+   "data": {
+    "entity_id": "acct-ghost-999",
+    "found": false
+   },
+   "evidence": {
+    "nodes": {},
+    "edges": []
+   },
+   "error": null,
+   "stop": "unknown_entity",
+   "meta": {
+    "elapsed_ms": 2.1,
+    "rows": 0,
+    "queries": [
+     {
+      "cypher": "MATCH (n:Entity {id: $id})\nOPTIONAL MATCH (n)-[o:FLOWS_TO]->()\nWITH n, count(o) AS sends_to\nOPTIONAL MATCH (n)<-[i:FLOWS_TO]-()\nWITH n, sends_to, count(i) AS receives_from\nOPTIONAL MATCH (n)-[x:USED_DEVICE|LOGGED_FROM]-()\nRETURN n {.*}, labels(n), sends_to, receives_from, count(x)",
+      "params": [
+       "id"
+      ],
+      "ms": 2.1,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "final",
+   "entity_id": "acct-ghost-999",
+   "case_id": "case-b0eeb3a8",
+   "answer_state": "unknown_entity",
+   "verdict": "INSUFFICIENT",
+   "verdict_basis": [
+    "F1"
+   ],
+   "statements": [
+    {
+     "text": "acct-ghost-999 is not in the graph, so nothing else was queried.",
+     "facts": [
+      "F1"
+     ]
+    }
+   ],
+   "summary": "acct-ghost-999 is not in the graph, so nothing else was queried.",
+   "badge": "1 statement, each rendered from a cited tool result",
+   "facts": [
+    {
+     "id": "F1",
+     "kind": "profile",
+     "subject": "acct-ghost-999",
+     "predicate": "not_in_graph",
+     "object": null,
+     "value": true,
+     "unit": null,
+     "source": {
+      "tool": "resolve_entity",
+      "step": 1,
+      "result_key": "data.found"
+     },
+     "scope": {},
+     "evidence_rev": 0,
+     "depends_on": [
+      "acct-ghost-999"
+     ],
+     "aggregate": false
+    }
+   ],
+   "claims": [],
+   "model_answer": null,
+   "freeze_targets": [],
+   "excluded": [],
+   "approval_request": null,
+   "coverage": null,
+   "evidence_rev": 0,
+   "tool_calls": 1,
+   "max_steps": 12,
+   "budget_exhausted": false,
+   "planner": "llm",
+   "model": "gemini-3.1-flash-lite",
+   "elapsed_ms": 29.2
+  }
+ ]
+}

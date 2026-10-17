@@ -16,9 +16,17 @@ from typing import Iterator
 
 from falkordb import Graph
 
+from backend.app.contracts import PRESCRIBED_DEPTH
+
 RISK_REL_TYPES = ["FLOWS_TO", "USED_DEVICE", "LOGGED_FROM"]
 RISK_RELS = "|".join(RISK_REL_TYPES)
 KIND_NAMES = ("accounts", "devices", "ips")
+ELIGIBLE_RULE = ("transfers followed in their own direction; identity hops only through a shared device "
+                 "(account -> device <- account, counted as 2 hops); shared IPs are never followed")
+SEARCH_NODE_BUDGET = 100_000
+SEARCH_TIME_BUDGET_S = 5.0
+LEVEL_TIMEOUT_MS = 5_000
+MAX_ROUTES = 10
 BROKER_SCOPE_LABELS = ("BrokerScope_1", "BrokerScope_2", "BrokerScope_3", "BrokerScope_4")
 HIDDEN_LABELS = {"Entity", "RiskNode", *BROKER_SCOPE_LABELS}
 FAR_FUTURE = 2**62
@@ -36,6 +44,26 @@ WITH b, min(ID(a)) AS parent
 RETURN collect(ID(b)), collect(parent),
        collect(CASE WHEN b:Device THEN 1 WHEN b:IP THEN 2 ELSE 0 END),
        collect(CASE WHEN b:Sanctioned OR b.risk_flags IS NOT NULL THEN ID(b) END)
+"""
+
+_ELIGIBLE_FROM_ACCOUNTS = """
+UNWIND $frontier AS nid
+MATCH (a) WHERE ID(a) = nid
+MATCH (a)-[:FLOWS_TO|USED_DEVICE]->(b)
+WITH b, min(ID(a)) AS parent
+RETURN collect(ID(b)), collect(parent),
+       collect(CASE WHEN b:Device THEN 1 ELSE 0 END),
+       collect(CASE WHEN b:Sanctioned THEN ID(b) END)
+"""
+
+_ELIGIBLE_FROM_DEVICES = """
+UNWIND $frontier AS nid
+MATCH (d) WHERE ID(d) = nid
+MATCH (d)<-[:USED_DEVICE]-(b)
+WITH b, min(ID(d)) AS parent
+RETURN collect(ID(b)), collect(parent),
+       collect(CASE WHEN b:Device THEN 1 ELSE 0 END),
+       collect(CASE WHEN b:Sanctioned THEN ID(b) END)
 """
 
 _FLOW_OUT = """
@@ -114,7 +142,8 @@ def describe_steps(graph: Graph, pairs: list[tuple[int, int]]) -> dict[tuple[int
     """, {"pairs": [list(p) for p in pairs]}).result_set
     steps: dict[tuple[int, int], dict] = {}
     for u, v, rel, forward in rows:
-        steps.setdefault((u, v), {"rel": rel, "forward": forward})
+        if (u, v) not in steps or (forward and not steps[(u, v)]["forward"]):
+            steps[(u, v)] = {"rel": rel, "forward": forward}
     return steps
 
 
@@ -157,8 +186,114 @@ def _render_path(graph: Graph, node_ids: list[int]) -> dict:
     }
 
 
-def explore_neighborhood(graph: Graph, entity_id: str, depth: int, neighbor_limit: int = 0) -> dict | None:
-    """Per-depth counts of everything reached, plus the flagged or sanctioned entities and a path to each.
+def _is_timeout(exc: Exception) -> bool:
+    return "timed out" in str(exc).lower()
+
+
+def _chain(parents: dict[int, int | None], nid: int) -> list[int]:
+    chain = [nid]
+    while parents[chain[-1]] is not None:
+        chain.append(parents[chain[-1]])
+    return chain[::-1]
+
+
+class _Frontier:
+    """Breadth-first expansion with an explicit record of how much of the requested scope it covered."""
+
+    def __init__(self, start: int, depth: int, node_budget: int, time_budget_s: float):
+        self.started = time.perf_counter()
+        self.depth, self.node_budget = depth, node_budget
+        self.deadline = self.started + time_budget_s
+        self.parents: dict[int, int | None] = {start: None}
+        self.completed, self.exhausted, self.truncated, self.timed_out = 0, False, False, False
+
+    def levels(self) -> Iterator[int]:
+        for d in range(1, self.depth + 1):
+            if time.perf_counter() > self.deadline:
+                self.timed_out = True
+                return
+            yield d
+
+    def finish_level(self, d: int, new: int) -> bool:
+        """Record a fully expanded level; False when the search must stop here."""
+        self.completed = d
+        if new == 0:
+            self.exhausted = True
+            return False
+        if d < self.depth and len(self.parents) > self.node_budget:
+            self.truncated = True
+            return False
+        return True
+
+    def scope(self) -> dict:
+        return {"requested_depth": self.depth, "completed_depth": self.completed, "exhausted": self.exhausted,
+                "reached": len(self.parents) - 1, "truncated": self.truncated, "timed_out": self.timed_out,
+                "complete": self.exhausted or (self.completed == self.depth and not self.timed_out),
+                "elapsed_ms": _ms(self.started)}
+
+
+def eligible_routes(graph: Graph, start: int, depth: int, node_budget: int | None = None,
+                    time_budget_s: float | None = None) -> dict:
+    """Shortest eligible route to every sanctioned account within `depth` hops (see ELIGIBLE_RULE).
+
+    Each edge costs one hop, so a device bridge (account -> device <- account) costs two. Steps are
+    rebuilt from the search itself, so each keeps the relationship and direction the search used.
+    """
+    search = _Frontier(start, depth, node_budget or SEARCH_NODE_BUDGET, time_budget_s or SEARCH_TIME_BUDGET_S)
+    start_kind = graph.ro_query("MATCH (n) WHERE ID(n) = $id RETURN n:Device", {"id": start}).result_set[0][0]
+    devices: set[int] = {start} if start_kind else set()
+    accounts, device_frontier = ([], [start]) if start_kind else ([start], [])
+    hits: list[tuple[int, int]] = []
+    for d in search.levels():
+        new_accounts, new_devices = [], []
+        try:
+            for query, frontier in ((_ELIGIBLE_FROM_ACCOUNTS, accounts), (_ELIGIBLE_FROM_DEVICES, device_frontier)):
+                if not frontier:
+                    continue
+                ids, via, is_device, sanctioned = graph.ro_query(query, {"frontier": frontier},
+                                                                 timeout=LEVEL_TIMEOUT_MS).result_set[0]
+                found = set(sanctioned)
+                for nid, parent, dev in zip(ids, via, is_device):
+                    if nid in search.parents:
+                        continue
+                    search.parents[nid] = parent
+                    if dev:
+                        devices.add(nid)
+                        new_devices.append(nid)
+                    else:
+                        new_accounts.append(nid)
+                    if nid in found:
+                        hits.append((nid, d))
+        except Exception as exc:
+            if not _is_timeout(exc):
+                raise
+            search.timed_out = True
+            break
+        accounts, device_frontier = new_accounts, new_devices
+        if not search.finish_level(d, len(new_accounts) + len(new_devices)):
+            break
+
+    routes = []
+    hits = hits[:MAX_ROUTES]
+    chains = [_chain(search.parents, nid) for nid, _ in hits]
+    info = describe_nodes(graph, sorted({n for chain in chains for n in chain})) if chains else {}
+    for (nid, d), chain in zip(hits, chains):
+        steps = []
+        for u, v in zip(chain, chain[1:]):
+            rel, forward = ("USED_DEVICE", True) if v in devices else ("USED_DEVICE", False) if u in devices \
+                else ("FLOWS_TO", True)
+            steps.append({"from": info[u]["id"], "to": info[v]["id"], "rel": rel, "forward": forward})
+        routes.append({"entity": info[nid], "hops": d,
+                       "path": {"nodes": [info[n]["id"] for n in chain], "steps": steps,
+                                "entities": [info[n] for n in chain]}})
+    return {"rule": ELIGIBLE_RULE, "scope": search.scope(), "routes": routes}
+
+
+def explore_neighborhood(graph: Graph, entity_id: str, depth: int, neighbor_limit: int = 0,
+                         node_budget: int | None = None, time_budget_s: float | None = None) -> dict | None:
+    """Per-depth counts of everything reached over any risk relationship, the flagged or sanctioned entities
+    with a shortest path to each, and separately the eligible routes (see `eligible_routes`). Each search
+    reports the scope it covered.
 
     With `neighbor_limit`, also lists up to that many direct neighbors and how each one connects.
     """
@@ -166,19 +301,24 @@ def explore_neighborhood(graph: Graph, entity_id: str, depth: int, neighbor_limi
     start = internal_id(graph, entity_id)
     if start is None:
         return None
-    parents: dict[int, int | None] = {start: None}
+    search = _Frontier(start, depth, node_budget or SEARCH_NODE_BUDGET, time_budget_s or SEARCH_TIME_BUDGET_S)
     frontier = [start]
     first_ring: list[int] = []
     levels, hits = [], []
-    for d in range(1, depth + 1):
-        if not frontier:
+    for d in search.levels():
+        try:
+            ids, via, kinds, risky = graph.ro_query(_EXPAND, {"frontier": frontier},
+                                                    timeout=LEVEL_TIMEOUT_MS).result_set[0]
+        except Exception as exc:
+            if not _is_timeout(exc):
+                raise
+            search.timed_out = True
             break
-        ids, via, kinds, risky = graph.ro_query(_EXPAND, {"frontier": frontier}).result_set[0]
         counts = [0, 0, 0]
         frontier = []
         for nid, parent, kind in zip(ids, via, kinds):
-            if nid not in parents:
-                parents[nid] = parent
+            if nid not in search.parents:
+                search.parents[nid] = parent
                 frontier.append(nid)
                 counts[kind] += 1
         if d == 1:
@@ -188,13 +328,10 @@ def explore_neighborhood(graph: Graph, entity_id: str, depth: int, neighbor_limi
         hits.extend((nid, d) for nid in found)
         levels.append({"depth": d, "reached": len(frontier), **dict(zip(KIND_NAMES, counts)),
                        "flagged": len(found)})
+        if not search.finish_level(d, len(frontier)):
+            break
 
-    flagged = []
-    for nid, d in hits:
-        chain = [nid]
-        while parents[chain[-1]] is not None:
-            chain.append(parents[chain[-1]])
-        flagged.append({"depth": d, "path": _render_path(graph, chain[::-1])})
+    flagged = [{"depth": d, "path": _render_path(graph, _chain(search.parents, nid))} for nid, d in hits]
     if flagged:
         info = describe_nodes(graph, [nid for nid, _ in hits])
         for item, (nid, _) in zip(flagged, hits):
@@ -205,6 +342,8 @@ def explore_neighborhood(graph: Graph, entity_id: str, depth: int, neighbor_limi
         "levels": levels,
         "total_reached": sum(level["reached"] for level in levels),
         "flagged": flagged,
+        "scope": search.scope(),
+        "eligible": eligible_routes(graph, start, depth, node_budget, time_budget_s),
     }
     if first_ring:
         info = describe_nodes(graph, [start, *first_ring])
@@ -232,7 +371,7 @@ def trace_money_flow(graph: Graph, entity_id: str, direction: str = "out", max_h
     best: dict[int, int] = {start: since_ts if downstream else until_ts}
     via: dict[int, list] = {}
     frontier = [[start, best[start]]]
-    hops, cycles, tops = [], [], []
+    hops, cycles, tops, capped = [], [], [], []
     for hop in range(1, max_hops + 1):
         if not frontier:
             break
@@ -248,6 +387,8 @@ def trace_money_flow(graph: Graph, entity_id: str, direction: str = "out", max_h
                 via[nid] = [prev, tx_id, ts, amount]
                 improved.append((nid, ts, amount))
         improved.sort(key=lambda x: -x[2])
+        if len(improved) > frontier_cap:
+            capped.append({"hop": hop, "kept": frontier_cap, "dropped": len(improved) - frontier_cap})
         improved = improved[:frontier_cap]
         frontier = [[nid, ts] for nid, ts, _ in improved]
         tops.append([(nid, list(via[nid])) for nid, _, _ in improved[:top_per_hop]])
@@ -279,6 +420,7 @@ def trace_money_flow(graph: Graph, entity_id: str, direction: str = "out", max_h
         "sanctioned": [{"entity": info[n], "trail": trail(n)} for n in sanctioned],
         "round_trips": [{"hop": c["hop"], "from": info[c["via"]]["id"], "tx_id": c["tx_id"], "ts": c["ts"],
                          "amount": c["amount"]} for c in cycles],
+        "capped_hops": capped,
         "elapsed_ms": _ms(started),
     }
 
@@ -501,12 +643,15 @@ def trace_governance(graph: Graph, entity_id: str) -> dict | None:
     decisions = []
     for d, approver, team, policy in rows:
         d, approver, team, policy = (dict(x) if x else None for x in (d, approver, team, policy))
+        violations = _waiver_violations(d, approver, policy)
+        if policy:
+            policy["waiver_threshold_monthly_usd"] = _usd(policy.pop("waiver_threshold_monthly", None))
         decisions.append({
             "id": d["id"], "kind": d.get("kind"), "control": d.get("control"), "status": d.get("status"),
             "summary": d.get("summary"), "approved_at": d.get("approved_at"),
             "merchant_monthly_volume_usd": _usd(d.get("merchant_monthly_volume")),
             "approved_by": approver, "team": team, "policy": policy,
-            "violations": _waiver_violations(d, approver, policy), "sources": [],
+            "violations": violations, "sources": [],
         })
 
     by_id = {d["id"]: d for d in decisions}
@@ -567,7 +712,8 @@ def trace_governance(graph: Graph, entity_id: str) -> dict | None:
 
 
 def freeze_impact(graph: Graph, target_ids: list[str]) -> dict:
-    """Legitimate accounts outside `target_ids` that share a device or IP with them."""
+    """Accounts outside `target_ids` that share a device or IP with them: legitimate collateral, or also
+    exposed when they have an eligible route of their own to a sanctioned account."""
     started = time.perf_counter()
     known = describe_entities(graph, target_ids)
     rows = graph.ro_query("""
@@ -577,20 +723,34 @@ def freeze_impact(graph: Graph, target_ids: list[str]) -> dict:
         WHERE NOT o.id IN $targets
         RETURN inf.id, labels(inf), inf.kind, collect(DISTINCT [t.id, type(r)]),
                collect(DISTINCT CASE WHEN o IS NULL THEN NULL
-                                     ELSE [o.id, o.name, o.tier, o.status, o.monthly_volume, type(r2)] END)
+                                     ELSE [o.id, o.name, o.tier, o.status, o.monthly_volume, type(r2), ID(o)] END)
     """, {"targets": target_ids}).result_set
-    infrastructure, collateral = [], {}
+    routes: dict[str, dict | None] = {}
+
+    def nearest_route(account: str, node: int) -> dict | None:
+        if account not in routes:
+            found = eligible_routes(graph, node, PRESCRIBED_DEPTH)["routes"]
+            routes[account] = min(found, key=lambda r: r["hops"]) if found else None
+        return routes[account]
+
+    infrastructure, collateral, exposed = [], {}, {}
     for inf, labels, kind, users, outsiders in rows:
-        legit = [o for o in outsiders if o[3] == "ACTIVE" and o[2] in LEGIT_TIERS]
+        active = [o for o in outsiders if o[3] == "ACTIVE" and o[2] in LEGIT_TIERS]
+        legit = [o for o in active if not nearest_route(o[0], o[6])]
         infrastructure.append({
             "id": inf, "type": _visible(labels)[0], "kind": kind,
             "used_by_targets": [{"id": u, "rel": rel} for u, rel in users],
             "outside_accounts": [{"id": o[0], "rel": o[5]} for o in outsiders],
             "safe_to_block": not legit,
         })
-        for oid, name, tier, status, volume, rel in legit:
-            entry = collateral.setdefault(oid, {"id": oid, "name": name, "tier": tier, "status": status,
-                                                "monthly_volume_usd": _usd(volume), "shared_via": []})
+        for oid, name, tier, status, volume, rel, _ in active:
+            route = routes[oid]
+            if route:
+                entry = exposed.setdefault(oid, {"id": oid, "name": name, "sanctioned": route["entity"]["id"],
+                                                 "route_hops": route["hops"], "shared_via": []})
+            else:
+                entry = collateral.setdefault(oid, {"id": oid, "name": name, "tier": tier, "status": status,
+                                                    "monthly_volume_usd": _usd(volume), "shared_via": []})
             entry["shared_via"].append(inf)
     return {
         "target_ids": target_ids,
@@ -598,6 +758,7 @@ def freeze_impact(graph: Graph, target_ids: list[str]) -> dict:
         "targets": [known[t] for t in target_ids if t in known],
         "infrastructure": infrastructure,
         "collateral": sorted(collateral.values(), key=lambda c: -(c["monthly_volume_usd"] or 0)),
+        "also_exposed": sorted(exposed.values(), key=lambda c: c["route_hops"]),
         "elapsed_ms": _ms(started),
     }
 
@@ -702,6 +863,15 @@ def approve_action(graph: Graph, request_id: str, approver_id: str, now: int | N
                             {"rid": request_id}).result_set[0][0]
     return {"request_id": request_id, "status": "APPROVED", "approved_by": approver_id, "approved_at": now,
             "frozen": sorted(frozen), "spared": sorted(spared)}
+
+
+def approval_statuses(graph: Graph, request_ids: list[str]) -> dict[str, str]:
+    rows = graph.ro_query("""
+        UNWIND $ids AS rid
+        MATCH (r:Entity {id: rid}) WHERE r:ApprovalRequest
+        RETURN r.id, r.status
+    """, {"ids": list(request_ids)}).result_set
+    return dict(rows)
 
 
 def list_approvals(graph: Graph, status: str | None = None, limit: int = 50) -> list[dict]:

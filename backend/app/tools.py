@@ -257,13 +257,28 @@ def explore_neighborhood(ctx: ToolContext, g: RecordingGraph, ev: Evidence, enti
             ev.edge(info["id"], nb.get("rel"), entity_id)
         neighbors.append({"id": info["id"], "name": info["name"], "labels": info["labels"], "rel": nb.get("rel"),
                           "direction": "out" if nb.get("forward", True) else "in"})
+    eligible = result["eligible"]
+    routes = []
+    for route in eligible["routes"]:
+        ev.path(route["path"])
+        ev.node(route["entity"])
+        routes.append({"entity": route["entity"], "hops": route["hops"], "path": _compact_path(route["path"]),
+                       "identity_hops": _identity_hops(route["path"])})
+    explored, searched = result["scope"], eligible["scope"]
     data = {
         "entity_id": entity_id,
         "depth": depth,
         "levels": result["levels"],
         "total_reached": result["total_reached"],
         "flagged": flagged,
-        "coverage": f"{result['total_reached']} entities within {depth} hop(s) checked",
+        "scope": explored,
+        "eligible_routes": {"rule": eligible["rule"], "scope": searched, "routes": routes},
+        "coverage": (f"Exploration: {explored['reached']:,} entities, {explored['completed_depth']} of {depth} "
+                     f"hop(s){', everything reachable' if explored['exhausted'] else ''}. Eligible-route search: "
+                     f"{searched['reached']:,} entities, {searched['completed_depth']} of {depth} hop(s), "
+                     + ("complete" if searched["complete"] else "INCOMPLETE ("
+                        + ("node budget hit" if searched["truncated"] else "timed out") + ")")
+                     + f"; {len(routes)} route(s) to a sanctioned account."),
     }
     if neighbors:
         data["neighbors"] = neighbors
@@ -319,7 +334,11 @@ def trace_money_flow(ctx: ToolContext, g: RecordingGraph, ev: Evidence, entity_i
                        for hit in result["sanctioned"]],
         "round_trips": [{"hop": rt["hop"], "via": rt["from"], "tx_id": rt["tx_id"], "amount_usd": rt["amount"] / 100,
                          "time": _utc(rt["ts"])} for rt in result["round_trips"]],
+        "capped_hops": result["capped_hops"],
     }
+    if result["capped_hops"]:
+        data["note"] = ("Some hops kept only the largest arrivals (capped_hops), so accounts beyond them may be "
+                        "missing: absence of a sanctioned account here is not a complete negative.")
     return data, result["accounts_reached"], None
 
 
@@ -483,9 +502,13 @@ def freeze_impact(ctx: ToolContext, g: RecordingGraph, ev: Evidence, target_ids:
         shared_with = sorted({c["id"] for c in result["collateral"]})
         advice.append(f"Do not block {', '.join(keep_open)}: shared with legitimate accounts {', '.join(shared_with)}.")
     if blocked:
-        advice.append(f"Blocking {', '.join(blocked)} affects no other customer.")
+        advice.append(f"Blocking {', '.join(blocked)} affects no legitimate customer.")
+    if result["also_exposed"]:
+        advice.append("Not customers to protect: " + "; ".join(
+            f"{a['id']} has its own eligible route to {a['sanctioned']} in {a['route_hops']} hops"
+            for a in result["also_exposed"]) + ". Add them to the freeze.")
     data = {**{k: v for k, v in result.items() if k != "elapsed_ms"}, "recommendation": " ".join(advice)}
-    return data, len(result["collateral"]) + len(result["infrastructure"]), None
+    return data, len(result["collateral"]) + len(result["also_exposed"]) + len(result["infrastructure"]), None
 
 
 @tool

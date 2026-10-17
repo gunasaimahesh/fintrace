@@ -1,8 +1,17 @@
-"""Answer states, verdicts and the edge-verified claim checker.
+"""Answer states, verdicts, typed facts and the analyst's card.
 
-The model's summary is kept only if every entity ID it mentions was returned by a tool in this run
-and every structured claim matches an edge a tool returned. Otherwise the summary and claims are
-replaced by ones written from the tool results alone.
+Every statement on the card is rendered from Facts, and every Fact comes from one tool result (tool,
+step, result_key). The verdict follows the eligible-route rule, not the model:
+
+- SUSPICIOUS: an eligible route to a sanctioned account was found (a positive witness stands even if
+  other searches were incomplete).
+- CLEAR: an eligible-route search completed to PRESCRIBED_DEPTH hops, or exhausted everything reachable,
+  and found none. Worded as "no eligible route within the stated scope", never "safe".
+- INSUFFICIENT: no such search completed (capped, timed out, too shallow, or never run).
+
+The model may propose a verdict, structured statements and a rationale. Its statements are bound to
+facts or rejected with a reason; its rationale is shown as unverified, with supplementary checks for IDs
+no tool returned and edges no tool showed. Those checks reject; they don't verify.
 """
 
 from __future__ import annotations
@@ -10,6 +19,9 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
+from typing import Any
+
+from backend.app.contracts import PRESCRIBED_DEPTH, Fact, FactKind, Source, edge_key
 
 
 class AnswerState(StrEnum):
@@ -30,6 +42,25 @@ CLAIM_RELATIONS = ("TRANSFERRED", "USED_DEVICE", "LOGGED_FROM", "APPROVED", "APP
                    "GOVERNED_BY", "MEMBER_OF", "AUTHORED", "OPENED", "ROUTED_TO", "UNDER_POLICY", "FOR_CASE",
                    "TARGETS", "EXCLUDES")
 MONEY_RELATIONS = {"TRANSFERRED", "FLOWS_TO"}
+RING_LIMIT = 25
+
+MODEL_PREDICATES = {
+    "eligible_route_hops": "subject: alert entity, object: sanctioned account, value: hops",
+    "no_eligible_route": "subject: alert entity, value: hops a complete search covered without finding a route",
+    "sanctioned_within_reach": "subject: alert entity, object: sanctioned account reached only by association, value: hops",
+    "transfer_amount": "subject: sender, object: receiver, value: USD",
+    "max_flow_capacity": "subject: a source account, object: target account, value: USD",
+    "monthly_volume": "subject: account, value: USD per month",
+    "policy_threshold": "subject: policy, value: USD per month",
+    "ring_size": "subject: account, value: community members",
+    "top_broker": "subject: account whose community was scored, object: broker account",
+    "approved_by": "subject: decision, object: employee",
+    "waiver_compliance": "subject: decision, object: policy, value: BREACH or COMPLIANT",
+    "action_status": "subject: approval request, value: status",
+}
+UNIT_FAMILY = {"eligible_route_hops": "hops", "no_eligible_route": "hops", "sanctioned_within_reach": "hops",
+               "transfer_amount": "USD",
+               "max_flow_capacity": "USD", "monthly_volume": "USD", "policy_threshold": "USD", "ring_size": "members"}
 
 _ID_TOKEN = re.compile(
     r"(?<![\w-])(?:acct|merch|dev|ip|emp|dec|pol|tick|msg|team|case|apr|alert)-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*"
@@ -83,6 +114,10 @@ def _and(items: list[str]) -> str:
     return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} and {items[-1]}"
 
 
+def _money(usd: float | int | None) -> str:
+    return f"${usd:,.0f}" if usd is not None else "an unknown amount"
+
+
 def normalize_claim(raw: object) -> tuple[str, str, str] | None:
     if isinstance(raw, dict):
         parts = (raw.get("subject"), raw.get("relation"), raw.get("object"))
@@ -97,30 +132,26 @@ def normalize_claim(raw: object) -> tuple[str, str, str] | None:
 
 
 @dataclass
-class Verification:
-    verified: bool
-    claims_checked: int
+class TextCheck:
+    """Supplementary rejection checks on model text: IDs no tool returned, edges no tool showed."""
+
     ids_checked: int
     unknown_ids: list[str]
     rejected_claims: list[dict]
-    rewritten: bool = False
 
     @property
-    def badge(self) -> str:
-        if self.verified:
-            return (f"Verified against graph ({_count(self.claims_checked, 'claim')}, "
-                    f"{_count(self.ids_checked, 'entity ID')} checked)")
-        return (f"Rewritten from graph results ({_count(len(self.rejected_claims), 'unsupported claim')}, "
-                f"{_count(len(self.unknown_ids), 'unknown ID')} in the model's answer)")
+    def passed(self) -> bool:
+        return not self.unknown_ids and not self.rejected_claims
 
     def to_json(self) -> dict:
-        return {**asdict(self), "badge": self.badge}
+        return {**asdict(self), "passed": self.passed}
 
 
-def verify(summary: str, claims: list, ledger: EvidenceLedger, given: list[str] | None = None) -> Verification:
+def check_text(text: str, ledger: EvidenceLedger, claims: list | None = None,
+               given: list[str] | None = None) -> TextCheck:
     """`given` are IDs from the request itself (the alert entity), which may legitimately be absent from the graph."""
     normalized = [(raw, normalize_claim(raw)) for raw in claims or []]
-    ids = mentioned_ids(summary)
+    ids = mentioned_ids(text)
     for _, claim in normalized:
         if claim:
             ids += [claim[0], claim[2]]
@@ -134,14 +165,13 @@ def verify(summary: str, claims: list, ledger: EvidenceLedger, given: list[str] 
             rejected.append({"claim": raw, "reason": f"unknown relation {claim[1]}"})
         elif not ledger.has_edge(*claim):
             rejected.append({"claim": raw, "reason": "no such edge in this run's tool results"})
-    return Verification(verified=not unknown and not rejected, claims_checked=len(normalized), ids_checked=len(ids),
-                        unknown_ids=unknown, rejected_claims=rejected)
+    return TextCheck(ids_checked=len(ids), unknown_ids=unknown, rejected_claims=rejected)
 
 
 def route_breaks(path: dict) -> list[str]:
     """Why money from the start of a path could not follow it to the end: a transfer pointing back toward
     the start, or an identity hop through a shared IP (proxies and carrier NAT are shared by strangers;
-    a device fingerprint is not). An empty list means the path is an exposure route."""
+    a device fingerprint is not). An empty list means the path follows the eligible-route rule."""
     breaks = []
     start = path["nodes"][0] if path.get("nodes") else "the start"
     for step in path["steps"]:
@@ -153,139 +183,469 @@ def route_breaks(path: dict) -> list[str]:
     return list(dict.fromkeys(breaks))
 
 
-def sanctioned_hits(results: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Sanctioned entities reached by explore_neighborhood, split into exposure routes and associations."""
-    hits = [h for r in _ok(results, "explore_neighborhood") for h in r["data"]["flagged"]
-            if "Sanctioned" in h["entity"]["labels"]]
-    routes = [h for h in hits if not route_breaks(h["path"])]
-    return routes, [h for h in hits if h not in routes]
+def _path_dependencies(path: dict) -> list[str]:
+    deps = list(path["nodes"])
+    for step in path["steps"]:
+        src, dst = (step["from"], step["to"]) if step.get("forward", True) else (step["to"], step["from"])
+        deps.append(edge_key(src, step["rel"], dst))
+    return deps
 
 
-def _ok(results: list[dict], tool: str) -> list[dict]:
-    return [r for r in results if r["tool"] == tool and r["ok"]]
+def extract_facts(results: list[dict], rev: int | None = None) -> list[Fact]:
+    """Typed facts from successful tool results, numbered F1, F2... in the order the tools ran."""
+    facts: list[Fact] = []
+
+    def add(kind: FactKind, subject: str, predicate: str, obj: str | None, value: Any, unit: str | None,
+            source: Source, scope: dict | None = None, depends_on: list[str] | None = None,
+            aggregate: bool = False) -> Fact:
+        fact = Fact(id=f"F{len(facts) + 1}", kind=kind.value, subject=subject, predicate=predicate, object=obj,
+                    value=value, unit=unit, source=source, scope=scope or {}, evidence_rev=rev,
+                    depends_on=list(dict.fromkeys(depends_on or [subject])), aggregate=aggregate)
+        facts.append(fact)
+        return fact
+
+    for step, r in enumerate(results, start=1):
+        if not r["ok"]:
+            continue
+        tool, d = r["tool"], r["data"]
+
+        def src(key: str) -> Source:
+            return Source(tool=tool, step=step, result_key=key)
+
+        if tool == "resolve_entity":
+            if not d.get("found"):
+                add(FactKind.PROFILE, d["entity_id"], "not_in_graph", None, True, None, src("data.found"))
+                continue
+            add(FactKind.PROFILE, d["id"], "status", None, d.get("status"), None, src("data.status"))
+            if (volume := d["profile"].get("monthly_volume_usd")) is not None:
+                add(FactKind.PROFILE, d["id"], "monthly_volume", None, volume, "USD/month",
+                    src("data.profile.monthly_volume_usd"))
+
+        elif tool == "recall_memory":
+            for i, mf in enumerate(d["facts"]):
+                add(FactKind(mf.get("kind") or FactKind.SANCTIONS_EXPOSURE), d["entity_id"], "memory_finding",
+                    mf["id"], mf["verdict"], None, src(f"data.facts[{i}]"),
+                    scope={k: mf.get(k) for k in ("status", "claim", "episode_id", "evidence_ids", "changed_evidence")})
+
+        elif tool == "explore_neighborhood":
+            subject, eligible = d["entity_id"], d["eligible_routes"]
+            scope = eligible["scope"]
+            for i, route in enumerate(eligible["routes"]):
+                add(FactKind.SANCTIONS_EXPOSURE, subject, "eligible_route_hops", route["entity"]["id"], route["hops"],
+                    "hops", src(f"data.eligible_routes.routes[{i}]"),
+                    scope={"path": route["path"], "identity_hops": route["identity_hops"], "search": scope},
+                    depends_on=_path_dependencies(route["path"]))
+            if not eligible["routes"]:
+                predicate = "no_eligible_route" if scope["complete"] else "eligible_search_incomplete"
+                add(FactKind.SANCTIONS_EXPOSURE, subject, predicate, None, scope["completed_depth"], "hops",
+                    src("data.eligible_routes.scope"), scope=scope, aggregate=True)
+            for i, hit in enumerate(d["flagged"]):
+                sanctioned = "Sanctioned" in hit["entity"]["labels"]
+                add(FactKind.SANCTIONS_EXPOSURE, subject,
+                    "sanctioned_within_reach" if sanctioned else "risk_flag_within_reach",
+                    hit["entity"]["id"], hit["depth"], "hops", src(f"data.flagged[{i}]"),
+                    scope={"path": hit["path"], "breaks": route_breaks(hit["path"])},
+                    depends_on=_path_dependencies(hit["path"]))
+
+        elif tool == "trace_money_flow":
+            for i, hit in enumerate(d["sanctioned"]):
+                trail = add(FactKind.SANCTIONS_EXPOSURE, d["entity_id"], "money_trail", hit["entity"]["id"],
+                            len(hit["trail"]), "transfers", src(f"data.sanctioned[{i}]"),
+                            scope={"direction": d["direction"]},
+                            depends_on=[n for leg in hit["trail"] for n in (leg["from"], leg["to"])])
+                for j, leg in enumerate(hit["trail"]):
+                    add(FactKind.SANCTIONS_EXPOSURE, leg["from"], "transfer_amount", leg["to"], leg["amount_usd"],
+                        "USD", src(f"data.sanctioned[{i}].trail[{j}]"),
+                        scope={"tx_id": leg["tx_id"], "time": leg["time"], "trail": trail.id},
+                        depends_on=[leg["from"], leg["to"], edge_key(leg["from"], "TRANSFERRED", leg["to"])])
+
+        elif tool == "exposure_flow":
+            sources = d["source_ids"]
+            add(FactKind.SANCTIONS_EXPOSURE, sources[0] if len(sources) == 1 else "+".join(sources),
+                "max_flow_capacity", d["target_id"], d["max_flow_usd"], "USD", src("data.max_flow_usd"),
+                scope={"sources": sources, "added_via_shared_device": d["added_via_shared_device"]},
+                depends_on=[*sources, d["target_id"]], aggregate=True)
+
+        elif tool == "detect_ring":
+            size = d["community_size"]
+            members = [m["id"] for m in d["members"]] if size <= RING_LIMIT else None
+            add(FactKind.SANCTIONS_EXPOSURE, d["entity_id"], "ring_size", None, size, "members",
+                src("data.community_size"), scope={"members": members, "runs": d["runs"]}, aggregate=True)
+
+        elif tool == "find_brokers":
+            ranked = [b for b in d["brokers"] if b["score"] > 0]
+            if ranked:
+                add(FactKind.SANCTIONS_EXPOSURE, d["entity_id"], "top_broker", ranked[0]["id"], ranked[0]["score"],
+                    "betweenness", src("data.brokers[0]"), scope={"scored": d["scored"]},
+                    depends_on=[d["entity_id"], ranked[0]["id"]], aggregate=True)
+
+        elif tool == "trace_governance":
+            entity = d["entity_id"]
+            for i, dec in enumerate(d["decisions"]):
+                key = f"data.decisions[{i}]"
+                approver, policy = dec["approved_by"], dec["policy"]
+                deps = [dec["id"], entity] + ([approver["id"]] if approver else []) + ([policy["id"]] if policy else [])
+                add(FactKind.WAIVER_COMPLIANCE, dec["id"], "waiver_applies_to", entity, dec.get("control"), None,
+                    src(key), scope={"sources": [s["id"] for s in dec["sources"]]}, depends_on=[dec["id"], entity])
+                if approver:
+                    add(FactKind.WAIVER_COMPLIANCE, dec["id"], "approved_by", approver["id"], approver.get("clearance"),
+                        None, src(f"{key}.approved_by"), depends_on=[dec["id"], approver["id"]])
+                if dec.get("merchant_monthly_volume_usd") is not None:
+                    add(FactKind.WAIVER_COMPLIANCE, entity, "monthly_volume", None, dec["merchant_monthly_volume_usd"],
+                        "USD/month", src(f"{key}.merchant_monthly_volume_usd"), scope={"recorded_on": dec["id"]},
+                        depends_on=[dec["id"]])
+                if policy:
+                    if policy.get("waiver_threshold_monthly_usd") is not None:
+                        add(FactKind.WAIVER_COMPLIANCE, policy["id"], "policy_threshold", None,
+                            policy["waiver_threshold_monthly_usd"], "USD/month",
+                            src(f"{key}.policy.waiver_threshold_monthly_usd"),
+                            scope={"version": policy.get("version"), "required_clearance": policy.get("required_clearance")})
+                    add(FactKind.WAIVER_COMPLIANCE, dec["id"], "waiver_compliance", policy["id"],
+                        "BREACH" if dec["violations"] else "COMPLIANT", None, src(f"{key}.violations"),
+                        scope={"details": [v["detail"] for v in dec["violations"]], "policy_version": policy.get("version")},
+                        depends_on=deps)
+            for i, other in enumerate(d["approver_other_decisions"]):
+                add(FactKind.WAIVER_COMPLIANCE, other["decision_id"], "waiver_compliance", other["policy_id"],
+                    "BREACH" if other["violations"] else "COMPLIANT", None, src(f"data.approver_other_decisions[{i}]"),
+                    scope={"approved_by": other["approved_by"], "applies_to": other["applies_to"]["id"], "other": True},
+                    depends_on=[other["decision_id"], other["approved_by"], other["applies_to"]["id"]])
+            if policy := d["freeze_policy"]:
+                for i, person in enumerate(d["on_call_approvers"]):
+                    add(FactKind.ACTION, policy["id"], "on_call_approver", person["id"], person["clearance"], None,
+                        src(f"data.on_call_approvers[{i}]"), depends_on=[policy["id"], person["id"]])
+
+        elif tool == "freeze_impact":
+            for i, c in enumerate(d["collateral"]):
+                add(FactKind.ACTION, c["id"], "collateral", "+".join(c["shared_via"]), c["tier"], None,
+                    src(f"data.collateral[{i}]"),
+                    scope={"shared_via": c["shared_via"], "monthly_volume_usd": c["monthly_volume_usd"]},
+                    depends_on=[c["id"], *c["shared_via"]])
+            for i, a in enumerate(d.get("also_exposed", [])):
+                add(FactKind.ACTION, a["id"], "also_exposed", a["sanctioned"], a["route_hops"], "hops",
+                    src(f"data.also_exposed[{i}]"), scope={"shared_via": a["shared_via"]},
+                    depends_on=[a["id"], *a["shared_via"]])
+
+        elif tool == "request_action":
+            add(FactKind.ACTION, d["request_id"], "action_status", d["approver"]["id"], d["status"], None,
+                src("data.status"), scope=_action_scope(d))
+
+        elif tool == "path_between" and d.get("connected"):
+            add(FactKind.SANCTIONS_EXPOSURE, d["from_id"], "shortest_connection_hops", d["to_id"], d["hops"], "hops",
+                src("data.hops"), scope={"path": d["path"], "breaks": route_breaks(d["path"])},
+                depends_on=_path_dependencies(d["path"]))
+    return facts
 
 
-def _money(usd: float | int | None) -> str:
-    return f"${usd:,.0f}" if usd is not None else "an unknown amount"
+def _action_scope(request: dict) -> dict:
+    return {"targets": request["target_ids"], "excluded": request["excluded_ids"], "policy_id": request["policy_id"],
+            "case_id": request["case_id"], "approver_clearance": request["approver"].get("clearance")}
 
 
-def _step_claim(step: dict) -> dict | None:
-    if not step.get("rel"):
-        return None
-    src, dst = (step["from"], step["to"]) if step.get("forward", True) else (step["to"], step["from"])
-    relation = "TRANSFERRED" if step["rel"] == "FLOWS_TO" else step["rel"]
-    return {"subject": src, "relation": relation, "object": dst}
+def status_read_facts(facts: list[Fact], statuses: dict[str, str], rev: int | None = None) -> list[Fact]:
+    """Approval status re-read from the graph when the card is rendered (statuses never come from memory)."""
+    fresh = []
+    for f in facts:
+        if f.predicate == "action_status" and f.subject in statuses:
+            fresh.append(Fact(id=f"F{len(facts) + len(fresh) + 1}", kind=f.kind, subject=f.subject,
+                              predicate="action_status", object=f.object, value=statuses[f.subject], unit=None,
+                              source=Source(tool="approval_status_read", step=0,
+                                            result_key=f"ApprovalRequest[{f.subject}].status"),
+                              scope=f.scope, evidence_rev=rev, depends_on=[f.subject]))
+    return fresh
 
 
-def summarize(entity_id: str, results: list[dict], state: AnswerState, ledger: EvidenceLedger) -> tuple[str, list[dict]]:
-    """A summary and claims written only from tool results, so they verify by construction."""
-    if state == AnswerState.UNKNOWN_ENTITY:
-        return f"{entity_id} is not in the graph, so nothing else was queried.", []
+def _by(facts: list[Fact], predicate: str) -> list[Fact]:
+    return [f for f in facts if f.predicate == predicate]
+
+
+def _first_per(facts: list[Fact], key=lambda f: (f.subject, f.object)) -> list[Fact]:
+    seen, out = set(), []
+    for f in facts:
+        if key(f) not in seen:
+            seen.add(key(f))
+            out.append(f)
+    return out
+
+
+def clears(fact: Fact) -> bool:
+    scope = fact.scope
+    return (fact.predicate == "no_eligible_route" and scope["complete"]
+            and (scope["exhausted"] or scope["requested_depth"] >= PRESCRIBED_DEPTH))
+
+
+def derive(facts: list[Fact], unknown: bool, investigated: bool) -> tuple[AnswerState, Verdict, list[str]]:
+    """Answer state, verdict and the facts the verdict rests on."""
+    if unknown:
+        return AnswerState.UNKNOWN_ENTITY, Verdict.INSUFFICIENT, [f.id for f in _by(facts, "not_in_graph")]
+    memory = _by(facts, "memory_finding")
+    current = [f for f in memory if f.scope["status"] == "CURRENT"]
+    stale = any(f.scope["status"] == "STALE" for f in memory)
+    if current and not stale and not investigated:
+        try:
+            remembered = Verdict(str(current[0].value).upper())
+        except ValueError:
+            remembered = Verdict.INSUFFICIENT
+        return AnswerState.ANSWERED_FROM_MEMORY, remembered, [current[0].id]
+
+    routes = _by(facts, "eligible_route_hops")
+    cleared = [f for f in facts if clears(f)]
+    if routes:
+        verdict, basis = Verdict.SUSPICIOUS, [min(routes, key=lambda f: f.value).id]
+    elif cleared:
+        verdict, basis = Verdict.CLEAR, [max(cleared, key=lambda f: f.scope["requested_depth"]).id]
+    else:
+        searches = _by(facts, "no_eligible_route") + _by(facts, "eligible_search_incomplete")
+        verdict, basis = Verdict.INSUFFICIENT, [f.id for f in searches]
+    if stale:
+        return AnswerState.MEMORY_STALE_REINVESTIGATED, verdict, basis
+    return (AnswerState.ANSWERED_WITH_PATH if verdict == Verdict.SUSPICIOUS else AnswerState.NOT_IN_GRAPH), verdict, basis
+
+
+@dataclass
+class Statement:
+    text: str
+    facts: list[str]
+
+    def to_json(self) -> dict:
+        return {"text": self.text, "facts": self.facts}
+
+
+def render(entity_id: str, state: AnswerState, verdict: Verdict, facts: list[Fact],
+           ledger: EvidenceLedger) -> list[Statement]:
+    """The analyst's card: fixed sentences filled only from facts, each citing the facts it uses."""
+    out: list[Statement] = []
 
     def label(eid: str) -> str:
         name = ledger.name(eid)
         return f"{name} ({eid})" if name and name != eid else eid
 
-    sentences: list[str] = []
-    claims: list[dict] = []
-    subject = label(entity_id)
-    memory = _ok(results, "recall_memory")
-    facts = memory[-1]["data"]["facts"] if memory else []
+    def say(text: str, *cited: Fact | None) -> None:
+        out.append(Statement(text, [f.id for f in cited if f is not None]))
 
+    if state == AnswerState.UNKNOWN_ENTITY:
+        say(f"{entity_id} is not in the graph, so nothing else was queried.", *_by(facts, "not_in_graph"))
+        return out
+
+    memory = _by(facts, "memory_finding")
+    for f in memory:
+        if f.scope["status"] == "STALE":
+            say(f"Memory held an earlier {f.value} finding, but {_and(f.scope['changed_evidence'] or ['its evidence'])} "
+                f"changed after it was recorded, so this was re-investigated from the graph.", f)
     if state == AnswerState.ANSWERED_FROM_MEMORY:
-        fact = next(f for f in facts if f["status"] == "CURRENT")
-        evidence = ", ".join(fact["evidence_ids"]) or "none recorded"
-        return (f"Answered from memory: {fact['claim']} (verdict {fact['verdict']}, recorded by episode "
-                f"{fact['episode_id']}). None of the entities it rests on ({evidence}) has changed since.", [])
-    for fact in facts:
-        if fact["status"] == "STALE":
-            sentences.append(f"Memory held an earlier {fact['verdict']} finding, but "
-                             f"{', '.join(fact['changed_evidence'])} changed after it was recorded, so this was "
-                             f"re-investigated from the graph.")
+        f = next(f for f in memory if f.scope["status"] == "CURRENT")
+        evidence = ", ".join(f.scope["evidence_ids"] or []) or "none recorded"
+        say(f"Answered from memory: {f.scope['claim']} (verdict {f.value}, recorded by episode {f.scope['episode_id']}). "
+            f"None of the entities it rests on ({evidence}) has changed since.", f)
+        return out
 
-    explores = _ok(results, "explore_neighborhood")
-    deepest = max(explores, key=lambda r: r["data"]["depth"]) if explores else None
-    routes, associations = sanctioned_hits(results)
+    routes = _first_per(sorted(_by(facts, "eligible_route_hops"), key=lambda f: f.value), key=lambda f: f.object)
+    for n, f in enumerate(routes):
+        if n == 0:
+            say(f"{label(f.subject)} has an eligible route to sanctioned {label(f.object)} in {f.value} hops: "
+                f"{' → '.join(f.scope['path']['nodes'])}.", f)
+            for hop in f.scope["identity_hops"]:
+                say(f"The route crosses shared {hop['type'].lower()} {hop['id']}, used by "
+                    f"{' and '.join(hop['accounts_on_path'])}; that hop is an identity link, not a transfer.", f)
+        else:
+            say(f"It also has an eligible route to sanctioned {label(f.object)} in {f.value} hops.", f)
 
-    if routes:
-        hit = min(routes, key=lambda h: h["depth"])
-        target = hit["entity"]["id"]
-        sentences.append(f"{subject} is {hit['depth']} hops from sanctioned {label(target)}: "
-                         f"{' → '.join(hit['path']['nodes'])}.")
-        for hop in hit.get("identity_hops", []):
-            sentences.append(f"The chain crosses shared {hop['type'].lower()} {hop['id']}, used by "
-                             f"{' and '.join(hop['accounts_on_path'])}; that hop is an identity link, not money.")
-        claims += [c for c in (_step_claim(s) for s in hit["path"]["steps"]) if c]
-    elif associations:
-        hit = min(associations, key=lambda h: h["depth"])
-        sentences.append(f"{subject} is {hit['depth']} hops from sanctioned {label(hit['entity']['id'])} "
-                         f"({' → '.join(hit['path']['nodes'])}), but money from it cannot follow that route: "
-                         f"{'; '.join(route_breaks(hit['path']))}. That is an association, not exposure.")
-        claims += [c for c in (_step_claim(s) for s in hit["path"]["steps"]) if c]
-    elif deepest:
-        data = deepest["data"]
-        hops = "1 hop" if data["depth"] == 1 else f"{data['depth']} hops"
-        sentences.append(f"Nothing sanctioned is linked to {subject} within {hops} "
-                         f"({data['total_reached']:,} entities checked). No recorded link is not proof the account is safe.")
-        for hit in data["flagged"]:
-            sentences.append(f"It does reach flagged {label(hit['entity']['id'])} at depth {hit['depth']}.")
+    if not routes:
+        cleared = [f for f in facts if clears(f)]
+        if verdict == Verdict.CLEAR and cleared:
+            f = max(cleared, key=lambda f: f.scope["requested_depth"])
+            if f.scope["exhausted"] and f.scope["reached"] == 0:
+                text = (f"No transfer leaves {label(f.subject)} and it shares no device, so no eligible route to a "
+                        f"sanctioned entity exists.")
+            elif f.scope["exhausted"]:
+                text = (f"Every entity reachable from {label(f.subject)} over eligible routes was checked "
+                        f"({f.scope['reached']:,}); none is sanctioned.")
+            else:
+                text = (f"No eligible route from {label(f.subject)} to a sanctioned entity was found within "
+                        f"{f.scope['requested_depth']} hops ({f.scope['reached']:,} entities reached).")
+            say(text + " That is not proof the account is safe.", f)
+        else:
+            searches = _by(facts, "no_eligible_route") + _by(facts, "eligible_search_incomplete")
+            if searches:
+                f = max(searches, key=lambda f: (f.scope["completed_depth"], f.scope["requested_depth"]))
+                scope = f.scope
+                why = ("it hit the node budget" if scope["truncated"] else "it ran out of time" if scope["timed_out"]
+                       else f"it was only asked to search {scope['requested_depth']} hops")
+                say(f"The eligible-route search from {label(f.subject)} covered {scope['completed_depth']} of the "
+                    f"{PRESCRIBED_DEPTH} hops required to clear an account because {why}, so finding no route "
+                    f"there does not clear it.", f)
+            else:
+                say(f"No eligible-route search was run from {label(entity_id)}, so nothing can be concluded about "
+                    f"its exposure.", *_by(facts, "status")[:1])
 
-    for r in _ok(results, "trace_money_flow"):
-        for hit in r["data"]["sanctioned"]:
-            legs = [f"{t['from']} → {t['to']} {_money(t['amount_usd'])} at {t['time']}" for t in hit["trail"]]
-            sentences.append(f"Money followed in time order: {'; '.join(legs)}.")
-            claims += [{"subject": t["from"], "relation": "TRANSFERRED", "object": t["to"]} for t in hit["trail"]]
+    route_targets = {f.object for f in routes}
+    for f in _first_per(_by(facts, "sanctioned_within_reach"), key=lambda f: f.object):
+        if f.object in route_targets:
+            continue
+        reasons = "; ".join(f.scope["breaks"]) or "no eligible route reaches it in the searched scope"
+        say(f"Sanctioned {label(f.object)} is {f.value} hops away if direction is ignored "
+            f"({' → '.join(f.scope['path']['nodes'])}), but money from {label(f.subject)} cannot follow that path: "
+            f"{reasons}. That is an association, not exposure.", f)
+    for f in _first_per(_by(facts, "risk_flag_within_reach"), key=lambda f: f.object):
+        say(f"It reaches flagged {label(f.object)} at depth {f.value}.", f)
 
-    for r in _ok(results, "exposure_flow"):
-        d = r["data"]
-        sentences.append(f"Up to {_money(d['max_flow_usd'])} could reach {d['target_id']} from "
-                         f"{_and(d['source_ids'])} (max flow over all transfers, an upper bound).")
+    transfers = _by(facts, "transfer_amount")
+    for f in _first_per(_by(facts, "money_trail")):
+        legs = [t for t in transfers if t.scope.get("trail") == f.id]
+        say(f"Money followed in time order from {label(f.subject)}: "
+            + "; ".join(f"{t.subject} → {t.object} {_money(t.value)} at {t.scope['time']}" for t in legs) + ".",
+            f, *legs)
 
-    for r in _ok(results, "detect_ring"):
-        d = r["data"]
-        if d["community_size"] <= 25:
-            sentences.append(f"Label propagation puts {_and([m['id'] for m in d['members']])} in one "
-                             f"community of {d['community_size']}.")
-    for r in _ok(results, "find_brokers"):
-        brokers = [b for b in r["data"]["brokers"] if b["score"] > 0]
-        if brokers:
-            sentences.append(f"{label(brokers[0]['id'])} ranks highest on betweenness, so money between "
-                             f"the other members passes through it.")
+    for f in _first_per(_by(facts, "max_flow_capacity")):
+        if f.value:
+            say(f"Up to {_money(f.value)} could reach {label(f.object)} from {_and(f.scope['sources'])} "
+                f"(max flow over aggregated transfers: an upper bound that ignores timing).", f)
+        else:
+            say(f"No chain of transfers carries money from {_and(f.scope['sources'])} to {label(f.object)} "
+                f"(max flow $0 over aggregated transfers).", f)
 
-    for r in _ok(results, "trace_governance"):
-        for d in r["data"]["decisions"]:
-            approver = d["approved_by"]
-            if not approver:
-                continue
-            claims.append({"subject": approver["id"], "relation": "APPROVED", "object": d["id"]})
-            claims.append({"subject": d["id"], "relation": "APPLIES_TO", "object": r["data"]["entity_id"]})
-            sources = _and([s["id"] for s in d["sources"]]) if d["sources"] else ""
-            sentence = (f"{d['id']} waived {d.get('control') or 'a control'} for {r['data']['entity_id']}, approved by "
-                        f"{label(approver['id'])} with {approver.get('clearance')} clearance"
-                        + (f" (sources: {sources})" if sources else "") + ".")
-            for v in d["violations"]:
-                sentence += f" That breaks {v['policy_id']}: {v['detail']}."
-                claims.append({"subject": d["id"], "relation": "GOVERNED_BY", "object": v["policy_id"]})
-            sentences.append(sentence)
-        for other in r["data"]["approver_other_decisions"]:
-            status = "also in breach" if other["violations"] else "within policy"
-            sentences.append(f"{other['approved_by']} also approved {other['decision_id']} for "
-                             f"{other['applies_to']['id']} ({status}).")
+    for f in _first_per(_by(facts, "ring_size")):
+        if f.scope["members"]:
+            say(f"Label propagation puts {_and(f.scope['members'])} in one community of {f.value}.", f)
+        else:
+            say(f"{label(f.subject)} sits in a community of {f.value:,}, too large to treat as a ring.", f)
+    for f in _first_per(_by(facts, "top_broker")):
+        say(f"{label(f.object)} ranks highest on betweenness among the {f.scope['scored']} accounts scored, "
+            f"so money between the others passes through it.", f)
 
-    for r in _ok(results, "freeze_impact"):
-        for c in r["data"]["collateral"]:
-            via = _and(c["shared_via"])
-            sentences.append(f"A blanket block would also hit {label(c['id'])}, a {c['tier']} account moving "
-                             f"{_money(c['monthly_volume_usd'])}/month through shared {via}; it is excluded and {via} stays open.")
+    compliance = _by(facts, "waiver_compliance")
+    for f in _first_per(_by(facts, "waiver_applies_to")):
+        approval = next((a for a in _by(facts, "approved_by") if a.subject == f.subject), None)
+        check = next((c for c in compliance if c.subject == f.subject and not c.scope.get("other")), None)
+        sources = f.scope["sources"]
+        say(f"{f.subject} waived {f.value or 'a control'} for {label(f.object)}"
+            + (f", approved by {label(approval.object)} with {approval.value} clearance" if approval else "")
+            + (f" (sources: {_and(sources)})" if sources else "") + ".", f, approval)
+        if check:
+            threshold = next((t for t in _by(facts, "policy_threshold") if t.subject == check.object), None)
+            volume = next((v for v in _by(facts, "monthly_volume") if v.scope.get("recorded_on") == f.subject), None)
+            if check.value == "BREACH":
+                say(f"That breaks {check.object}: {'; '.join(check.scope['details'])}.", check, threshold, volume)
+            else:
+                say(f"That waiver is within {check.object} (version {check.scope.get('policy_version')}).",
+                    check, threshold, volume)
+    for f in _first_per([c for c in compliance if c.scope.get("other")]):
+        status = "also in breach" if f.value == "BREACH" else "within policy"
+        say(f"{f.scope['approved_by']} also approved {f.subject} for {label(f.scope['applies_to'])}, {status}.", f)
 
-    for r in _ok(results, "request_action"):
-        d = r["data"]
-        approver = d["approver"]
-        sentences.append(f"Freeze request {d['request_id']} for {_count(len(d['target_ids']), 'account')} is waiting for "
-                         f"{approver.get('name') or approver['id']} ({approver['id']}, {approver.get('clearance')}) "
-                         f"to sign off under {d['policy_id']}; nothing is frozen yet.")
-        claims.append({"subject": d["request_id"], "relation": "ROUTED_TO", "object": approver["id"]})
-        claims.append({"subject": d["request_id"], "relation": "UNDER_POLICY", "object": d["policy_id"]})
+    latest: dict[str, Fact] = {}
+    for f in _by(facts, "action_status"):
+        latest[f.subject] = f
+    requested = {t for f in latest.values() for t in f.scope["targets"]}
 
-    unique = list({(c["subject"], c["relation"], c["object"]): c for c in claims}.values())
-    return " ".join(sentences) or f"No conclusion could be drawn about {subject}.", unique
+    for f in _first_per(_by(facts, "collateral"), key=lambda f: f.subject):
+        via = _and(f.scope["shared_via"])
+        say(f"A blanket block would also hit {label(f.subject)}, a {f.value} account moving "
+            f"{_money(f.scope['monthly_volume_usd'])}/month through shared {via}, so {via} should stay open.", f)
+    for f in _first_per(_by(facts, "also_exposed"), key=lambda f: f.subject):
+        left_out = " The freeze request leaves it out." if latest and f.subject not in requested else ""
+        say(f"{label(f.subject)} shares {_and(f.scope['shared_via'])} with the accounts to be frozen and has its own "
+            f"eligible route to sanctioned {label(f.object)} in {f.value} hops, so it is not a customer to "
+            f"protect.{left_out}", f)
+
+    for f in latest.values():
+        targets = _count(len(f.scope["targets"]), "account")
+        name = ledger.name(f.object)
+        approver = f"{name} ({f.object}, {f.scope['approver_clearance']})" if name else f.object
+        if f.value == "PENDING_L3":
+            say(f"Freeze request {f.subject} for {targets} is waiting for {approver} to sign off under "
+                f"{f.scope['policy_id']}; nothing is frozen yet.", f)
+        elif f.value == "APPROVED":
+            say(f"Freeze request {f.subject} was signed off by {approver}; {targets} frozen.", f)
+        else:
+            say(f"Freeze request {f.subject} is {f.value}.", f)
+    return out
+
+
+def claims_from_facts(facts: list[Fact]) -> list[dict]:
+    """Graph edges behind the card, for highlighting."""
+    claims: list[dict] = []
+
+    def edge(src: str, rel: str, dst: str) -> None:
+        claims.append({"subject": src, "relation": "TRANSFERRED" if rel == "FLOWS_TO" else rel, "object": dst})
+
+    for f in facts:
+        if f.predicate in ("eligible_route_hops", "sanctioned_within_reach"):
+            for step in f.scope["path"]["steps"]:
+                src, dst = (step["from"], step["to"]) if step.get("forward", True) else (step["to"], step["from"])
+                edge(src, step["rel"], dst)
+        elif f.predicate == "transfer_amount":
+            edge(f.subject, "TRANSFERRED", f.object)
+        elif f.predicate == "approved_by":
+            edge(f.object, "APPROVED", f.subject)
+        elif f.predicate == "waiver_applies_to":
+            edge(f.subject, "APPLIES_TO", f.object)
+        elif f.predicate == "waiver_compliance" and not f.scope.get("other") and f.object:
+            edge(f.subject, "GOVERNED_BY", f.object)
+        elif f.predicate == "action_status":
+            edge(f.subject, "ROUTED_TO", f.object)
+            edge(f.subject, "UNDER_POLICY", f.scope["policy_id"])
+    return list({(c["subject"], c["relation"], c["object"]): c for c in claims}.values())
+
+
+def _number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.replace("$", "").replace(",", "").strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _same(claimed: Any, actual: Any) -> bool:
+    a, b = _number(claimed), _number(actual)
+    if a is not None and b is not None:
+        return abs(a - b) < 0.5
+    return str(claimed).strip().upper() == str(actual).strip().upper()
+
+
+def _show(value: Any, unit: str | None) -> str:
+    if unit and unit.startswith("USD") and _number(value) is not None:
+        return _money(_number(value))
+    return str(value)
+
+
+def bind(statements: Any, facts: list[Fact]) -> list[dict]:
+    """Match each statement the model proposed to the fact it restates, or reject it with the reason."""
+    out = []
+    for raw in statements if isinstance(statements, list) else []:
+        if not isinstance(raw, dict) or not all(isinstance(raw.get(k), str) and raw[k].strip()
+                                                for k in ("subject", "predicate")):
+            out.append({"statement": raw, "status": "rejected", "reason": "needs a subject and a predicate"})
+            continue
+        subject, predicate = raw["subject"].strip(), raw["predicate"].strip().lower()
+        obj = raw.get("object").strip() if isinstance(raw.get("object"), str) and raw["object"].strip() else None
+        value = raw.get("value")
+        if predicate not in MODEL_PREDICATES:
+            out.append({"statement": raw, "status": "rejected", "reason": f"unknown predicate {predicate}"})
+            continue
+        candidates = [f for f in facts if f.predicate == predicate
+                      and (f.subject == subject or subject in f.scope.get("sources", []))
+                      and (obj is None or f.object == obj)]
+        target = f"{subject} → {obj}" if obj else subject
+        family = UNIT_FAMILY.get(predicate)
+        elsewhere = next((f for f in facts if family and value is not None and f not in candidates
+                          and (f.unit or "").split("/")[0] == family and _same(value, f.value)), None)
+        hint = f"; {_show(value, elsewhere.unit)} is {elsewhere.subject}'s {elsewhere.predicate} ({elsewhere.id})" \
+            if elsewhere else ""
+        if not candidates:
+            out.append({"statement": raw, "status": "rejected",
+                        "reason": f"no tool result gives {predicate} for {target}{hint}"})
+            continue
+        match = candidates[0] if value is None else next((f for f in candidates if _same(value, f.value)), None)
+        if match is None:
+            actual = candidates[-1]
+            out.append({"statement": raw, "status": "rejected",
+                        "reason": f"{predicate} for {target} is {_show(actual.value, actual.unit)} ({actual.id}), "
+                                  f"not {_show(value, actual.unit)}{hint}"})
+            continue
+        out.append({"statement": raw, "status": "bound", "fact": match.id})
+    return out

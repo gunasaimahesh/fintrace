@@ -1,0 +1,486 @@
+{
+ "entity_id": "acct-ind-20118",
+ "started_at": "20261017T113428Z",
+ "model": "gemini-3.1-flash-lite",
+ "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+ "graph": "fintrace:live-56c057",
+ "seconds": 4.26,
+ "expected_verdict": "CLEAR",
+ "verdict": "CLEAR",
+ "planner": "llm",
+ "tool_calls": 3,
+ "model_answer": {
+  "proposed_verdict": "CLEAR",
+  "agrees": true,
+  "rationale": "A complete 6-hop search of the network surrounding acct-ind-20118 found no eligible routes to any sanctioned entities. The account has no activity and no identity links, indicating it is not involved in money laundering.",
+  "rationale_check": {
+   "ids_checked": 1,
+   "unknown_ids": [],
+   "rejected_claims": [],
+   "passed": true
+  },
+  "statements": [
+   {
+    "statement": {
+     "subject": "acct-ind-20118",
+     "predicate": "no_eligible_route",
+     "value": 6
+    },
+    "status": "rejected",
+    "reason": "no_eligible_route for acct-ind-20118 is 1 (F3), not 6"
+   }
+  ]
+ },
+ "failure": null,
+ "events": [
+  {
+   "type": "run_started",
+   "entity_id": "acct-ind-20118",
+   "case_id": "case-0fde3479",
+   "graph": "fintrace:live-56c057",
+   "planner": "llm",
+   "model": "gemini-3.1-flash-lite",
+   "max_steps": 12,
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_call",
+   "step": 1,
+   "tool": "resolve_entity",
+   "args": {
+    "entity_id": "acct-ind-20118"
+   },
+   "thought": "Resolve the alert entity before reasoning about it.",
+   "planner": "llm",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 1,
+   "tool": "resolve_entity",
+   "ok": true,
+   "args": {
+    "entity_id": "acct-ind-20118"
+   },
+   "data": {
+    "found": true,
+    "id": "acct-ind-20118",
+    "labels": [
+     "Account"
+    ],
+    "name": "Retail Individual Account",
+    "status": "ACTIVE",
+    "topology_updated_at": 1792235048,
+    "profile": {
+     "kind": "Individual",
+     "tier": "standard",
+     "bank": "FinTrace Demo Bank",
+     "source": "planted",
+     "monthly_volume_usd": 0.0
+    },
+    "counterparties": {
+     "sends_to": 0,
+     "receives_from": 0
+    },
+    "identity_links": 0
+   },
+   "evidence": {
+    "nodes": {
+     "acct-ind-20118": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Retail Individual Account"
+     }
+    },
+    "edges": []
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 4.6,
+    "rows": 1,
+    "queries": [
+     {
+      "cypher": "MATCH (n:Entity {id: $id})\nOPTIONAL MATCH (n)-[o:FLOWS_TO]->()\nWITH n, count(o) AS sends_to\nOPTIONAL MATCH (n)<-[i:FLOWS_TO]-()\nWITH n, sends_to, count(i) AS receives_from\nOPTIONAL MATCH (n)-[x:USED_DEVICE|LOGGED_FROM]-()\nRETURN n {.*}, labels(n), sends_to, receives_from, count(x)",
+      "params": [
+       "id"
+      ],
+      "ms": 4.6,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "tool_call",
+   "step": 2,
+   "tool": "recall_memory",
+   "args": {
+    "entity_id": "acct-ind-20118"
+   },
+   "thought": "Check memory for earlier findings.",
+   "planner": "llm",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 2,
+   "tool": "recall_memory",
+   "ok": true,
+   "args": {
+    "entity_id": "acct-ind-20118"
+   },
+   "data": {
+    "entity_id": "acct-ind-20118",
+    "facts": [],
+    "episodes": [],
+    "fingerprint": {
+     "features": {
+      "fan_out": 0,
+      "fan_in": 0,
+      "accounts_sharing_device": 0,
+      "accounts_sharing_ip": 0,
+      "device_bridges_one_hop": 0,
+      "two_step_cycles": 0
+     },
+     "patterns": []
+    },
+    "playbooks": [],
+    "elapsed_ms": 14.9
+   },
+   "evidence": {
+    "nodes": {
+     "acct-ind-20118": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Retail Individual Account"
+     }
+    },
+    "edges": []
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 16.0,
+    "rows": 0,
+    "queries": [
+     {
+      "cypher": "MATCH (x:Entity {id: $id})\nOPTIONAL MATCH (x)-[:FLOWS_TO]->(o)\nWITH x, count(DISTINCT o) AS fan_out\nOPTIONAL MATCH (x)<-[:FLOWS_TO]-(i)\nWITH x, fan_out, count(DISTINCT i) AS fan_in\nOPTIONAL MATCH (x)-[:USED_DEVICE]->(:Device)<-[:USED_DEVICE]-(sd:Account)\nWHERE sd <> x\nWITH x, fan_out, fan_in, count(DISTINCT sd) AS shared_device\nOPTIONAL MATCH (x)-[:LOGGED_FROM]->(:IP)<-[:LOGGED_FROM]-(si:Account)\nWHERE si <> x\nWITH x, fan_out, fan_in, shared_device, count(DISTINCT si) AS shared_ip\nOPTIONAL MATCH (x)-[:FLOWS_TO]-(nb:Account)-[:USED_DEVICE]->(d:Device)<-[:USED_DEVICE]-(far:Account)\nWHERE far <> nb AND far <> x\nWITH x, fan_out, fan_in, shared_device, shared_ip, count(DISTINCT d) AS device_bridges\nOPTIONAL MATCH (x)-[:FLOWS_TO]->(b)-[:FLOWS_TO]->(x)\nRETURN fan_out, fan_in, shared_device, shared_ip, device_bridges, count(DISTINCT b)",
+      "params": [
+       "id"
+      ],
+      "ms": 8.3,
+      "calls": 1
+     },
+     {
+      "cypher": "MATCH (f:SemanticFact)-[:ABOUT]->(target:Entity {id: $id})\nWHERE f.status IN ['CURRENT', 'STALE']\nOPTIONAL MATCH (f)-[:DERIVED_FROM]->(ev:Entity)\nWITH f, collect(ev.id) AS evidence_ids, collect(ev.topology_updated_at) AS evidence_ts\nWITH f, evidence_ids, evidence_ts, any(x IN evidence_ts WHERE x > f.valid_from) AS is_stale\nRETURN f.id, f.claim, f.verdict, f.valid_from, f.episode_id, evidence_ids,\n       [i IN range(0, size(evidence_ids) - 1) WHERE evidence_ts[i] > f.valid_from | evidence_ids[i]],\n       CASE WHEN is_stale THEN 'STALE' ELSE f.status END\nORDER BY f.valid_from DESC",
+      "params": [
+       "id"
+      ],
+      "ms": 2.0,
+      "calls": 1
+     },
+     {
+      "cypher": "MATCH (ep:Episode)-[:ABOUT]->(x:Entity {id: $id})\nOPTIONAL MATCH (ep)-[:HAS_STEP]->(s:Step)\nWITH ep, s ORDER BY s.seq\nWITH ep, collect(s.tool) AS tools\nRETURN ep.id, ep.created_at, ep.verdict, ep.answer_state, tools\nORDER BY ep.created_at DESC LIMIT 3",
+      "params": [
+       "id"
+      ],
+      "ms": 1.6,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $patterns AS name\nMATCH (pt:PatternType {name: name})<-[:FOR_PATTERN]-(pb:Playbook)-[:FIRST_STEP]->(first:PlaybookStep)\nMATCH path = (first)-[:NEXT*0..12]->(s:PlaybookStep)\nWITH pt, pb, s, length(path) AS pos ORDER BY pos\nRETURN pt.name, pb.id, collect([s.tool, s.default_args])",
+      "params": [
+       "patterns"
+      ],
+      "ms": 3.0,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $ids AS eid\nMATCH (n:Entity {id: eid})\nRETURN n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 1.1,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "tool_call",
+   "step": 3,
+   "tool": "explore_neighborhood",
+   "args": {
+    "depth": 6,
+    "entity_id": "acct-ind-20118"
+   },
+   "thought": null,
+   "planner": "llm",
+   "worker_id": "investigator"
+  },
+  {
+   "type": "tool_result",
+   "step": 3,
+   "tool": "explore_neighborhood",
+   "ok": true,
+   "args": {
+    "entity_id": "acct-ind-20118",
+    "depth": 6
+   },
+   "data": {
+    "entity_id": "acct-ind-20118",
+    "depth": 6,
+    "levels": [
+     {
+      "depth": 1,
+      "reached": 0,
+      "accounts": 0,
+      "devices": 0,
+      "ips": 0,
+      "flagged": 0
+     }
+    ],
+    "total_reached": 0,
+    "flagged": [],
+    "scope": {
+     "requested_depth": 6,
+     "completed_depth": 1,
+     "exhausted": true,
+     "reached": 0,
+     "truncated": false,
+     "timed_out": false,
+     "complete": true,
+     "elapsed_ms": 3.9
+    },
+    "eligible_routes": {
+     "rule": "transfers followed in their own direction; identity hops only through a shared device (account -> device <- account, counted as 2 hops); shared IPs are never followed",
+     "scope": {
+      "requested_depth": 6,
+      "completed_depth": 1,
+      "exhausted": true,
+      "reached": 0,
+      "truncated": false,
+      "timed_out": false,
+      "complete": true,
+      "elapsed_ms": 3.0
+     },
+     "routes": []
+    },
+    "coverage": "Exploration: 0 entities, 1 of 6 hop(s), everything reachable. Eligible-route search: 0 entities, 1 of 6 hop(s), complete; 0 route(s) to a sanctioned account."
+   },
+   "evidence": {
+    "nodes": {
+     "acct-ind-20118": {
+      "labels": [
+       "Account"
+      ],
+      "name": "Retail Individual Account"
+     }
+    },
+    "edges": []
+   },
+   "error": null,
+   "stop": null,
+   "meta": {
+    "elapsed_ms": 11.6,
+    "rows": 0,
+    "queries": [
+     {
+      "cypher": "MATCH (n:Entity {id: $id}) RETURN ID(n)",
+      "params": [
+       "id"
+      ],
+      "ms": 3.5,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $frontier AS nid\nMATCH (a) WHERE ID(a) = nid\nMATCH (a)-[:FLOWS_TO|USED_DEVICE|LOGGED_FROM]-(b)\nWITH b, min(ID(a)) AS parent\nRETURN collect(ID(b)), collect(parent),\n       collect(CASE WHEN b:Device THEN 1 WHEN b:IP THEN 2 ELSE 0 END),\n       collect(CASE WHEN b:Sanctioned OR b.risk_flags IS NOT NULL THEN ID(b) END)",
+      "params": [
+       "frontier"
+      ],
+      "ms": 3.9,
+      "calls": 1
+     },
+     {
+      "cypher": "MATCH (n) WHERE ID(n) = $id RETURN n:Device",
+      "params": [
+       "id"
+      ],
+      "ms": 1.0,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $frontier AS nid\nMATCH (a) WHERE ID(a) = nid\nMATCH (a)-[:FLOWS_TO|USED_DEVICE]->(b)\nWITH b, min(ID(a)) AS parent\nRETURN collect(ID(b)), collect(parent),\n       collect(CASE WHEN b:Device THEN 1 ELSE 0 END),\n       collect(CASE WHEN b:Sanctioned THEN ID(b) END)",
+      "params": [
+       "frontier"
+      ],
+      "ms": 1.9,
+      "calls": 1
+     },
+     {
+      "cypher": "UNWIND $ids AS eid\nMATCH (n:Entity {id: eid})\nRETURN n.id, labels(n), coalesce(n.name, n.title, n.summary, n.address, n.os)",
+      "params": [
+       "ids"
+      ],
+      "ms": 1.0,
+      "calls": 1
+     }
+    ]
+   }
+  },
+  {
+   "type": "final",
+   "entity_id": "acct-ind-20118",
+   "case_id": "case-0fde3479",
+   "answer_state": "not_in_graph",
+   "verdict": "CLEAR",
+   "verdict_basis": [
+    "F3"
+   ],
+   "statements": [
+    {
+     "text": "No transfer leaves Retail Individual Account (acct-ind-20118) and it shares no device, so no eligible route to a sanctioned entity exists. That is not proof the account is safe.",
+     "facts": [
+      "F3"
+     ]
+    }
+   ],
+   "summary": "No transfer leaves Retail Individual Account (acct-ind-20118) and it shares no device, so no eligible route to a sanctioned entity exists. That is not proof the account is safe.",
+   "badge": "1 statement, each rendered from a cited tool result",
+   "facts": [
+    {
+     "id": "F1",
+     "kind": "profile",
+     "subject": "acct-ind-20118",
+     "predicate": "status",
+     "object": null,
+     "value": "ACTIVE",
+     "unit": null,
+     "source": {
+      "tool": "resolve_entity",
+      "step": 1,
+      "result_key": "data.status"
+     },
+     "scope": {},
+     "evidence_rev": 0,
+     "depends_on": [
+      "acct-ind-20118"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F2",
+     "kind": "profile",
+     "subject": "acct-ind-20118",
+     "predicate": "monthly_volume",
+     "object": null,
+     "value": 0.0,
+     "unit": "USD/month",
+     "source": {
+      "tool": "resolve_entity",
+      "step": 1,
+      "result_key": "data.profile.monthly_volume_usd"
+     },
+     "scope": {},
+     "evidence_rev": 0,
+     "depends_on": [
+      "acct-ind-20118"
+     ],
+     "aggregate": false
+    },
+    {
+     "id": "F3",
+     "kind": "sanctions_exposure",
+     "subject": "acct-ind-20118",
+     "predicate": "no_eligible_route",
+     "object": null,
+     "value": 1,
+     "unit": "hops",
+     "source": {
+      "tool": "explore_neighborhood",
+      "step": 3,
+      "result_key": "data.eligible_routes.scope"
+     },
+     "scope": {
+      "requested_depth": 6,
+      "completed_depth": 1,
+      "exhausted": true,
+      "reached": 0,
+      "truncated": false,
+      "timed_out": false,
+      "complete": true,
+      "elapsed_ms": 3.0
+     },
+     "evidence_rev": 0,
+     "depends_on": [
+      "acct-ind-20118"
+     ],
+     "aggregate": true
+    }
+   ],
+   "claims": [],
+   "model_answer": {
+    "proposed_verdict": "CLEAR",
+    "agrees": true,
+    "rationale": "A complete 6-hop search of the network surrounding acct-ind-20118 found no eligible routes to any sanctioned entities. The account has no activity and no identity links, indicating it is not involved in money laundering.",
+    "rationale_check": {
+     "ids_checked": 1,
+     "unknown_ids": [],
+     "rejected_claims": [],
+     "passed": true
+    },
+    "statements": [
+     {
+      "statement": {
+       "subject": "acct-ind-20118",
+       "predicate": "no_eligible_route",
+       "value": 6
+      },
+      "status": "rejected",
+      "reason": "no_eligible_route for acct-ind-20118 is 1 (F3), not 6"
+     }
+    ]
+   },
+   "freeze_targets": [],
+   "excluded": [],
+   "approval_request": null,
+   "coverage": {
+    "depth": 6,
+    "exploration": {
+     "requested_depth": 6,
+     "completed_depth": 1,
+     "exhausted": true,
+     "reached": 0,
+     "truncated": false,
+     "timed_out": false,
+     "complete": true,
+     "elapsed_ms": 3.9
+    },
+    "eligible": {
+     "requested_depth": 6,
+     "completed_depth": 1,
+     "exhausted": true,
+     "reached": 0,
+     "truncated": false,
+     "timed_out": false,
+     "complete": true,
+     "elapsed_ms": 3.0
+    }
+   },
+   "evidence_rev": 0,
+   "tool_calls": 3,
+   "max_steps": 12,
+   "budget_exhausted": false,
+   "planner": "llm",
+   "model": "gemini-3.1-flash-lite",
+   "llm_ms": [
+    2058.2,
+    2135.6
+   ],
+   "elapsed_ms": 4256.4
+  }
+ ]
+}

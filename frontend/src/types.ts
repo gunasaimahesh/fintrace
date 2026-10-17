@@ -16,14 +16,49 @@ export type Envelope = {
 
 export type Claim = { subject: string; relation: string; object: string };
 
-export type Verification = {
-  verified: boolean;
-  claims_checked: number;
-  ids_checked: number;
-  unknown_ids: string[];
-  rejected_claims: { claim: unknown; reason: string }[];
-  rewritten: boolean;
-  badge: string;
+export type Fact = {
+  id: string;
+  kind: string;
+  subject: string;
+  predicate: string;
+  object: string | null;
+  value: unknown;
+  unit: string | null;
+  source: { tool: string; step: number; result_key: string };
+  scope: Record<string, any>;
+  evidence_rev: number | null;
+  depends_on: string[];
+  aggregate: boolean;
+};
+
+export type Statement = { text: string; facts: string[] };
+
+export type SearchScope = {
+  requested_depth: number;
+  completed_depth: number;
+  exhausted: boolean;
+  reached: number;
+  truncated: boolean;
+  timed_out: boolean;
+  complete: boolean;
+  elapsed_ms: number;
+};
+
+export type BoundStatement =
+  | { statement: unknown; status: "bound"; fact: string }
+  | { statement: unknown; status: "rejected"; reason: string };
+
+export type ModelAnswer = {
+  proposed_verdict: Verdict | null;
+  agrees: boolean;
+  rationale: string;
+  rationale_check: {
+    ids_checked: number;
+    unknown_ids: string[];
+    rejected_claims: { claim: unknown; reason: string }[];
+    passed: boolean;
+  };
+  statements: BoundStatement[];
 };
 
 export type ApprovalRequest = {
@@ -45,13 +80,18 @@ export type FinalEvent = {
   case_id: string;
   answer_state: string;
   verdict: Verdict;
+  verdict_basis: string[];
+  statements: Statement[];
   summary: string;
+  badge: string;
+  facts: Fact[];
   claims: Claim[];
-  verification: Verification;
+  model_answer: ModelAnswer | null;
   freeze_targets: string[];
   excluded: string[];
   approval_request: ApprovalRequest | null;
-  coverage: { depth: number; entities_checked: number } | null;
+  coverage: { depth: number; exploration: SearchScope; eligible: SearchScope } | null;
+  evidence_rev: number | null;
   tool_calls: number;
   max_steps: number;
   budget_exhausted: boolean;

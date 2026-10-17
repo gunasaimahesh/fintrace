@@ -14,15 +14,24 @@ from dataclasses import dataclass, field
 NOVAPAY = "merch-nova-pay"
 NOVA_OPS = "acct-nova-ops"
 SHARED_DEVICE = "dev-fp-8821"
-VOLKOV = "acct-mule-volkov"
-ORION = "acct-mule-orion"
-BALTIC = "acct-shell-baltic"
-VORTEX = "acct-vortex-sdn"
+VOLKOV = "acct-volkov-clearing"
+ORION = "acct-orion-logistics"
+BALTIC = "acct-baltic-trade"
+VORTEX = "acct-vortex-holdings"
 PROXY_IP = "ip-185-220-101-7"
-VIP = "acct-vip-enterprise-payroll"
+VIP = "acct-tier1-payroll"
 LUMEN = "merch-lumen-games"
-ISOLATED = "acct-clean-isolated"
+ISOLATED = "acct-ind-20118"
 UNKNOWN = "acct-ghost-999"
+
+RENAMED = {
+    "acct-mule-volkov": VOLKOV,
+    "acct-mule-orion": ORION,
+    "acct-shell-baltic": BALTIC,
+    "acct-vortex-sdn": VORTEX,
+    "acct-vip-enterprise-payroll": VIP,
+    "acct-clean-isolated": ISOLATED,
+}
 
 ROHAN = "emp-rohan-mehta"
 PRIYA = "emp-priya-nair"
@@ -100,16 +109,16 @@ def build_scenario(anchors: dict[str, list[str]], window: tuple[int, int], base_
             monthly_volume=9_000_000)
     account(ACCOUNT, BALTIC, "Baltic Trade Settlement", kind="Corporation", bank="Latvia Bank #9",
             monthly_volume=26_000_000)
-    account(f"{ACCOUNT}:Sanctioned", VORTEX, "Vortex Lazarus Syndicate", kind="Corporation",
-            bank="Offshore Bank #44", list="OFAC-SDN", monthly_volume=0)
+    account(f"{ACCOUNT}:Sanctioned", VORTEX, "Vortex Holdings Ltd", kind="Corporation",
+            bank="Seychelles Bank #44", list="OFAC-SDN", monthly_volume=0)
 
-    spec.transfer(NOVAPAY, NOVA_OPS, "nova-sweep-01", 145_000_00, base_ts + 100 * MINUTE, "Wire")
+    spec.transfer(NOVAPAY, NOVA_OPS, next(tx), 145_000_00, base_ts + 100 * MINUTE, "Wire")
     spec.identity("USED_DEVICE", NOVA_OPS, SHARED_DEVICE, base_ts - 6 * DAY, base_ts + 90 * MINUTE)
     spec.identity("USED_DEVICE", VOLKOV, SHARED_DEVICE, base_ts - 3 * DAY, base_ts + 400 * MINUTE)
-    spec.transfer(VOLKOV, ORION, "nova-layer-01", 64_000_00, base_ts + 300 * MINUTE, "Wire")
-    spec.transfer(VOLKOV, BALTIC, "nova-layer-02", 138_000_00, base_ts + 400 * MINUTE, "Wire")
-    spec.transfer(ORION, BALTIC, "nova-layer-03", 61_500_00, base_ts + 600 * MINUTE, "Wire")
-    spec.transfer(BALTIC, VORTEX, "nova-exit-01", 132_000_00, base_ts + 900 * MINUTE, "Wire")
+    spec.transfer(VOLKOV, ORION, next(tx), 64_000_00, base_ts + 300 * MINUTE, "Wire")
+    spec.transfer(VOLKOV, BALTIC, next(tx), 138_000_00, base_ts + 400 * MINUTE, "Wire")
+    spec.transfer(ORION, BALTIC, next(tx), 61_500_00, base_ts + 600 * MINUTE, "Wire")
+    spec.transfer(BALTIC, VORTEX, next(tx), 132_000_00, base_ts + 900 * MINUTE, "Wire")
 
     # Collateral: Volkov logs in through a corporate proxy that a legitimate VIP payroll account also uses.
     spec.node("Entity:RiskNode:IP", id=PROXY_IP, address="185.220.101.7", kind="corporate_proxy",
@@ -133,7 +142,7 @@ def build_scenario(anchors: dict[str, list[str]], window: tuple[int, int], base_
         for _ in range(rng.randint(1, 2)):
             spec.transfer(cust, LUMEN, next(tx), rng.randint(150_00, 4_000_00), when(start, end), "Credit Card")
 
-    account(ACCOUNT, ISOLATED, "Isolated Test Account", kind="Individual", bank="FinTrace Demo Bank",
+    account(ACCOUNT, ISOLATED, "Retail Individual Account", kind="Individual", bank="FinTrace Demo Bank",
             monthly_volume=0)
 
     _add_org_layer(spec, base_ts)

@@ -14,8 +14,10 @@ from types import SimpleNamespace
 import pytest
 
 from backend.app import agent
+from backend.app import queries as q
 from backend.app import scenario as s
 from backend.app.config import get_settings
+from backend.app.db import get_db
 
 pytestmark = pytest.mark.graph
 
@@ -42,12 +44,24 @@ def answer(**fields) -> SimpleNamespace:
     return SimpleNamespace(content=json.dumps(fields), tool_calls=None)
 
 
+def fact(final: dict, fact_id: str) -> dict:
+    return next(f for f in final["facts"] if f["id"] == fact_id)
+
+
+def cited(final: dict) -> bool:
+    ids = {f["id"] for f in final["facts"]}
+    return all(st["facts"] and set(st["facts"]) <= ids for st in final["statements"])
+
+
 class FakeLLM:
     """Replays scripted assistant turns in place of openai.AsyncOpenAI; a turn may be a callable or an exception."""
 
     def __init__(self, *turns):
-        self.turns, self.requests = list(turns), []
+        self.turns, self.requests, self.closed = list(turns), [], False
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+    async def close(self):
+        self.closed = True
 
     async def create(self, **request):
         self.requests.append({**request, "messages": list(request["messages"])})
@@ -79,65 +93,154 @@ def test_fallback_investigates_novapay_and_routes_the_freeze_to_priya(scratch_ke
     assert tools_called(events) == ["resolve_entity", "recall_memory", "explore_neighborhood", "explore_neighborhood",
                                     "trace_money_flow", "exposure_flow", "detect_ring", "find_brokers",
                                     "trace_governance", "freeze_impact", "request_action"]
+    assert [e["args"]["depth"] for e in events if e.get("tool") == "explore_neighborhood" and e["type"] == "tool_call"] \
+        == [1, 6]
     assert (final["verdict"], final["answer_state"]) == ("SUSPICIOUS", "answered_with_path")
-    assert final["verification"]["verified"] and final["verification"]["claims_checked"] >= 8
+    basis = fact(final, final["verdict_basis"][0])
+    assert (basis["predicate"], basis["object"], basis["value"]) == ("eligible_route_hops", s.VORTEX, 5)
+    assert cited(final) and final["badge"] == f"{len(final['statements'])} statements, each rendered from a cited tool result"
+    assert final["coverage"]["eligible"]["complete"] and final["coverage"]["eligible"]["requested_depth"] == 6
     assert final["approval_request"]["approver"]["id"] == s.PRIYA
     assert final["approval_request"]["status"] == "PENDING_L3"
+    assert "waiting for Priya Nair (emp-priya-nair, L3) to sign off" in final["summary"]
     assert set(final["freeze_targets"]) == {s.NOVAPAY, s.NOVA_OPS, s.VOLKOV, s.BALTIC, s.ORION}
     assert set(final["excluded"]) == {s.VIP, s.PROXY_IP}
     assert {"subject": s.ROHAN, "relation": "APPROVED", "object": s.WAIVER} in final["claims"]
+    assert final["model_answer"] is None and isinstance(final["evidence_rev"], int)
 
 
 def test_an_unknown_id_stops_after_one_call(scratch_key):
     events, final = run(s.UNKNOWN, scratch_key, mode="fallback")
     assert tools_called(events) == ["resolve_entity"]
     assert (final["verdict"], final["answer_state"]) == ("INSUFFICIENT", "unknown_entity")
-    assert final["verification"]["verified"]
+    assert [st["text"] for st in final["statements"]] == [f"{s.UNKNOWN} is not in the graph, so nothing else was queried."]
 
 
 def test_an_isolated_account_is_clear_with_the_caveat(scratch_key):
     _, final = run(s.ISOLATED, scratch_key, mode="fallback")
     assert (final["verdict"], final["answer_state"]) == ("CLEAR", "not_in_graph")
-    assert "No recorded link is not proof the account is safe" in final["summary"]
+    assert final["coverage"]["eligible"]["exhausted"]
+    assert final["summary"].endswith("That is not proof the account is safe.")
 
 
-def test_sharing_only_a_proxy_ip_with_a_mule_is_association_not_exposure(scratch_key):
+def test_sharing_only_a_proxy_ip_with_a_sanctioned_route_is_association_not_exposure(scratch_key):
     events, final = run(s.VIP, scratch_key, mode="fallback")
     assert len(tools_called(events)) == 4 and final["approval_request"] is None
-    assert final["verdict"] == "CLEAR"
+    assert final["verdict"] == "CLEAR" and cited(final)
+    assert "within 6 hops" in final["summary"] and "That is not proof the account is safe." in final["summary"]
     assert "ip-185-220-101-7 is a shared IP, not a shared device" in final["summary"]
 
 
-def test_an_llm_answer_with_an_invented_edge_is_rewritten(scratch_key, fake_llm):
-    llm = fake_llm(calls(*EXPLORE), answer(
-        verdict="SUSPICIOUS", summary=f"{s.NOVAPAY} wired money straight to {s.VORTEX} via acct-made-up-77.",
-        claims=[{"subject": s.NOVAPAY, "relation": "TRANSFERRED", "object": s.VORTEX}]))
+def test_a_valid_route_is_found_despite_a_shorter_ip_path(fresh_key):
+    get_db().select_graph(fresh_key).query("""
+        MATCH (a:Entity {id: $a}), (b:Entity {id: $b})
+        CREATE (ip:Entity:RiskNode:IP {id: 'ip-203-0-113-9', address: '203.0.113.9', kind: 'residential'})
+        CREATE (a)-[:LOGGED_FROM {first_seen: 0, last_seen: 1, weight: 1}]->(ip),
+               (b)-[:LOGGED_FROM {first_seen: 0, last_seen: 1, weight: 1}]->(ip)
+    """, {"a": s.NOVAPAY, "b": s.BALTIC})
+    _, final = run(s.NOVAPAY, fresh_key, mode="fallback")
+    nearest = min((f for f in final["facts"] if f["predicate"] == "sanctioned_within_reach"), key=lambda f: f["value"])
+    assert nearest["value"] == 3 and "ip-203-0-113-9" in nearest["scope"]["path"]["nodes"]
+    assert final["verdict"] == "SUSPICIOUS"
+    route = fact(final, final["verdict_basis"][0])
+    assert route["value"] == 5 and s.SHARED_DEVICE in route["scope"]["path"]["nodes"]
+    assert "ip-203-0-113-9" not in route["scope"]["path"]["nodes"]
+
+
+def test_a_device_bridge_costs_two_hops_so_four_hops_clears_nobody(scratch_key, fake_llm):
+    fake_llm(calls(("explore_neighborhood", {"entity_id": s.NOVAPAY, "depth": 4})),
+             answer(verdict="CLEAR", statements=[], rationale="Nothing sanctioned within 4 hops."))
+    _, final = run(s.NOVAPAY, scratch_key)
+    assert final["verdict"] == "INSUFFICIENT"
+    assert final["model_answer"]["proposed_verdict"] == "CLEAR" and not final["model_answer"]["agrees"]
+    assert "covered 4 of the 6 hops required to clear an account" in final["summary"]
+
+
+@pytest.mark.parametrize("budget", [{"SEARCH_NODE_BUDGET": 50}, {"SEARCH_TIME_BUDGET_S": 1e-9}],
+                         ids=["node-budget", "time-budget"])
+def test_a_capped_or_timed_out_search_is_insufficient_not_clear(scratch_key, monkeypatch, budget):
+    for name, value in budget.items():
+        monkeypatch.setattr(q, name, value)
+    _, final = run(s.VIP, scratch_key, mode="fallback")
+    assert final["verdict"] == "INSUFFICIENT" and cited(final)
+    eligible = final["coverage"]["eligible"]
+    assert not eligible["complete"] and (eligible["truncated"] or eligible["timed_out"])
+    assert "does not clear it" in final["summary"]
+
+
+def test_a_sanctioned_account_beyond_six_hops_gets_a_qualified_clear(fresh_key):
+    graph = get_db().select_graph(fresh_key)
+    graph.query("""
+        MATCH (m:Entity {id: $m})
+        CREATE (a:Entity:RiskNode:Account {id: 'acct-test-far-1', name: 'Far Account One', status: 'ACTIVE'}),
+               (b:Entity:RiskNode:Account {id: 'acct-test-far-2', name: 'Far Account Two', status: 'ACTIVE'})
+        CREATE (a)-[:TRANSFERRED {tx_id: 'test-far-1', amount: 1000000, ts: 1, channel: 'wire', weight: 1}]->(b),
+               (a)-[:FLOWS_TO {amount: 1000000, transfers: 1, first_ts: 1, last_ts: 1, capacity: 10000, weight: 1}]->(b),
+               (b)-[:TRANSFERRED {tx_id: 'test-far-2', amount: 1000000, ts: 2, channel: 'wire', weight: 1}]->(m),
+               (b)-[:FLOWS_TO {amount: 1000000, transfers: 1, first_ts: 2, last_ts: 2, capacity: 10000, weight: 1}]->(m)
+    """, {"m": s.NOVAPAY})
+    _, final = run("acct-test-far-1", fresh_key, mode="fallback")
+    assert final["verdict"] == "CLEAR"
+    assert final["summary"].startswith("No eligible route from Far Account One (acct-test-far-1) to a sanctioned "
+                                       "entity was found within 6 hops")
+    beyond = q.eligible_routes(graph, q.internal_id(graph, "acct-test-far-1"), 7)
+    assert [(r["entity"]["id"], r["hops"]) for r in beyond["routes"]] == [(s.VORTEX, 7)]
+
+
+def test_model_statements_are_bound_to_facts_or_rejected(scratch_key, fake_llm):
+    statements = [
+        {"subject": s.NOVAPAY, "predicate": "eligible_route_hops", "object": s.VORTEX, "value": 5},
+        {"subject": s.NOVA_OPS, "predicate": "max_flow_capacity", "object": s.VORTEX, "value": 410_000},
+        {"subject": s.LUMEN, "predicate": "eligible_route_hops", "object": s.VORTEX, "value": 5},
+        {"subject": "apr-0000aaaa", "predicate": "action_status", "value": "APPROVED"},
+    ]
+    llm = fake_llm(calls(*EXPLORE),
+                   calls(("exposure_flow", {"source_ids": [s.NOVA_OPS, s.VOLKOV], "target_id": s.VORTEX})),
+                   answer(verdict="SUSPICIOUS", statements=statements, freeze_targets=[s.VOLKOV, "acct-made-up-77"],
+                          rationale=f"{s.NOVAPAY} wired money straight to {s.VORTEX} via acct-made-up-77."))
     events, final = run(s.NOVAPAY, scratch_key)
     assert final["planner"] == "llm" and final["model"] == "fake-model"
-    assert tools_called(events) == ["resolve_entity", "recall_memory", "explore_neighborhood", "explore_neighborhood"]
-    assert (final["verdict"], final["answer_state"]) == ("SUSPICIOUS", "answered_with_path")
-    check = final["verification"]
-    assert check["rewritten"] and check["unknown_ids"] == ["acct-made-up-77"]
-    assert [r["claim"]["object"] for r in check["rejected_claims"]] == [s.VORTEX]
-    assert "acct-made-up-77" not in final["summary"] and "5 hops from sanctioned" in final["summary"]
+    assert tools_called(events) == ["resolve_entity", "recall_memory", "explore_neighborhood", "explore_neighborhood",
+                                    "exposure_flow"]
+    bound, swapped, other_subject, other_request = final["model_answer"]["statements"]
+    route = fact(final, bound["fact"])
+    assert bound["status"] == "bound" and (route["predicate"], route["value"]) == ("eligible_route_hops", 5)
+    assert swapped["status"] == "rejected"
+    assert f"max_flow_capacity for {s.NOVA_OPS} → {s.VORTEX} is $132,000" in swapped["reason"]
+    assert f"$410,000 is {s.NOVAPAY}'s monthly_volume" in swapped["reason"]
+    assert other_subject["reason"].startswith(f"no tool result gives eligible_route_hops for {s.LUMEN}")
+    assert other_request["reason"] == "no tool result gives action_status for apr-0000aaaa"
+
+    assert final["model_answer"]["agrees"] and final["verdict"] == "SUSPICIOUS"
+    assert final["model_answer"]["rationale_check"]["unknown_ids"] == ["acct-made-up-77"]
+    assert "acct-made-up-77" not in final["summary"] and cited(final)
+    assert final["freeze_targets"] == [s.VOLKOV]
     opening = llm.requests[0]["messages"]
-    assert [m.get("tool_call_id") for m in opening if m["role"] == "tool"] == ["call_harness_0", "call_harness_1"]
+    assert [m["role"] for m in opening] == ["system", "user"]
+    assert "resolve_entity(" in opening[1]["content"] and "recall_memory(" in opening[1]["content"]
+    assert llm.closed
 
 
-def test_an_llm_answer_citing_tool_edges_is_kept(scratch_key, fake_llm):
-    summary = (f"{s.NOVAPAY} pays {s.NOVA_OPS}, which shares device {s.SHARED_DEVICE} with {s.VOLKOV}; "
-               f"that chain reaches sanctioned {s.VORTEX} in 5 hops.")
-    claims = [[s.NOVAPAY, "TRANSFERRED", s.NOVA_OPS], [s.NOVA_OPS, "USED_DEVICE", s.SHARED_DEVICE],
-              [s.VOLKOV, "USED_DEVICE", s.SHARED_DEVICE]]
-    fake_llm(calls(*EXPLORE), answer(verdict="SUSPICIOUS", summary=summary, claims=claims))
+def test_tool_calls_go_back_with_their_provider_signature(scratch_key, fake_llm):
+    signed = calls(EXPLORE[0])
+    signed.tool_calls[0].model_extra = {"extra_content": {"google": {"thought_signature": "sig-1"}}}
+    llm = fake_llm(signed, answer(verdict="INSUFFICIENT", statements=[]))
+    run(s.NOVAPAY, scratch_key)
+    [replayed] = [m for m in llm.requests[1]["messages"] if m["role"] == "assistant"]
+    assert replayed["tool_calls"][0]["extra_content"] == {"google": {"thought_signature": "sig-1"}}
+
+
+def test_the_model_verdict_never_overrides_the_facts(scratch_key, fake_llm):
+    fake_llm(calls(*EXPLORE), answer(verdict="CLEAR", statements=[], rationale="No direct transfers to sanctioned."))
     _, final = run(s.NOVAPAY, scratch_key)
-    assert final["summary"] == summary
-    assert final["verification"]["verified"] and final["verification"]["claims_checked"] == 3
+    assert final["verdict"] == "SUSPICIOUS"
+    assert final["model_answer"]["proposed_verdict"] == "CLEAR" and not final["model_answer"]["agrees"]
+    assert final["model_answer"]["rationale"] == "No direct transfers to sanctioned."
 
 
 def test_the_tool_budget_caps_a_model_that_never_stops(scratch_key, fake_llm):
     burst = calls(*EXPLORE, ("detect_ring", {"entity_id": s.VOLKOV}))
-    llm = fake_llm(lambda request: burst if "tools" in request else answer(verdict="SUSPICIOUS", summary=""))
+    llm = fake_llm(lambda request: burst if "tools" in request else answer(verdict="SUSPICIOUS", statements=[]))
     events, final = run(s.NOVAPAY, scratch_key)
     assert final["tool_calls"] == agent.MAX_STEPS and final["budget_exhausted"]
     assert len(tools_called(events)) == agent.MAX_STEPS
@@ -153,5 +256,5 @@ def test_an_llm_failure_hands_over_to_the_fallback_without_repeating_calls(scrat
     assert any("The LLM failed (RuntimeError: provider down)" in e["message"] for e in events if e["type"] == "notice")
     assert final["planner"] == "llm+fallback"
     explores = [e["args"] for e in events if e["type"] == "tool_call" and e["tool"] == "explore_neighborhood"]
-    assert explores == [{"entity_id": s.NOVAPAY, "depth": 1}, {"entity_id": s.NOVAPAY, "depth": 5}]
+    assert explores == [{"entity_id": s.NOVAPAY, "depth": 1}, {"entity_id": s.NOVAPAY, "depth": 6}]
     assert final["verdict"] == "SUSPICIOUS" and final["approval_request"]["approver"]["id"] == s.PRIYA

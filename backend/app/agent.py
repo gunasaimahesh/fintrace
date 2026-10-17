@@ -3,8 +3,8 @@
 The harness always resolves the alert entity and checks memory first, so an unknown ID never reaches
 the model. An LLM (any OpenAI-compatible endpoint) then picks tools turn by turn. Without an LLM key, or
 if the LLM fails mid-run, a deterministic planner continues from the results so far. Either way the
-answer goes through guardrails.verify before it is shown, and the answer state is derived from the tool
-results, not taken from the model.
+verdict and the analyst's card come from typed facts in the tool results (guardrails.py); the model's
+own statements are bound to those facts or rejected, and its rationale is shown as unverified.
 
     python -m backend.app.agent merch-nova-pay [--mode fallback] [--graph fintrace:acme-pay]
 """
@@ -24,9 +24,12 @@ from mcp import Client
 from mcp.types import CallToolResult
 
 from backend.app import guardrails as gr
+from backend.app import queries as q
 from backend.app.config import Settings, get_settings
+from backend.app.contracts import PRESCRIBED_DEPTH, current_rev
+from backend.app.db import get_db
 from backend.app.db import graph_key as tenant_graph_key
-from backend.app.guardrails import AnswerState, EvidenceLedger, Verdict
+from backend.app.guardrails import EvidenceLedger, Verdict
 from backend.app.mcp_server import build_server
 
 MAX_STEPS = 12
@@ -43,29 +46,45 @@ SYSTEM_PROMPT = """\
 You are FinTrace, an anti-money-laundering investigator. You work only through the tools, which query a \
 FalkorDB graph of accounts and their transfers, the devices and IPs they log in from, and the company's own \
 employees, policies, tickets and approval decisions. The alert entity has already been resolved and its memory \
-checked: those are the first tool results below.
+checked: those results are in the alert message.
 
-How to investigate:
+Rules:
 - If memory holds a CURRENT finding, answer from it without more calls. If a finding is STALE, re-investigate.
-- Explore depth 1, then depth 5. A sanctioned entity you reach matters only if money from the alert entity could \
-follow the path: every transfer must point away from the alert entity, and identity hops must go through a \
-shared device. A shared IP is weak (proxies are shared by strangers). Anything else is association, not exposure.
-- When there is exposure: trace_money_flow from the account just past the shared device, exposure_flow from the \
-accounts on both sides of that device to the sanctioned account, detect_ring and find_brokers on that account, \
-then trace_governance on the alert entity.
-- Before requesting a freeze, run freeze_impact on the accounts you would freeze and exclude the legitimate \
-customers and shared infrastructure it reports. Then call request_action with case_id {case_id}, the freeze \
-policy and an on-call approver from trace_governance. Never target a sanctioned account; it is already blocked.
+- Exposure means money from the alert entity could reach a sanctioned entity. explore_neighborhood reports \
+these as eligible_routes and says how much of the graph each search covered. Anything reached only by ignoring \
+transfer direction, or through a shared IP, is association, not exposure.
+- An account can be cleared only by an eligible-route search that completed {depth} hops or exhausted everything \
+reachable. A capped, timed-out or shallower search clears nobody.
+- When an eligible route exists, finish the case before answering:
+  1. Follow the money in time order (trace_money_flow) from the account where the route's last run of transfers \
+begins: if the route crosses a shared device, the account just after the device.
+  2. Bound how much could reach the sanctioned account (exposure_flow), using the accounts on both sides of each \
+shared device on the route as sources.
+  3. Check whether that account sits in a small ring (detect_ring) and which member brokers it (find_brokers with \
+the ring's members).
+  4. Check the company's own decisions about the alert entity, and who may approve a freeze (trace_governance).
+  5. Run freeze_impact on the accounts you would freeze: the alert entity and every account on the route and the \
+money trail except the sanctioned one, plus the members of a small ring. Leave out the legitimate customers and \
+shared infrastructure it reports, and add any account it reports as also exposed.
+  6. File the freeze with request_action: case_id {case_id}, the freeze policy, an on-call approver with the \
+required clearance, the accounts to freeze and the ones left out. Nothing is frozen until a human signs off. Never \
+target a sanctioned account; it is already blocked.
 - You have {max_steps} tool calls in total, including the ones already made.
 
 Final answer: reply with only this JSON object, no prose around it:
 {{"verdict": "SUSPICIOUS" | "CLEAR" | "INSUFFICIENT",
- "summary": "3 to 6 sentences for an analyst",
- "claims": [{{"subject": "<id>", "relation": "<RELATION>", "object": "<id>"}}],
- "freeze_targets": ["<id>"], "excluded": ["<id>"]}}
-Every entity ID in the summary must come from a tool result. Each claim must copy a [subject, relation, object] \
-triple from a tool result's evidence_edges (TRANSFERRED and FLOWS_TO are interchangeable). An answer that breaks \
-these rules is discarded and replaced by a summary generated from the tool results."""
+ "statements": [{{"subject": "<id>", "predicate": "<predicate>", "object": "<id or null>", "value": <number, string or null>}}],
+ "freeze_targets": ["<id>"], "excluded": ["<id>"],
+ "rationale": "2 to 4 sentences for an analyst"}}
+Statement predicates:
+{predicates}
+Amounts are US dollars. The analyst's card is written from the tool results, not from your answer: each statement \
+is matched to the tool result it restates or rejected, and the rationale is shown as unverified."""
+
+
+def system_prompt(case_id: str, max_steps: int) -> str:
+    predicates = "\n".join(f"- {name}: {desc}" for name, desc in gr.MODEL_PREDICATES.items())
+    return SYSTEM_PROMPT.format(case_id=case_id, max_steps=max_steps, depth=PRESCRIBED_DEPTH, predicates=predicates)
 
 
 @dataclass
@@ -77,8 +96,10 @@ class Investigation:
     planner: str
     client: Client
     emit: Emit
+    rev: int | None = None
     results: list[dict] = field(default_factory=list)
     ledger: EvidenceLedger = field(default_factory=EvidenceLedger)
+    llm_ms: list[float] = field(default_factory=list)
 
     @property
     def steps_left(self) -> int:
@@ -161,22 +182,34 @@ def _verdict(value: Any) -> Verdict | None:
         return None
 
 
+def replay(call: Any) -> dict:
+    """A tool call as the model sent it, with provider fields kept: Gemini 3 rejects a follow-up request whose
+    tool calls lost their thought signature (extra_content)."""
+    extra = getattr(call, "model_extra", None) or {}
+    return {"id": call.id, "type": "function",
+            "function": {"name": call.function.name, "arguments": call.function.arguments}, **extra}
+
+
 async def llm_plan(inv: Investigation, settings: Settings) -> dict:
     from openai import AsyncOpenAI
 
     llm = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url, timeout=60, max_retries=1)
+    try:
+        return await _converse(inv, settings, llm)
+    finally:
+        await llm.close()
+
+
+async def _converse(inv: Investigation, settings: Settings, llm: Any) -> dict:
     listed = await inv.client.list_tools()
     specs = [{"type": "function", "function": {"name": t.name, "description": t.description or "",
                                                "parameters": t.input_schema}} for t in listed.tools]
+    # The harness's own calls go in the alert text: providers that sign tool calls reject unsigned injected ones.
+    harness = "\n".join(f"{r['tool']}({json.dumps(r['args'])}) returned: {for_model(r)}" for r in inv.results)
     messages: list[dict] = [
-        {"role": "system", "content": SYSTEM_PROMPT.format(case_id=inv.case_id, max_steps=inv.max_steps)},
-        {"role": "user", "content": f"Alert: investigate {inv.entity_id}."},
+        {"role": "system", "content": system_prompt(inv.case_id, inv.max_steps)},
+        {"role": "user", "content": f"Alert: investigate {inv.entity_id}.\n\nAlready run:\n{harness}"},
     ]
-    for i, r in enumerate(inv.results):
-        call_id = f"call_harness_{i}"
-        messages.append({"role": "assistant", "content": None, "tool_calls": [
-            {"id": call_id, "type": "function", "function": {"name": r["tool"], "arguments": json.dumps(r["args"])}}]})
-        messages.append({"role": "tool", "tool_call_id": call_id, "content": for_model(r)})
 
     for _ in range(inv.max_steps * 2):
         out_of_calls = inv.steps_left <= 0
@@ -184,15 +217,15 @@ async def llm_plan(inv: Investigation, settings: Settings) -> dict:
             messages.append({"role": "user", "content": f"All {inv.max_steps} tool calls are used. "
                                                         "Reply now with the final JSON object."})
         tool_args = {} if out_of_calls else {"tools": specs, "tool_choice": "auto"}
+        asked = time.perf_counter()
         response = await llm.chat.completions.create(model=settings.llm_model, messages=messages, temperature=0,
                                                      **tool_args)
+        inv.llm_ms.append(round((time.perf_counter() - asked) * 1000, 1))
         message = response.choices[0].message
         calls = [c for c in message.tool_calls or [] if getattr(c, "function", None)]
         if not calls or out_of_calls:
             return parse_answer(message.content)
-        messages.append({"role": "assistant", "content": message.content, "tool_calls": [
-            {"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}}
-            for c in calls]})
+        messages.append({"role": "assistant", "content": message.content, "tool_calls": [replay(c) for c in calls]})
         thought = (message.content or "").strip() or None
         for c in calls:
             if inv.steps_left <= 0:
@@ -222,16 +255,20 @@ async def fallback_plan(inv: Investigation) -> None:
                             "Start with direct counterparties and devices.")
     if not near or near["total_reached"] == 0:
         return
-    await inv.ensure("explore_neighborhood", {"entity_id": e, "depth": 5},
-                     "Widen to 5 hops across money, shared devices and IPs.")
-    routes, associations = gr.sanctioned_hits(inv.results)
+    deep = await inv.ensure("explore_neighborhood", {"entity_id": e, "depth": PRESCRIBED_DEPTH},
+                            f"Widen to {PRESCRIBED_DEPTH} hops, and search the routes money could actually take.")
+    if not deep:
+        return
+    routes = deep["eligible_routes"]["routes"]
     if not routes:
-        if associations:
-            await inv.notice("A sanctioned entity is within reach, but money from the alert entity cannot follow "
-                             "the route there, so the investigation stops at association.")
+        if not deep["eligible_routes"]["scope"]["complete"]:
+            await inv.notice("The eligible-route search did not finish, so the account cannot be cleared.")
+        elif any("Sanctioned" in h["entity"]["labels"] for h in deep["flagged"]):
+            await inv.notice("A sanctioned entity is within reach, but no eligible route leads there, so the "
+                             "investigation stops at association.")
         return
 
-    hit = min(routes, key=lambda h: h["depth"])
+    hit = min(routes, key=lambda r: r["hops"])
     target, nodes = hit["entity"]["id"], hit["path"]["nodes"]
     devices = [h for h in hit["identity_hops"] if h["type"] == "Device"]
     bridge = devices[-1] if devices else None
@@ -264,7 +301,7 @@ async def fallback_plan(inv: Investigation) -> None:
         return
     excluded = [c["id"] for c in impact["collateral"]]
     excluded += [i["id"] for i in impact["infrastructure"] if not i["safe_to_block"]]
-    reason = (f"{e} is {hit['depth']} hops from sanctioned {target}"
+    reason = (f"{e} has an eligible route to sanctioned {target} in {hit['hops']} hops"
               + (f" through shared device {bridge['id']}" if bridge else "")
               + (f"; up to ${exposure['max_flow_usd']:,.0f} could reach it" if exposure else "") + ".")
     approver = approvers[0]
@@ -284,46 +321,29 @@ def freeze_targets(inv: Investigation, hit: dict, flow: dict | None, ring: dict 
             if "Account" in inv.ledger.labels(c) and "Sanctioned" not in inv.ledger.labels(c)]
 
 
-def assess(inv: Investigation, proposed: Verdict | None) -> tuple[AnswerState, Verdict]:
-    """The answer state from what the tools returned; the model's verdict is kept unless a SUSPICIOUS call has no path."""
-    if inv.unknown:
-        return AnswerState.UNKNOWN_ENTITY, Verdict.INSUFFICIENT
-    facts = (inv.latest("recall_memory") or {"facts": []})["facts"]
-    current = [f for f in facts if f["status"] == "CURRENT"]
-    stale = any(f["status"] == "STALE" for f in facts)
+def model_answer(answer: dict, verdict: Verdict, facts: list, inv: Investigation) -> dict:
+    proposed = _verdict(answer.get("verdict"))
+    rationale = str(answer.get("rationale") or answer.get("summary") or "").strip()
+    return {
+        "proposed_verdict": proposed.value if proposed else None,
+        "agrees": proposed == verdict,
+        "rationale": rationale,
+        "rationale_check": gr.check_text(rationale, inv.ledger, answer.get("claims"), given=[inv.entity_id]).to_json(),
+        "statements": gr.bind(answer.get("statements"), facts),
+    }
+
+
+def finalize(inv: Investigation, answer: dict | None, model: str | None, started: float,
+             statuses: dict[str, str] | None = None) -> dict:
+    facts = gr.extract_facts(inv.results, inv.rev)
+    facts += gr.status_read_facts(facts, statuses or {}, inv.rev)
     investigated = any(r["ok"] and r["tool"] in INVESTIGATIVE for r in inv.results)
-    if current and not stale and not investigated:
-        return AnswerState.ANSWERED_FROM_MEMORY, _verdict(current[0]["verdict"]) or Verdict.INSUFFICIENT
-    routes, associations = gr.sanctioned_hits(inv.results)
-    has_path = bool(routes or associations
-                    or any(r["data"]["flagged"] for r in inv.results if r["ok"] and r["tool"] == "explore_neighborhood")
-                    or any(r["data"]["sanctioned"] for r in inv.results if r["ok"] and r["tool"] == "trace_money_flow")
-                    or any(r["data"]["connected"] for r in inv.results if r["ok"] and r["tool"] == "path_between"))
-    verdict = proposed or (Verdict.SUSPICIOUS if routes else Verdict.CLEAR if investigated else Verdict.INSUFFICIENT)
-    if verdict == Verdict.SUSPICIOUS and not has_path:
-        verdict = Verdict.INSUFFICIENT
-    if stale:
-        return AnswerState.MEMORY_STALE_REINVESTIGATED, verdict
-    return (AnswerState.ANSWERED_WITH_PATH if verdict == Verdict.SUSPICIOUS else AnswerState.NOT_IN_GRAPH), verdict
-
-
-def finalize(inv: Investigation, answer: dict | None, model: str | None, started: float) -> dict:
-    state, verdict = assess(inv, _verdict(answer.get("verdict")) if answer else None)
-    given = [inv.entity_id]
-    fallback_summary, fallback_claims = gr.summarize(inv.entity_id, inv.results, state, inv.ledger)
-    summary, claims = fallback_summary, fallback_claims
-    if answer and str(answer.get("summary") or "").strip() and state != AnswerState.UNKNOWN_ENTITY:
-        summary = str(answer["summary"]).strip()
-        claims = answer.get("claims") if isinstance(answer.get("claims"), list) and answer.get("claims") else fallback_claims
-        verification = gr.verify(summary, claims, inv.ledger, given=given)
-        if not verification.verified:
-            summary, claims = fallback_summary, fallback_claims
-            verification.rewritten = True
-    else:
-        verification = gr.verify(summary, claims, inv.ledger, given=given)
+    state, verdict, basis = gr.derive(facts, inv.unknown, investigated)
+    statements = gr.render(inv.entity_id, state, verdict, facts, inv.ledger)
 
     request = inv.latest("request_action")
     if request:
+        request = {**request, "status": (statuses or {}).get(request["request_id"], request["status"])}
         targets, excluded = request["target_ids"], request["excluded_ids"]
     else:
         known = lambda ids: [i for i in ids if isinstance(i, str) and i in inv.ledger.nodes]  # noqa: E731
@@ -337,18 +357,25 @@ def finalize(inv: Investigation, answer: dict | None, model: str | None, started
         "case_id": inv.case_id,
         "answer_state": state.value,
         "verdict": verdict.value,
-        "summary": summary,
-        "claims": [dict(zip(("subject", "relation", "object"), c)) for c in map(gr.normalize_claim, claims) if c],
-        "verification": verification.to_json(),
+        "verdict_basis": basis,
+        "statements": [s.to_json() for s in statements],
+        "summary": " ".join(s.text for s in statements),
+        "badge": f"{gr._count(len(statements), 'statement')}, each rendered from a cited tool result",
+        "facts": [f.to_json() for f in facts],
+        "claims": gr.claims_from_facts(facts),
+        "model_answer": model_answer(answer, verdict, facts, inv) if answer is not None else None,
         "freeze_targets": targets,
         "excluded": excluded,
         "approval_request": request,
-        "coverage": {"depth": deepest["depth"], "entities_checked": deepest["total_reached"]} if deepest else None,
+        "coverage": {"depth": deepest["depth"], "exploration": deepest["scope"],
+                     "eligible": deepest["eligible_routes"]["scope"]} if deepest else None,
+        "evidence_rev": inv.rev,
         "tool_calls": len(inv.results),
         "max_steps": inv.max_steps,
         "budget_exhausted": inv.steps_left <= 0,
         "planner": inv.planner,
         "model": model,
+        "llm_ms": inv.llm_ms,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
     }
 
@@ -358,10 +385,11 @@ async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: 
     settings = get_settings()
     use_llm = mode == "llm" or (mode == "auto" and settings.llm_enabled)
     started = time.perf_counter()
+    graph = get_db().select_graph(key)
     async with Client(build_server(key, worker_id)) as client:
         inv = Investigation(entity_id=entity_id, case_id=case_id or f"case-{uuid.uuid4().hex[:8]}",
                             max_steps=max_steps, worker_id=worker_id, planner="llm" if use_llm else "fallback",
-                            client=client, emit=emit)
+                            client=client, emit=emit, rev=await asyncio.to_thread(current_rev, graph))
         model = settings.llm_model if use_llm else None
         await emit({"type": "run_started", "entity_id": entity_id, "case_id": inv.case_id, "graph": key,
                     "planner": inv.planner, "model": model, "max_steps": max_steps, "worker_id": worker_id})
@@ -385,7 +413,9 @@ async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: 
                     await fallback_plan(inv)
             else:
                 await fallback_plan(inv)
-        await emit(finalize(inv, answer, model, started))
+        requests = [r["data"]["request_id"] for r in inv.results if r["ok"] and r["tool"] == "request_action"]
+        statuses = await asyncio.to_thread(q.approval_statuses, graph, requests) if requests else {}
+        await emit(finalize(inv, answer, model, started, statuses))
 
 
 async def investigate(entity_id: str, *, graph_key: str | None = None, worker_id: str = "investigator",

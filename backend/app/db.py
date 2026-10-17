@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 
 from falkordb import FalkorDB, Graph
@@ -9,10 +10,19 @@ from falkordb import FalkorDB, Graph
 from .config import get_settings
 
 GRAPH_PREFIX = "fintrace:"
+TENANT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 
 
 def graph_key(tenant: str) -> str:
     return f"{GRAPH_PREFIX}{tenant}"
+
+
+def tenant_key(tenant: str | None = None) -> str:
+    """The graph every request and worker for `tenant` must use. Raises ValueError for a malformed name."""
+    tenant = tenant or get_settings().default_tenant
+    if not TENANT_RE.match(tenant):
+        raise ValueError(f"{tenant!r} is not a valid tenant name")
+    return graph_key(tenant)
 
 
 @lru_cache
