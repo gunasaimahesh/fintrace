@@ -1,0 +1,441 @@
+{
+ "started_at": "2026-10-17T15:32:35Z",
+ "finished_at": "2026-10-17T15:35:19Z",
+ "commit": "7fd8413",
+ "uncommitted_changes": [],
+ "graph": {
+  "key": "fintrace:acme-pay",
+  "fixture_version": "base-3+challenge-1",
+  "rev": 0
+ },
+ "suite": {
+  "seconds": 70.6,
+  "passed": 108
+ },
+ "summary": {
+  "pending": 2,
+  "pass": 8
+ },
+ "rows": [
+  {
+   "check": "Real agent",
+   "required": "Actual model and external MCP runs; planner mode and all failed/retried runs visible; no schema examples point at the hidden answer.",
+   "status": "pending",
+   "tests": [
+    {
+     "test": "test_agent.py::test_tool_calls_go_back_with_their_provider_signature",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_agent.py::test_an_llm_failure_hands_over_to_the_fallback_without_repeating_calls",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_agent.py::test_a_per_minute_rate_limit_is_waited_out_but_a_daily_quota_falls_back",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_mcp_stdio.py::test_the_stdio_server_lists_the_eleven_tools_and_answers",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_leaks.py::test_tool_schemas_and_the_prompt_name_nothing_from_the_scenario",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_leaks.py::test_renamed_ids_are_gone_from_the_graph",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_graph_checkpoints.py::test_no_ground_truth_in_graph",
+     "outcome": "passed"
+    }
+   ],
+   "checks": [
+    {
+     "check": "model_runs",
+     "ok": true,
+     "evidence": "93 controlled runs with gemini-3.1-flash-lite (92 llm, 1 llm+fallback); 14 live run logs in backend/eval/runs/"
+    },
+    {
+     "check": "failures_visible",
+     "ok": true,
+     "evidence": "every run records its planner and provider retries; 1 failed run(s), 1 listed in the summary; 7 provider retries"
+    }
+   ],
+   "manual": [
+    {
+     "item": "cursor-mcp",
+     "required": "A tool call from Cursor's MCP client against the seeded graph returns a result",
+     "confirmed": false
+    }
+   ]
+  },
+  {
+   "check": "Route and coverage",
+   "required": "Alternate valid route found despite a shorter IP path; device hops counted correctly; timeout/cap/budget and out-of-scope targets do not become unqualified CLEAR results.",
+   "status": "pass",
+   "tests": [
+    {
+     "test": "test_agent.py::test_a_valid_route_is_found_despite_a_shorter_ip_path",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_agent.py::test_a_device_bridge_costs_two_hops_so_four_hops_clears_nobody",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_tools.py::test_eligible_routes_keep_direction_and_a_device_bridge_costs_two_hops",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_agent.py::test_a_capped_or_timed_out_search_is_insufficient_not_clear",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_agent.py::test_a_sanctioned_account_beyond_six_hops_gets_a_qualified_clear",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_agent.py::test_sharing_only_a_proxy_ip_with_a_sanctioned_route_is_association_not_exposure",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_guardrails.py::test_clear_needs_the_prescribed_depth_or_an_exhausted_frontier",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_guardrails.py::test_an_eligible_route_is_suspicious_even_when_another_search_was_cut_short",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_guardrails.py::test_the_card_states_the_scope_behind_clear_and_insufficient",
+     "outcome": "passed"
+    }
+   ],
+   "checks": [],
+   "manual": []
+  },
+  {
+   "check": "Bound claims",
+   "required": "Swapping monthly volume with exposure, another subject's path length, or another approval's status is rejected. Authoritative output cites the right structured result.",
+   "status": "pass",
+   "tests": [
+    {
+     "test": "test_guardrails.py::test_swapping_monthly_volume_for_exposure_is_rejected",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_guardrails.py::test_another_subjects_path_length_is_rejected",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_guardrails.py::test_another_approvals_status_is_rejected",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_guardrails.py::test_facts_cite_their_tool_result_and_route_dependencies",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_guardrails.py::test_statements_that_restate_a_fact_are_bound_to_it",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_guardrails.py::test_every_statement_cites_facts_and_unknown_entities_say_nothing_else",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_agent.py::test_model_statements_are_bound_to_facts_or_rejected",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_agent.py::test_the_model_verdict_never_overrides_the_facts",
+     "outcome": "passed"
+    }
+   ],
+   "checks": [],
+   "manual": []
+  },
+  {
+   "check": "Mutation consistency",
+   "required": "A transfer add/update/delete changes raw and summary edges consistently; same-second changes invalidate; deletion and changed aggregate findings cannot retain stale CURRENT facts.",
+   "status": "pass",
+   "tests": [
+    {
+     "test": "test_memory.py::test_transfer_writes_keep_raw_and_summary_edges_consistent",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_a_change_in_the_same_second_as_the_fact_still_stales_it",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_deleting_a_route_transfer_updates_its_summary_and_stales_the_route",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_deleting_a_route_node_stales_the_route_through_a_missing_dependency",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_an_unrelated_transfer_keeps_the_route_and_refreshes_only_the_aggregates",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_a_clear_finding_goes_stale_on_any_change",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_identity_and_sanction_changes_bump_the_revision",
+     "outcome": "passed"
+    }
+   ],
+   "checks": [],
+   "manual": []
+  },
+  {
+   "check": "Persistence and concurrency",
+   "required": "A new session recalls an episode; mutation produces STALE and SUPERSEDES; a concurrent change cannot be persisted as a fresh fact; duplicate completion is prevented.",
+   "status": "pass",
+   "tests": [
+    {
+     "test": "test_memory.py::test_a_new_session_answers_from_memory",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_an_unrelated_transfer_keeps_the_route_and_refreshes_only_the_aggregates",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_guardrails.py::test_stale_memory_says_what_changed_and_fresh_facts_decide",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_a_change_during_the_investigation_is_not_cached",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_sign_off_is_refused_once_the_evidence_changed",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_coordination.py::test_an_expired_claim_goes_back_to_the_queue_and_its_token_can_no_longer_commit",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_coordination.py::test_twenty_claimants_and_a_sweeper_lose_nothing_and_complete_each_alert_once",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_coordination.py::test_two_cases_racing_to_freeze_the_same_accounts_cannot_both_file",
+     "outcome": "passed"
+    }
+   ],
+   "checks": [],
+   "manual": []
+  },
+  {
+   "check": "Procedural memory",
+   "required": "A different held-out subject uses a learned, parameterized procedure; cold/warm comparisons disable subject-answer caching and publish actual deltas.",
+   "status": "pass",
+   "tests": [
+    {
+     "test": "test_playbook.py::test_a_playbook_is_learned_from_an_approved_run_and_holds_roles_not_ids",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_playbook.py::test_it_matches_held_out_subjects_by_topology_alone",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_playbook.py::test_a_held_out_positive_is_investigated_on_its_own_evidence",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_playbook.py::test_on_a_lookalike_it_stops_where_the_evidence_does_and_the_answer_stays_clear",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_playbook.py::test_remembered_findings_take_precedence_and_procedures_mode_never_reads_them",
+     "outcome": "passed"
+    }
+   ],
+   "checks": [
+    {
+     "check": "procedure_deltas",
+     "ok": true,
+     "evidence": "playbook applied to c01, c05, c14, c15 (all held out), with cold and warm requests and tokens published; cold and warm read memory in 'procedures' mode, never the subject's findings"
+    }
+   ],
+   "manual": []
+  },
+  {
+   "check": "Coordination and tenants",
+   "required": "Three workers demonstrate a real graph-state handoff; contention check has no lost work or duplicate committed completion; tenant A's facts/actions are absent from B.",
+   "status": "pass",
+   "tests": [
+    {
+     "test": "test_coordination.py::test_three_hunters_drain_the_queue_without_losing_or_duplicating_work",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_coordination.py::test_a_later_hunter_reuses_an_earlier_hunters_route_and_defers_to_its_freeze",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_coordination.py::test_cases_merge_only_on_a_high_risk_entity_or_two_shared_entities",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_coordination.py::test_failed_alerts_are_retried_until_the_last_attempt_then_stay_failed_and_visible",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_tenants.py::test_memory_queue_approvals_revision_and_reset_stay_inside_their_tenant",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_tenants.py::test_tenant_names_are_checked_before_any_graph_is_touched",
+     "outcome": "passed"
+    }
+   ],
+   "checks": [
+    {
+     "check": "contention_sound",
+     "ok": true,
+     "evidence": "5 runs: 0 invariant violations, 69 late commits refused and 0 accepted, 101 crashed claims recovered"
+    }
+   ],
+   "manual": []
+  },
+  {
+   "check": "Company knowledge",
+   "required": "Policy source and graph version agree; waiver compliance updates independently of sanctions risk; simulated approval is clearly identified.",
+   "status": "pass",
+   "tests": [
+    {
+     "test": "test_company.py::test_every_company_node_carries_its_provenance",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_company.py::test_unchanged_files_cause_no_writes",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_company.py::test_raising_the_waiver_threshold_clears_the_breach_in_one_revision",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_company.py::test_editing_only_the_policy_text_is_an_edit_too",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_company.py::test_mistakes_in_the_source_files_fail_loudly",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_a_policy_edit_refreshes_the_waiver_check_and_keeps_the_route",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_tools.py::test_governance_finds_the_breach_and_the_on_call_approver",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_tools.py::test_a_freeze_needs_an_on_call_l3_and_happens_only_on_sign_off",
+     "outcome": "passed"
+    }
+   ],
+   "checks": [
+    {
+     "check": "company_agrees",
+     "ok": true,
+     "evidence": "fintrace:acme-pay: 14/14 source records match; fintrace-pristine:acme-pay: 14/14 source records match"
+    },
+    {
+     "check": "approval_labelled",
+     "ok": true,
+     "evidence": "the Approval Inbox and its sign-off button say sign-off is simulated; so does the README"
+    }
+   ],
+   "manual": []
+  },
+  {
+   "check": "Evaluation",
+   "required": "Controlled case results and IBM retrieval results are labelled separately; output limits, graph version, seeds, failures, and cost metrics are recorded.",
+   "status": "pass",
+   "tests": [
+    {
+     "test": "test_eval.py::test_an_incomplete_run_is_correct_if_insufficient_or_if_it_established_the_subjects_own_route",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_eval.py::test_the_lookup_baseline_follows_money_out_and_shared_devices_but_never_ips",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_eval.py::test_the_lookup_baseline_clears_only_once_every_page_within_depth_is_read",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_eval.py::test_the_eval_endpoint_serves_summaries_without_the_per_run_records",
+     "outcome": "passed"
+    }
+   ],
+   "checks": [
+    {
+     "check": "eval_recorded",
+     "ok": true,
+     "evidence": "controlled (per planner) and IBM retrieval saved separately, each with graph, dataset version, commit, output limits, seed rule, failures and, for the LLM, requests and tokens; recorded with uncommitted backend changes: controlled.llm"
+    }
+   ],
+   "manual": []
+  },
+  {
+   "check": "Submission",
+   "required": "Clean-start reproduction, usable repository/video links, required README/AI disclosure, accurate selected-track claims, and saved submission confirmation.",
+   "status": "pending",
+   "tests": [],
+   "checks": [
+    {
+     "check": "readme_complete",
+     "ok": true,
+     "evidence": "README names all three tracks and has every required section; none of 100%, undeniable"
+    },
+    {
+     "check": "repository_clean",
+     "ok": true,
+     "evidence": "none of 113 tracked files is a planning doc, .env, raw data, virtualenv, node_modules, build output or tsbuildinfo"
+    },
+    {
+     "check": "clean_start",
+     "ok": true,
+     "evidence": "fresh clone of git@github.com:gunasaimahesh/fintrace.git at 7fd8413: up and seeded in 23 s (59,149 nodes), NovaPay investigated as SUSPICIOUS by the deterministic planner, container tests: 108 passed in 67.38s (0:01:07)"
+    },
+    {
+     "check": "links_ready",
+     "ok": null,
+     "evidence": "the README still says 'link added at submission'"
+    }
+   ],
+   "manual": [
+    {
+     "item": "ai-disclosure",
+     "required": "The participant has reviewed the AI-assistance section and their contributions in it",
+     "confirmed": false
+    },
+    {
+     "item": "video",
+     "required": "The demo video is public and linked from the README and the submission",
+     "confirmed": false
+    },
+    {
+     "item": "submitted",
+     "required": "The submission form is filed and its confirmation saved",
+     "confirmed": false
+    }
+   ]
+  }
+ ]
+}

@@ -476,8 +476,8 @@ Found while building (filed upstream; links added at submission):
 - `algo.maxFlow`'s capacity-range error says 2^32, but capacities spanning `[1, 2^32 − 1]` already fail
   (FinTrace clamps them to `[1, 2^31 − 1]`).
 - `algo.BFS` (outgoing edges only) and `algo.betweenness` (follows edge direction) have no direction option.
-- `algo.SSpaths` `pathCount` semantics are undocumented: omitted, it returns one path in total, not one per
-  destination; 0 returns all minimum-weight paths.
+- `algo.SSpaths` returns a single path by default: `pathCount` (default 1) caps the whole result, not paths per
+  destination, which is easy to miss for a procedure described as finding paths to all reachable nodes.
 - `algo.labelPropagation` takes no seed.
 
 ## Repository layout
