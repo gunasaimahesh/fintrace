@@ -24,7 +24,7 @@ from backend.app import coordination as co
 from backend.app import queries as q
 from backend.app import scenario as s
 from backend.app import tools as t
-from backend.app.config import FRONTEND_DIST, get_settings
+from backend.app.config import FRONTEND_DIST, ROOT, get_settings
 from backend.app.contracts import ALERT_RULES, MAX_CAPACITY
 from backend.app.db import get_db, graph_exists, tenant_key
 
@@ -47,6 +47,8 @@ MUTATIONS = {
     "set_sanctioned": (mutations.set_sanctioned, ("account", "sanctioned", "list_name")),
 }
 ID_FIELDS = {"src", "dst", "tx_id", "account", "target"}
+EVAL_RESULTS = ROOT / "backend" / "eval" / "results.json"
+BULKY = {"runs", "instances", "seeds"}
 
 Tenant = Annotated[str | None, Query(description="Tenant whose graph to use; defaults to DEFAULT_TENANT")]
 _locks: dict[tuple[str, str], asyncio.Lock] = {}
@@ -194,6 +196,20 @@ def queue(tenant: Tenant = None) -> list[dict]:
 def evidence_board(tenant: Tenant = None, limit: int = Query(60, ge=1, le=500)) -> dict:
     """Queue, cases, episodes, facts, playbooks and approvals, read back from what was persisted."""
     return board.board(_graph(tenant), limit)
+
+
+@app.get("/api/eval")
+def eval_results() -> dict:
+    """The saved benchmark summaries, without the per-run records they were computed from."""
+    if not EVAL_RESULTS.exists():
+        raise HTTPException(404, "no eval results yet: run python -m backend.eval.run_eval")
+
+    def summary(value):
+        if not isinstance(value, dict):
+            return value
+        return {k: summary(v) for k, v in value.items() if not (k in BULKY and isinstance(v, (list, dict)))}
+
+    return summary(json.loads(EVAL_RESULTS.read_text()))
 
 
 @app.post("/api/alerts")

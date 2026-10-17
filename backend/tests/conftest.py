@@ -10,7 +10,7 @@ import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from backend.app.config import get_settings
-from backend.app.db import get_db, graph_key
+from backend.app.db import copy_graph, get_db, graph_key
 from backend.app.tenants import pristine_key
 
 
@@ -24,7 +24,7 @@ def _copy_seeded_graph() -> str:
     if source not in graphs:
         pytest.skip(f"{source} is not loaded; run python -m backend.app.seed_data --reset")
     key = f"fintrace:test-{uuid.uuid4().hex[:8]}"
-    get_db().select_graph(source).copy(key)
+    copy_graph(source, key)
     return key
 
 

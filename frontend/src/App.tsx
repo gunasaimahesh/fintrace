@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, getJSON, postJSON } from "./api";
 import { ApprovalsView } from "./components/ApprovalsView";
+import { EvalView } from "./components/EvalView";
 import { HuntersView } from "./components/HuntersView";
 import { InvestigateView } from "./components/InvestigateView";
 import { MemoryView } from "./components/MemoryView";
 import type { Board, Health, Scenario } from "./types";
 
-type Tab = "investigate" | "hunters" | "memory" | "approvals";
+type Tab = "investigate" | "hunters" | "memory" | "approvals" | "eval";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "investigate", label: "Investigate" },
   { id: "hunters", label: "Hunters" },
   { id: "memory", label: "Memory" },
   { id: "approvals", label: "Approvals" },
+  { id: "eval", label: "Eval" },
 ];
 
 function initialTenant() {
@@ -145,6 +147,9 @@ export default function App() {
           </div>
           <div className={`${shown("approvals")} overflow-y-auto`}>
             <ApprovalsView tenant={tenant} board={board} refresh={refresh} />
+          </div>
+          <div className={`${shown("eval")} overflow-y-auto`}>
+            <EvalView active={tab === "eval"} />
           </div>
         </>
       )}

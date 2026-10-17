@@ -268,3 +268,30 @@ def test_an_llm_failure_hands_over_to_the_fallback_without_repeating_calls(scrat
     explores = [e["args"] for e in events if e["type"] == "tool_call" and e["tool"] == "explore_neighborhood"]
     assert explores == [{"entity_id": s.NOVAPAY, "depth": 1}, {"entity_id": s.NOVAPAY, "depth": 6}]
     assert final["verdict"] == "SUSPICIOUS" and final["approval_request"]["approver"]["id"] == s.PRIYA
+
+
+class RateLimited(Exception):
+    """A provider 429 shaped like Gemini's: the exceeded quota and how long to wait."""
+
+    status_code = 429
+
+    def __init__(self, quota: str):
+        super().__init__("Error code: 429 - You exceeded your current quota")
+        self.body = [{"error": {"code": 429, "status": "RESOURCE_EXHAUSTED", "details": [
+            {"@type": "type.googleapis.com/google.rpc.QuotaFailure", "violations": [{"quotaId": quota}]},
+            {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "21s"}]}}]
+
+
+def test_a_per_minute_rate_limit_is_waited_out_but_a_daily_quota_falls_back(scratch_key, fake_llm, monkeypatch):
+    per_minute = "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+    assert agent.rate_limit(RateLimited(per_minute)) == {"quotas": [per_minute], "daily": False, "retry_s": 22.0}
+    monkeypatch.setattr(agent, "MAX_RATE_LIMIT_WAIT_S", 0.01)
+    llm = fake_llm(RateLimited(per_minute), answer(verdict="CLEAR", statements=[]))
+    _, final = run(s.ISOLATED, scratch_key)
+    assert final["planner"] == "llm" and len(llm.requests) == 2 and final["llm_wait_ms"] >= 10
+
+    daily = "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+    llm = fake_llm(RateLimited(daily))
+    events, final = run(s.ISOLATED, scratch_key)
+    assert final["planner"] == "llm+fallback" and len(llm.requests) == 1
+    assert any(f"daily quota reached: {daily}" in e["message"] for e in events if e["type"] == "notice")

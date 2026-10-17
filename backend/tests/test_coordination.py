@@ -5,9 +5,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import random
-import threading
-import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
@@ -20,6 +17,8 @@ from backend.app import scenario as s
 from backend.app.contracts import MAX_ATTEMPTS
 from backend.app.db import get_db
 from backend.app.overlay import CASES_PATH
+from backend.eval import contention
+from backend.eval.contention import plant as plant_alerts
 
 pytestmark = pytest.mark.graph
 
@@ -34,16 +33,6 @@ def queue_key():
     yield key
     if key in get_db().list_graphs():
         get_db().select_graph(key).delete()
-
-
-def plant_alerts(key: str, n: int):
-    graph = get_db().select_graph(key)
-    graph.query("""
-        UNWIND range(1, $n) AS i
-        CREATE (:Entity:Alert {id: 'alert-' + toString(i), status: 'PENDING', priority: i % 5, created_at: i,
-                               subject_id: 'acct-' + toString(i)})
-    """, {"n": n})
-    return graph
 
 
 def attempts(graph, alert_id: str) -> list[dict]:
@@ -97,66 +86,10 @@ def test_failed_alerts_are_retried_until_the_last_attempt_then_stay_failed_and_v
 
 
 def test_twenty_claimants_and_a_sweeper_lose_nothing_and_complete_each_alert_once(queue_key):
-    graph = plant_alerts(queue_key, 200)
-    lease, stop, refused = 0.3, threading.Event(), []
-
-    def claimant(n: int) -> None:
-        rng = random.Random(n)
-        while True:
-            alert = co.claim(graph, f"w{n:02d}", lease_seconds=lease)
-            if alert is None:
-                if stop.is_set():
-                    return
-                time.sleep(0.02)
-                continue
-            roll = rng.random()
-            if roll < 0.08:  # crashes: never commits, so only the sweeper can recover the alert
-                continue
-            if roll < 0.14:  # stalls past its lease, then tries to commit anyway
-                time.sleep(lease * 3)
-                if not co.complete(graph, alert["id"], alert["token"], {"verdict": "CLEAR"}):
-                    refused.append(alert["id"])
-            elif roll < 0.20:
-                co.fail(graph, alert["id"], alert["token"], "simulated failure")
-            else:
-                co.complete(graph, alert["id"], alert["token"], {"verdict": "CLEAR"})
-
-    def sweeper() -> None:
-        while not stop.is_set():
-            co.sweep(graph)
-            time.sleep(0.05)
-
-    with ThreadPoolExecutor(max_workers=21) as pool:
-        futures = [pool.submit(claimant, n) for n in range(20)] + [pool.submit(sweeper)]
-        deadline = time.time() + 90
-        while time.time() < deadline:
-            unfinished = graph.ro_query("""
-                MATCH (al:Alert)
-                WHERE al.status IN ['PENDING', 'CLAIMED'] OR (al.status = 'FAILED' AND al.attempt < $max)
-                RETURN count(al)
-            """, {"max": MAX_ATTEMPTS}).result_set[0][0]
-            if unfinished == 0:
-                break
-            time.sleep(0.1)
-        stop.set()
-        for future in futures:
-            future.result()
-
-    queue = co.queue_state(graph)
-    assert len(queue) == 200 and {a["status"] for a in queue} <= {"COMPLETED", "FAILED"}
-    for alert in queue:
-        numbers = [a["attempt"] for a in alert["attempts"]]
-        assert numbers == list(range(1, alert["attempt"] + 1)), f"{alert['id']} attempts {numbers}"
-        completions = [a for a in alert["attempts"] if a["status"] == "COMPLETED"]
-        if alert["status"] == "COMPLETED":
-            assert [a["worker_id"] for a in completions] == [alert["completed_by"]]
-        else:
-            assert completions == [] and alert["attempt"] == MAX_ATTEMPTS
-    retried = [a for a in queue if a["attempt"] > 1]
-    assert refused and retried, "the run never exercised a lapsed lease"
-    for alert_id in refused:
-        history = next(a for a in queue if a["id"] == alert_id)["attempts"]
-        assert any(a["refused"] and a["status"] == "EXPIRED" for a in history)
+    result = contention.run(queue_key, claimants=20, alerts=200)
+    assert result["violations"] == []
+    assert sum(result["statuses"].values()) == 200 and set(result["statuses"]) <= {"COMPLETED", "FAILED"}
+    assert result["late_commits_refused"] and result["reclaimed"], "the run never exercised a lapsed lease"
 
 
 def test_three_hunters_drain_the_queue_without_losing_or_duplicating_work(fresh_key):

@@ -347,3 +347,96 @@ export type DrainEvent =
   | { type: "swept"; expired: string[]; gave_up: string[]; retried: string[] }
   | { type: "drained"; graph: string; workers: number; outcomes: AlertOutcome[]; elapsed_ms: number }
   | { type: "error"; message: string };
+
+export type Spread = { median: number; min: number; max: number; n: number } | null;
+
+export type Condition = "cold" | "warm" | "revisit" | "baseline";
+
+export type Score = { correct: number; runs: number };
+
+type Measure = "tool_calls" | "verdict_step" | "elapsed_ms" | "llm_requests" | "llm_ms" | "llm_tokens" | "db_queries" | "db_ms" | "bytes_to_planner";
+
+export type ConditionSummary = {
+  groups: Record<string, Score & { verdicts: Record<string, number> }>;
+  detection: Score;
+  failures: { case_id: string; repeat: number; failure: string }[];
+  planner_used: Record<string, number>;
+  model_agreed: number;
+  model_answered: number;
+  provider_retries: number;
+} & Record<Measure, Spread>;
+
+export type CaseSummary = {
+  subject_id: string;
+  group: string;
+  pattern: string | null;
+  split: string | null;
+  expected: Verdict | null;
+} & Partial<Record<Condition, { correct: string; verdicts: Record<string, number>; tool_calls: Spread; elapsed_ms: Spread }>>;
+
+export type Delta = { runs: number; correct: string } & Partial<Record<"tool_calls" | "elapsed_ms" | "llm_requests" | "llm_tokens", Record<string, number>>>;
+
+export type Stage = { started_at: string; finished_at: string; conditions: Condition[]; repeats: number[]; runs: number; stopped_early: string | null };
+
+export type ControlledResult = {
+  config: {
+    planner: string;
+    model: string | null;
+    llm_requests_per_minute: number | null;
+    repeats: number | number[];
+    conditions: Condition[];
+    max_steps: number;
+    depth: number;
+    graph: string;
+    commit: string;
+  };
+  stages?: Stage[];
+  finished_at?: string;
+  stopped_early?: string | null;
+  playbook: { id: string; family: string } | null;
+  summary: {
+    conditions: Partial<Record<Condition, ConditionSummary>>;
+    cases: Record<string, CaseSummary>;
+    warm_vs_cold: { playbook_used_on: string[]; cases: Record<string, Delta | null> };
+    revisit_vs_cold: Record<string, Delta | null>;
+  };
+};
+
+export type StrategySummary = {
+  instances: number;
+  macro_recall: number;
+  found_any: number;
+  with_caps: number;
+  truncated_results: number;
+  failures: number;
+} & Record<"recall" | "returned" | "off_instance" | "calls" | "db_queries" | "db_ms" | "bytes", Spread>;
+
+export type RetrievalResult = {
+  started_at: string;
+  config: { instances: number; hops: number; strategies: Record<string, string>; output_limits: Record<string, number>; seed_rule: string; recall: string };
+  summary: {
+    strategies: Record<string, StrategySummary>;
+    families: Record<string, { instances: number } & Record<string, { macro_recall: number; found_any: string }>>;
+  };
+};
+
+export type ContentionResult = {
+  at: string;
+  config: { claimants: number; alerts: number; lease_s: number; max_attempts: number; crash: number; stall: number; fail: number };
+  summary: {
+    runs: number;
+    violations: number;
+    alerts_per_s: Spread;
+    late_commits_refused: number;
+    late_commits_accepted: number;
+    crashed_claims_recovered: number;
+    statuses: Record<string, number>;
+  };
+};
+
+export type EvalResults = {
+  updated_at: string;
+  controlled?: Partial<Record<"fallback" | "llm", ControlledResult>>;
+  retrieval?: Partial<Record<"pilot" | "all", RetrievalResult>>;
+  contention?: ContentionResult;
+};

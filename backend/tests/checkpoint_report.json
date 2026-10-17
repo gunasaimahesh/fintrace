@@ -1,16 +1,16 @@
 {
   "budget_ms": 1000,
   "latency_ms": {
-    "path_between(novapay, vortex)": 20.2,
-    "explore(novapay, depth=1)": 2.6,
-    "explore(novapay, depth=5)": 291.7,
-    "explore(biggest hub, depth=5)": 518.5,
-    "trace_money_flow(volkov, out, 6)": 1.8,
-    "trace_money_flow(novapay, out, 6)": 4.8,
-    "exposure_flow(nova-ops + volkov)": 24.6,
-    "detect_ring(volkov)": 124.1,
-    "find_brokers(ring)": 7.0,
-    "GRAPH.COPY": 639.5
+    "path_between(novapay, vortex)": 22.0,
+    "explore(novapay, depth=1)": 3.0,
+    "explore(novapay, depth=5)": 291.9,
+    "explore(biggest hub, depth=5)": 535.9,
+    "trace_money_flow(volkov, out, 6)": 2.4,
+    "trace_money_flow(novapay, out, 6)": 4.3,
+    "exposure_flow(nova-ops + volkov)": 25.9,
+    "detect_ring(volkov)": 123.9,
+    "find_brokers(ring)": 7.6,
+    "GRAPH.COPY": 603.5
   },
   "novapay_depth5": {
     "reached": 30110,
@@ -84,7 +84,8 @@
       "Message": 0.0,
       "Decision": 0.0,
       "Meta": 0.0,
-      "BrokerScope_3": 0.0
+      "BrokerScope_3": 0.0,
+      "BrokerScope_1": 0.0
     },
     "amortized_unlabeled_nodes_attributes_sz_mb": 0.0,
     "amortized_edge_block_sz_mb": 4.0,

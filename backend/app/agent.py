@@ -109,6 +109,7 @@ class Investigation:
     ledger: EvidenceLedger = field(default_factory=EvidenceLedger)
     llm_ms: list[float] = field(default_factory=list)
     llm_wait_s: float = 0.0
+    llm_tokens: dict[str, int] = field(default_factory=lambda: {"prompt": 0, "completion": 0})
     playbook: dict | None = None
 
     @property
@@ -200,6 +201,55 @@ def replay(call: Any) -> dict:
             "function": {"name": call.function.name, "arguments": call.function.arguments}, **extra}
 
 
+RATE_LIMIT_WAITS = 5
+MAX_RATE_LIMIT_WAIT_S = 65.0
+
+
+def rate_limit(exc: Exception) -> dict | None:
+    """What a provider's 429 says: the quotas exceeded, whether one is daily, and how long it asks to wait."""
+    if getattr(exc, "status_code", None) != 429:
+        return None
+    text = json.dumps(getattr(exc, "body", None), default=str) + str(exc)
+    quotas = sorted(set(re.findall(r"""quotaId['"]?\s*[:=]\s*['"]([A-Za-z0-9_-]+)""", text)))
+    delay = re.search(r"""retryDelay['"]?\s*[:=]\s*['"](\d+(?:\.\d+)?)s""", text)
+    return {"quotas": quotas, "daily": any("PerDay" in quota for quota in quotas),
+            "retry_s": min(float(delay.group(1)) + 1, MAX_RATE_LIMIT_WAIT_S) if delay else 30.0}
+
+
+def llm_failure(exc: Exception) -> str:
+    if limit := rate_limit(exc):
+        kind = "daily quota reached" if limit["daily"] else "rate limit still exceeded after waiting"
+        return f"{kind}: {', '.join(limit['quotas']) or 'the provider did not name the quota'}"
+    return f"{type(exc).__name__}: {str(exc)[:200]}"
+
+
+async def complete(llm: Any, settings: Settings, **kwargs: Any) -> tuple[Any, float, float]:
+    """One paced chat completion at temperature 0. A per-minute rate limit is waited out for as long as the
+    provider asks; a daily quota is not, so the caller can fall back. Returns the response, the seconds spent
+    waiting, and the milliseconds the answered request took."""
+    waited = 0.0
+    for attempt in range(RATE_LIMIT_WAITS + 1):
+        waited += await pace(settings.llm_requests_per_minute)
+        asked = time.perf_counter()
+        try:
+            response = await llm.chat.completions.create(model=settings.llm_model, temperature=0, **kwargs)
+            return response, waited, round((time.perf_counter() - asked) * 1000, 1)
+        except Exception as exc:
+            limit = rate_limit(exc)
+            if limit is None or limit["daily"] or attempt == RATE_LIMIT_WAITS:
+                raise
+            await asyncio.sleep(limit["retry_s"])
+            waited += limit["retry_s"]
+    raise AssertionError("unreachable")
+
+
+def count_tokens(totals: dict[str, int], response: Any) -> None:
+    """Add a response's reported token usage; providers that report none leave the totals unchanged."""
+    usage = getattr(response, "usage", None)
+    totals["prompt"] += getattr(usage, "prompt_tokens", None) or 0
+    totals["completion"] += getattr(usage, "completion_tokens", None) or 0
+
+
 _pace_lock = threading.Lock()
 _next_request_at = 0.0
 
@@ -249,11 +299,10 @@ async def _converse(inv: Investigation, settings: Settings, llm: Any) -> dict:
             messages.append({"role": "user", "content": f"All {inv.max_steps} tool calls are used. "
                                                         "Reply now with the final JSON object."})
         tool_args = {} if out_of_calls else {"tools": specs, "tool_choice": "auto"}
-        inv.llm_wait_s += await pace(settings.llm_requests_per_minute)
-        asked = time.perf_counter()
-        response = await llm.chat.completions.create(model=settings.llm_model, messages=messages, temperature=0,
-                                                     **tool_args)
-        inv.llm_ms.append(round((time.perf_counter() - asked) * 1000, 1))
+        response, waited, ms = await complete(llm, settings, messages=messages, **tool_args)
+        inv.llm_wait_s += waited
+        inv.llm_ms.append(ms)
+        count_tokens(inv.llm_tokens, response)
         message = response.choices[0].message
         calls = [c for c in message.tool_calls or [] if getattr(c, "function", None)]
         if not calls or out_of_calls:
@@ -520,6 +569,7 @@ def finalize(inv: Investigation, answer: dict | None, model: str | None, started
         "playbook": inv.playbook,
         "llm_ms": inv.llm_ms,
         "llm_wait_ms": round(inv.llm_wait_s * 1000, 1),
+        "llm_tokens": inv.llm_tokens if inv.llm_ms else None,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 1),
     }
 
@@ -561,7 +611,7 @@ async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: 
                 try:
                     answer = await llm_plan(inv, settings)
                 except Exception as exc:
-                    await inv.notice(f"The LLM failed ({type(exc).__name__}: {str(exc)[:200]}). The deterministic "
+                    await inv.notice(f"The LLM failed ({llm_failure(exc)}). The deterministic "
                                      f"planner continues from the {len(inv.results)} tool results so far.")
                     inv.planner = "llm+fallback"
                     await fallback_plan(inv)

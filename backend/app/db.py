@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import re
+import time
 from functools import lru_cache
 
 from falkordb import FalkorDB, Graph
+from redis.exceptions import ResponseError
 
 from .config import get_settings
 
@@ -38,6 +40,19 @@ def get_graph(tenant: str | None = None) -> Graph:
 
 def graph_exists(key: str) -> bool:
     return key in get_db().list_graphs()
+
+
+def copy_graph(source: str, target: str, attempts: int = 8) -> None:
+    """GRAPH.COPY, retried while Redis refuses to fork because another child (a snapshot, an earlier copy) is
+    still running."""
+    for attempt in range(1, attempts + 1):
+        try:
+            get_db().select_graph(source).copy(target)
+            return
+        except ResponseError as exc:
+            if "could not fork" not in str(exc) or attempt == attempts:
+                raise
+            time.sleep(0.25 * attempt)
 
 
 def memory_usage_mb(key: str) -> dict:

@@ -18,7 +18,7 @@ from pathlib import Path
 from backend.app import agent
 from backend.app import scenario as s
 from backend.app.config import get_settings
-from backend.app.db import get_db, graph_key
+from backend.app.db import copy_graph, get_db, graph_key
 
 RUNS = Path(__file__).parent / "runs"
 EXPECTED = {s.NOVAPAY: "SUSPICIOUS", s.VIP: "CLEAR", s.ISOLATED: "CLEAR", s.UNKNOWN: "INSUFFICIENT"}
@@ -54,7 +54,7 @@ def main() -> None:
         raise SystemExit("No LLM configured: set LLM_API_KEY in .env.")
 
     key = f"fintrace:live-{uuid.uuid4().hex[:6]}"
-    get_db().select_graph(graph_key(settings.default_tenant)).copy(key)
+    copy_graph(graph_key(settings.default_tenant), key)
     RUNS.mkdir(parents=True, exist_ok=True)
     try:
         for entity_id in args.subjects:

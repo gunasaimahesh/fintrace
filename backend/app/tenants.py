@@ -6,7 +6,7 @@ Every API call and worker resolves its graph from the tenant name; nothing is sh
 from __future__ import annotations
 
 from backend.app.contracts import current_rev
-from backend.app.db import GRAPH_PREFIX, get_db, tenant_key
+from backend.app.db import GRAPH_PREFIX, copy_graph, get_db, tenant_key
 
 PRISTINE_PREFIX = "fintrace-pristine:"
 
@@ -25,7 +25,7 @@ def snapshot(tenant: str) -> str:
     db, pristine = get_db(), pristine_key(tenant)
     if pristine in db.list_graphs():
         db.select_graph(pristine).delete()
-    db.select_graph(tenant_key(tenant)).copy(pristine)
+    copy_graph(tenant_key(tenant), pristine)
     return pristine
 
 
@@ -36,7 +36,7 @@ def reset(tenant: str) -> dict:
         raise LookupError(f"{tenant} has no pristine snapshot; reseed it with python -m backend.app.seed_data")
     if key in db.list_graphs():
         db.select_graph(key).delete()
-    db.select_graph(pristine).copy(key)
+    copy_graph(pristine, key)
     graph = db.select_graph(key)
     return {"tenant": tenant, "graph": key, "rev": current_rev(graph),
             "nodes": graph.ro_query("MATCH (n) RETURN count(n)").result_set[0][0]}
