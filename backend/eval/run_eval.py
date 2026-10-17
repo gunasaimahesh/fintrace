@@ -382,7 +382,9 @@ def run_stage(args, saved: dict | None) -> tuple[list[dict], list[dict], dict | 
         return runs, [stage], extra["playbook"]
     fresh = {(r["condition"], r["case_id"], r["repeat"]) for r in runs}
     kept = [r for r in saved["runs"] if (r["condition"], r["case_id"], r["repeat"]) not in fresh]
-    return kept + runs, saved.get("stages", []) + [stage], extra["playbook"] or saved.get("playbook")
+    # Stages saved before stages recorded their commit ran at the commit the saved configuration names.
+    earlier = [{**{k: saved["config"].get(k) for k in CODE_KEYS}, **s} for s in saved.get("stages", [])]
+    return kept + runs, earlier + [stage], extra["playbook"] or saved.get("playbook")
 
 
 def main() -> None:
