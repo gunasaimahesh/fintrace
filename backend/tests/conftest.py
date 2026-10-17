@@ -1,4 +1,5 @@
-"""Graph tests run on a throwaway GRAPH.COPY of the seeded tenant graph, deleted afterwards."""
+"""Graph tests run on a throwaway GRAPH.COPY of the seeded tenant graph, deleted afterwards. They copy its
+pristine snapshot when there is one, so using the demo doesn't change what the tests start from."""
 
 from __future__ import annotations
 
@@ -10,14 +11,16 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 
 from backend.app.config import get_settings
 from backend.app.db import get_db, graph_key
+from backend.app.tenants import pristine_key
 
 
 def _copy_seeded_graph() -> str:
-    source = graph_key(get_settings().default_tenant)
+    tenant = get_settings().default_tenant
     try:
         graphs = get_db().list_graphs()
     except RedisConnectionError:
         pytest.skip("FalkorDB is not running; start it with docker compose up -d")
+    source = pristine_key(tenant) if pristine_key(tenant) in graphs else graph_key(tenant)
     if source not in graphs:
         pytest.skip(f"{source} is not loaded; run python -m backend.app.seed_data --reset")
     key = f"fintrace:test-{uuid.uuid4().hex[:8]}"

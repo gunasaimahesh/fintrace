@@ -52,7 +52,8 @@ def open_case(graph: Graph, case_id: str, entity_id: str, worker_id: str, now: f
     """, {"case": case_id, "now": now or time.time(), "subject": entity_id, "worker": worker_id})
 
 
-def _fact(props: dict, rev: int, graph: Graph) -> dict:
+def read_fact(props: dict, rev: int, graph: Graph) -> dict:
+    """A persisted fact with its status as of now: a CURRENT fact whose evidence changed reads as STALE."""
     fact = {
         "id": props["id"], "kind": props["kind"], "subject": props["subject"], "predicate": props["predicate"],
         "object": props.get("object") or None, "value": json.loads(props["value"]), "unit": props.get("unit") or None,
@@ -132,7 +133,7 @@ def recall(graph: Graph, entity_id: str, facts: bool = True) -> dict | None:
         WHERE f.status IN ['CURRENT', 'STALE']
         RETURN f ORDER BY f.created_at DESC, f.source_step
     """, {"id": entity_id}).result_set
-    remembered = [_fact(node.properties, rev, graph) for (node,) in rows]
+    remembered = [read_fact(node.properties, rev, graph) for (node,) in rows]
     episodes = graph.ro_query("""
         MATCH (ep:Episode)-[:ABOUT]->(:Entity {id: $id})
         OPTIONAL MATCH (ep)-[:HAS_STEP]->(s:Step)

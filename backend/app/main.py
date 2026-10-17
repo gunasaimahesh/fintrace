@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from redis.exceptions import ConnectionError as RedisConnectionError
 from sse_starlette.sse import EventSourceResponse
 
-from backend.app import agent, memory, mutations, tenants
+from backend.app import agent, board, memory, mutations, tenants
 from backend.app import coordination as co
 from backend.app import queries as q
 from backend.app import scenario as s
@@ -123,6 +123,7 @@ def health(tenant: Tenant = None) -> dict:
         "dataset": q.dataset_meta(graph),
         "llm": {"enabled": settings.llm_enabled, "model": settings.llm_model if settings.llm_enabled else None},
         "max_steps": agent.MAX_STEPS,
+        "alert_rules": list(ALERT_RULES),
     }
 
 
@@ -187,6 +188,12 @@ def approve(request_id: str, body: Approval, tenant: Tenant = None) -> dict:
 @app.get("/api/queue")
 def queue(tenant: Tenant = None) -> list[dict]:
     return co.queue_state(_graph(tenant))
+
+
+@app.get("/api/board")
+def evidence_board(tenant: Tenant = None, limit: int = Query(60, ge=1, le=500)) -> dict:
+    """Queue, cases, episodes, facts, playbooks and approvals, read back from what was persisted."""
+    return board.board(_graph(tenant), limit)
 
 
 @app.post("/api/alerts")

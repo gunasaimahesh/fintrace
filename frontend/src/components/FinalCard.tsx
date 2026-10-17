@@ -1,12 +1,7 @@
 import { useState } from "react";
-import { postJSON } from "../api";
-import type { ApprovalResult, Fact, FinalEvent, ModelAnswer, SearchScope, Verdict } from "../types";
-
-const VERDICT_STYLE: Record<Verdict, string> = {
-  SUSPICIOUS: "bg-rose-500/15 text-rose-300 ring-rose-500/40",
-  CLEAR: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/40",
-  INSUFFICIENT: "bg-zinc-500/15 text-zinc-300 ring-zinc-500/40",
-};
+import { api, postJSON } from "../api";
+import type { ApprovalResult, Fact, FinalEvent, ModelAnswer, SearchScope } from "../types";
+import { VERDICT_STYLE } from "./ui";
 
 const STATE_LABEL: Record<string, string> = {
   answered_with_path: "Eligible route to a sanctioned account",
@@ -107,7 +102,7 @@ function ModelProposal({ model }: { model: ModelAnswer }) {
   );
 }
 
-export function FinalCard({ final }: { final: FinalEvent }) {
+export function FinalCard({ final, tenant, onSignedOff }: { final: FinalEvent; tenant: string; onSignedOff: () => void }) {
   const [approval, setApproval] = useState<ApprovalResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -120,7 +115,7 @@ export function FinalCard({ final }: { final: FinalEvent }) {
     setError(null);
     try {
       setApproval(
-        await postJSON<ApprovalResult>(`/api/approvals/${request.request_id}/approve`, {
+        await postJSON<ApprovalResult>(api(`/api/approvals/${request.request_id}/approve`, tenant), {
           approver_id: request.approver.id,
         }),
       );
@@ -128,6 +123,7 @@ export function FinalCard({ final }: { final: FinalEvent }) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+      onSignedOff();
     }
   }
 
@@ -169,6 +165,20 @@ export function FinalCard({ final }: { final: FinalEvent }) {
       <div className="rounded bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300 ring-1 ring-emerald-500/30">
         ✓ {final.badge}
       </div>
+
+      {final.memory && (
+        <div className="text-xs text-zinc-500">
+          Recorded as <span className="font-mono text-zinc-300">{final.memory.episode_id}</span>:{" "}
+          {final.memory.cached ? `${final.memory.facts_written} facts cached` : final.memory.note}
+          {final.memory.superseded.length > 0 && `, superseding ${final.memory.superseded.length} older`}
+          {final.memory.case?.merged_into && (
+            <span className="text-violet-300">
+              {" "}
+              · case merged into {final.memory.case.merged_into} ({final.memory.case.rule})
+            </span>
+          )}
+        </div>
+      )}
 
       {final.model_answer && <ModelProposal model={final.model_answer} />}
 

@@ -13,8 +13,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
+from backend.app import board, memory, mutations
 from backend.app import coordination as co
-from backend.app import memory
 from backend.app import queries as q
 from backend.app import scenario as s
 from backend.app.contracts import MAX_ATTEMPTS
@@ -213,6 +213,19 @@ def test_a_later_hunter_reuses_an_earlier_hunters_route_and_defers_to_its_freeze
     [third] = asyncio.run(co.hunt(fresh_key, "hunter-3", max_alerts=1))
     assert third["alert_id"] == alert["id"] and third["verdict"] == "SUSPICIOUS" and third["tool_calls"] < 11
     assert third["merged_into"] == first["case_id"]
+
+    persisted = board.board(graph)
+    episodes = {ep["id"]: ep for ep in persisted["episodes"]}
+    assert [r["episode_id"] for r in episodes[second["episode_id"]]["reused"]] == [first["episode_id"]]
+    assert [d["request_id"] for d in episodes[second["episode_id"]]["deferred_to"]] == [first["request_id"]]
+    merged = {c["id"]: c["merged_into"] for c in persisted["cases"] if c["merged_into"]}
+    assert merged == {second["case_id"]: first["case_id"], third["case_id"]: first["case_id"]}
+    shared = [f for f in persisted["facts"]["recent"] if f["shared"]]
+    assert shared and all(f["status"] == "CURRENT" for f in shared)
+
+    mutations.add_transfer(graph, "acct-9330192", FIRST["expected"]["sanctioned_target"], 950_000)
+    after = {f["id"]: f for f in board.board(graph)["facts"]["recent"]}
+    assert all(after[f["id"]]["status"] == "STALE" and "acct-9330192" in after[f["id"]]["changed"] for f in shared)
 
 
 def test_two_cases_racing_to_freeze_the_same_accounts_cannot_both_file(fresh_key):

@@ -97,7 +97,33 @@ export type FinalEvent = {
   budget_exhausted: boolean;
   planner: string;
   model: string | null;
+  playbook: { id: string; family: string; steps: number; ran: number; stopped: string | null } | null;
+  memory: PersistedRun | null;
+  llm_ms: number;
+  llm_wait_ms: number;
   elapsed_ms: number;
+};
+
+export type CaseLink = {
+  case_id: string;
+  canonical: string;
+  merged_into: string | null;
+  merged: string[];
+  shared: string[];
+  rule: string | null;
+};
+
+export type PersistedRun = {
+  episode_id: string;
+  case_id: string;
+  facts_written: number;
+  cached: boolean;
+  note: string | null;
+  superseded: string[];
+  marked_stale: string[];
+  reused: string[];
+  deferred_to: string[];
+  case: CaseLink | null;
 };
 
 export type ToolCallEvent = {
@@ -131,12 +157,193 @@ export type RunEvent =
 
 export type Health = {
   status: string;
+  tenant: string;
   graph: string;
   nodes: number;
+  dataset: { rev?: number; fixture_version?: string; source?: string };
   llm: { enabled: boolean; model: string | null };
   max_steps: number;
+  alert_rules: string[];
 };
 
 export type Scenario = { id: string; label: string; expect: string };
 
-export type ApprovalResult = { request_id: string; status: string; frozen: string[]; spared: string[] };
+export type LearnedPlaybook = {
+  id: string;
+  family: string;
+  steps: { tool: string; args: Record<string, unknown> }[];
+  required_patterns: string[];
+  uses: number;
+  derived_from: { episode_id: string; subject_id: string; request_id: string; approved_by: string }[];
+};
+
+export type ApprovalResult = {
+  request_id: string;
+  status: string;
+  frozen: string[];
+  spared: string[];
+  playbook: LearnedPlaybook | null;
+};
+
+export type AttemptStatus = "CLAIMED" | "COMPLETED" | "FAILED" | "EXPIRED";
+
+export type Attempt = {
+  worker_id: string;
+  attempt: number;
+  status: AttemptStatus;
+  claimed_at: number;
+  finished_at: number | null;
+  error: string | null;
+  episode_id: string | null;
+  commit_refused_at: number | null;
+  refused: string | null;
+};
+
+export type QueueAlert = {
+  id: string;
+  subject_id: string;
+  rule: string;
+  priority: number;
+  created_at: number;
+  status: "PENDING" | "CLAIMED" | "COMPLETED" | "FAILED";
+  attempt: number | null;
+  claimed_by: string | null;
+  case_id: string | null;
+  verdict: Verdict | null;
+  answer_state: string | null;
+  episode_id: string | null;
+  request_id: string | null;
+  error: string | null;
+  completed_by: string | null;
+  attempts: Attempt[];
+  merged_into: string | null;
+  merged_on: string[] | null;
+};
+
+export type CaseRow = {
+  id: string;
+  status: "OPEN" | "MERGED";
+  subject_id: string;
+  created_at: number;
+  merged_into: string | null;
+  merge: { rule: string; shared: string[]; by: string; at: number } | null;
+  evidence: string[];
+  episodes: string[];
+  requests: string[];
+  alerts: string[];
+};
+
+export type EpisodeRow = {
+  id: string;
+  case_id: string;
+  entity_id: string;
+  worker_id: string;
+  planner: string;
+  model: string;
+  verdict: Verdict;
+  answer_state: string;
+  created_at: number;
+  tool_calls: number;
+  elapsed_ms: number;
+  request_id: string | null;
+  playbook_id: string | null;
+  facts_cached: boolean | null;
+  cache_note: string | null;
+  evidence_rev: number;
+  reused: { fact_id: string; episode_id: string; worker_id: string; case_id: string; found_from: string; target: string }[];
+  deferred_to: { request_id: string; targets: string[]; status: string }[];
+  facts_written: number;
+};
+
+export type FactRow = {
+  id: string;
+  kind: string;
+  subject: string;
+  predicate: string;
+  object: string | null;
+  value: unknown;
+  unit: string;
+  status: "CURRENT" | "STALE" | "SUPERSEDED";
+  recorded_status: "CURRENT" | "STALE" | "SUPERSEDED";
+  why_stale: string | null;
+  changed: string[];
+  superseded_by: string | null;
+  valid_rev: number;
+  created_at: number;
+  claim: string;
+  episode_id: string;
+  worker_id: string;
+  case_id: string;
+  supersedes: string[];
+  shared: { fact_id: string; episode_id: string; case_id: string; worker_id: string; found_from: string } | null;
+};
+
+export type PlaybookRow = {
+  id: string;
+  family: string;
+  uses: number;
+  created_at: number;
+  last_used_at: number | null;
+  required_patterns: string[];
+  steps: string[];
+  learned_from: { episode_id: string; subject_id: string; case_id: string; request_id: string; approved_by: string; at: number }[];
+  used_by: { episode_id: string; subject_id: string; verdict: Verdict; worker_id: string }[];
+};
+
+export type ApprovalRow = {
+  id: string;
+  status: "PENDING_L3" | "APPROVED" | "STALE";
+  action_type: string;
+  reason: string;
+  created_at: number;
+  requested_by: string;
+  target_ids: string[];
+  excluded_ids: string[];
+  required_clearance: string;
+  evidence_rev: number;
+  approved_by?: string;
+  stale_reason?: string;
+  approver: { id: string; name: string; title: string; clearance: string } | null;
+  policy: { id: string; title: string } | null;
+  case: { id: string; status: string; subject_id: string } | null;
+};
+
+export type Board = {
+  rev: number;
+  dataset: Health["dataset"];
+  queue: QueueAlert[];
+  cases: CaseRow[];
+  episodes: EpisodeRow[];
+  facts: { counts: Record<FactRow["status"], number>; recent: FactRow[] };
+  playbooks: PlaybookRow[];
+  approvals: ApprovalRow[];
+};
+
+export type AlertOutcome = {
+  alert_id: string;
+  subject_id: string;
+  worker_id: string;
+  attempt: number;
+  case_id: string;
+  verdict: Verdict | null;
+  answer_state: string | null;
+  episode_id: string | null;
+  merged_into: string | null;
+  request_id: string | null;
+  tool_calls: number;
+  lost_lease: boolean;
+  error: string | null;
+  committed: boolean;
+  status: string;
+};
+
+type Hunter = { worker_id: string; alert_id: string };
+
+export type DrainEvent =
+  | ({ type: "claimed"; subject_id: string; attempt: number; case_id: string; priority: number } & Hunter)
+  | ({ type: "tool_call"; step: number; tool: string; args: Record<string, unknown>; planner: string } & Hunter)
+  | ({ type: "notice"; message: string } & Hunter)
+  | ({ type: "alert_done" } & AlertOutcome)
+  | { type: "swept"; expired: string[]; gave_up: string[]; retried: string[] }
+  | { type: "drained"; graph: string; workers: number; outcomes: AlertOutcome[]; elapsed_ms: number }
+  | { type: "error"; message: string };
