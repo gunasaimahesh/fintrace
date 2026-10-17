@@ -71,6 +71,7 @@ export default function App() {
     }
   }
 
+  const demo = health?.public_demo ?? null;
   const queued = board?.queue.filter((a) => a.status === "PENDING").length ?? 0;
   const stale = board?.facts.counts.STALE ?? 0;
   const pending = board?.approvals.filter((r) => r.status === "PENDING_L3").length ?? 0;
@@ -133,6 +134,13 @@ export default function App() {
         </div>
       </header>
       {apiError && health && <div className="border-b border-rose-500/30 bg-rose-500/10 px-5 py-1.5 text-xs text-rose-300">{apiError}</div>}
+      {demo && (
+        <div className="border-b border-sky-500/20 bg-sky-500/5 px-5 py-1.5 text-xs text-sky-200/80">
+          Public demo: every visitor shares these graphs, so changes are applied one at a time and everyone sees them. Reset tenant restores the seeded data.
+          {health?.llm.enabled &&
+            ` Model runs are capped at ${demo.llm_runs_per_hour} an hour (${demo.llm_runs_left} left) and ${demo.llm_runs_per_visitor_per_hour} per visitor; past that, investigations use the deterministic planner, as hunters always do here.`}
+        </div>
+      )}
 
       {tenant && (
         <>
@@ -140,7 +148,7 @@ export default function App() {
             <InvestigateView tenant={tenant} scenarios={scenarios} onError={setApiError} onFinished={refresh} />
           </div>
           <div className={`${shown("hunters")} overflow-y-auto`}>
-            <HuntersView tenant={tenant} board={board} rules={health?.alert_rules ?? []} llm={health?.llm.enabled ?? false} refresh={refresh} />
+            <HuntersView tenant={tenant} board={board} rules={health?.alert_rules ?? []} llm={(health?.llm.enabled ?? false) && !demo} refresh={refresh} />
           </div>
           <div className={`${shown("memory")} overflow-y-auto`}>
             <MemoryView tenant={tenant} board={board} refresh={refresh} />

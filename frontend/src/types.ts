@@ -164,6 +164,13 @@ export type Health = {
   llm: { enabled: boolean; model: string | null };
   max_steps: number;
   alert_rules: string[];
+  public_demo: {
+    llm_runs_per_hour: number;
+    llm_runs_per_visitor_per_hour: number;
+    llm_runs_left: number;
+    max_investigations: number;
+    hunter_planner: string;
+  } | null;
 };
 
 export type Scenario = { id: string; label: string; expect: string };

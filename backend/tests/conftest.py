@@ -9,6 +9,7 @@ from collections.abc import Iterator
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
+from backend.app import seed_data
 from backend.app.config import get_settings
 from backend.app.db import copy_graph, get_db, graph_key
 from backend.app.tenants import pristine_key
@@ -50,3 +51,14 @@ def other_key() -> Iterator[str]:
     key = _copy_seeded_graph()
     yield key
     get_db().select_graph(key).delete()
+
+
+@pytest.fixture
+def small_tenant() -> Iterator[str]:
+    """A second tenant seeded from the small fixture, with the pristine copy resets restore."""
+    name = f"test-small-{uuid.uuid4().hex[:6]}"
+    seed_data.seed(name, reset=False, profile="small")
+    yield name
+    for key in (graph_key(name), pristine_key(name)):
+        if key in get_db().list_graphs():
+            get_db().select_graph(key).delete()

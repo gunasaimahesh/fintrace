@@ -12,7 +12,7 @@ import asyncio
 import json
 from typing import Annotated, Literal
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -27,6 +27,7 @@ from backend.app import tools as t
 from backend.app.config import FRONTEND_DIST, ROOT, get_settings
 from backend.app.contracts import ALERT_RULES, MAX_CAPACITY
 from backend.app.db import get_db, graph_exists, tenant_key
+from backend.app.demo import guard
 
 app = FastAPI(title="FinTrace", version="0.3.0")
 
@@ -47,6 +48,7 @@ MUTATIONS = {
     "set_sanctioned": (mutations.set_sanctioned, ("account", "sanctioned", "list_name")),
 }
 ID_FIELDS = {"src", "dst", "tx_id", "account", "target"}
+PUBLIC_HUNTERS = 3
 EVAL_RESULTS = ROOT / "backend" / "eval" / "results.json"
 BULKY = {"runs", "instances", "seeds"}
 
@@ -102,6 +104,11 @@ def _entity_id(value: str) -> str:
     return value
 
 
+def _visitor(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    return forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+
+
 def _sse(event: dict) -> dict:
     # Unnamed messages: a named "error" event would collide with EventSource's own error event.
     return {"data": json.dumps(event, default=str)}
@@ -126,6 +133,7 @@ def health(tenant: Tenant = None) -> dict:
         "llm": {"enabled": settings.llm_enabled, "model": settings.llm_model if settings.llm_enabled else None},
         "max_steps": agent.MAX_STEPS,
         "alert_rules": list(ALERT_RULES),
+        "public_demo": guard.status(),
     }
 
 
@@ -140,15 +148,22 @@ def scenarios() -> list[dict]:
 
 
 @app.get("/api/investigate")
-async def investigate(entity_id: str, tenant: Tenant = None, mode: Literal["auto", "llm", "fallback"] = "auto",
+async def investigate(request: Request, entity_id: str, tenant: Tenant = None,
+                      mode: Literal["auto", "llm", "fallback"] = "auto",
                       max_steps: int = Query(agent.MAX_STEPS, ge=1, le=agent.MAX_STEPS),
                       memory: Literal["on", "procedures", "off"] = "on") -> EventSourceResponse:
     eid, key = _entity_id(entity_id), _key(tenant)
+    if guard.busy():
+        raise HTTPException(429, "the demo is running as many investigations as it allows; try again shortly")
+    mode, notice = guard.planner(_visitor(request), mode)
 
     async def events():
-        async for event in agent.investigate(eid, graph_key=key, worker_id="ui-investigator", mode=mode,
-                                             max_steps=max_steps, memory_mode=memory):
-            yield _sse(event)
+        with guard.investigation(key):
+            if notice:
+                yield _sse({"type": "notice", "message": notice})
+            async for event in agent.investigate(eid, graph_key=key, worker_id="ui-investigator", mode=mode,
+                                                 max_steps=max_steps, memory_mode=memory):
+                yield _sse(event)
 
     return EventSourceResponse(events())
 
@@ -233,6 +248,8 @@ async def drain(tenant: Tenant = None, workers: int = Query(3, ge=1, le=6),
                 mode: Literal["auto", "llm", "fallback"] = "fallback") -> EventSourceResponse:
     """Hunters drain the queue: their claims, tool calls, notices and outcomes stream as they happen."""
     key = _key(tenant)
+    if get_settings().public_demo:
+        mode, workers = "fallback", min(workers, PUBLIC_HUNTERS)
     lock = _lock(key, "drain")
     if lock.locked():
         raise HTTPException(409, "hunters are already draining this tenant's queue")
@@ -279,15 +296,19 @@ async def mutate(body: Mutation, tenant: Tenant = None) -> dict:
 
 @app.post("/api/reset")
 async def reset(tenant: Tenant = None) -> dict:
-    """Restore the tenant's graph from its pristine copy."""
+    """Restore the tenant's graph from its pristine copy, once nothing is using it."""
     key = _key(tenant)
     if _lock(key, "drain").locked():
         raise HTTPException(409, "hunters are draining this tenant's queue")
+    if refusal := guard.refuse_reset(key):
+        raise HTTPException(*refusal)
     async with _lock(key, "mutation"):
         try:
-            return await asyncio.to_thread(tenants.reset, key.split(":", 1)[1])
+            restored = await asyncio.to_thread(tenants.reset, key.split(":", 1)[1])
         except LookupError as exc:
             raise HTTPException(409, str(exc)) from None
+    guard.reset_done(key)
+    return restored
 
 
 class UI(StaticFiles):

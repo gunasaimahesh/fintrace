@@ -30,6 +30,11 @@ class Settings:
     llm_model: str
     llm_requests_per_minute: int
     llm_max_retries: int
+    public_demo: bool = False
+    demo_llm_runs_per_hour: int = 20
+    demo_llm_runs_per_visitor_per_hour: int = 5
+    demo_max_investigations: int = 4
+    demo_reset_cooldown_s: float = 30.0
 
     @property
     def llm_enabled(self) -> bool:
@@ -50,4 +55,9 @@ def get_settings() -> Settings:
         llm_model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
         llm_requests_per_minute=int(os.getenv("LLM_REQUESTS_PER_MINUTE", "0")),
         llm_max_retries=int(os.getenv("LLM_MAX_RETRIES", "4")),
+        public_demo=os.getenv("PUBLIC_DEMO", "").strip().lower() in ("1", "true", "yes"),
+        demo_llm_runs_per_hour=int(os.getenv("DEMO_LLM_RUNS_PER_HOUR", "20")),
+        demo_llm_runs_per_visitor_per_hour=int(os.getenv("DEMO_LLM_RUNS_PER_VISITOR_PER_HOUR", "5")),
+        demo_max_investigations=int(os.getenv("DEMO_MAX_INVESTIGATIONS", "4")),
+        demo_reset_cooldown_s=float(os.getenv("DEMO_RESET_COOLDOWN_S", "30")),
     )

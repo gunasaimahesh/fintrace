@@ -4,27 +4,14 @@ they were written to (demo data isolation, not access control)."""
 from __future__ import annotations
 
 import json
-import uuid
 
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.app import main, seed_data, tenants
+from backend.app import main
 from backend.app import scenario as s
-from backend.app.db import get_db
 
 pytestmark = pytest.mark.graph
-
-
-@pytest.fixture
-def small_tenant():
-    """A second tenant seeded from the small fixture, with the pristine copy resets restore."""
-    name = f"test-small-{uuid.uuid4().hex[:6]}"
-    seed_data.seed(name, reset=False, profile="small")
-    yield name
-    for key in (f"fintrace:{name}", tenants.pristine_key(name)):
-        if key in get_db().list_graphs():
-            get_db().select_graph(key).delete()
 
 
 @pytest.fixture
