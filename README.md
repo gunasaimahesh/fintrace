@@ -14,7 +14,7 @@ investigation starts from what is already known and notices when the evidence ch
 and [Track 3: Company Brain](#track-3-company-brain).
 
 - **Demo video:** *link added at submission*
-- **Live demo:** *link added at submission (shared demo graph; see [Public demo](#public-demo))*
+- **Live demo:** [app-production-1451.up.railway.app](https://app-production-1451.up.railway.app) (shared demo graph; see [Public demo](#public-demo))
 - **Repository:** https://github.com/gunasaimahesh/fintrace
 
 Everything here is demo data: the transfers are **IBM synthetic AML data**, and the people, policies, tickets and
@@ -455,6 +455,11 @@ time and everyone sees them; *Reset tenant* restores the seeded data, and waits 
 the graph. Model runs are capped per hour, overall and per visitor (past the cap an investigation uses the
 deterministic planner and says so), concurrent investigations are bounded, and hunters stay deterministic. See
 `backend/app/demo.py` and the `DEMO_*` settings in `.env.example`.
+
+It runs on Railway as two services: the same `falkordb/falkordb:v4.22.1` image with a volume and no public
+address, and the app built from this repository's `Dockerfile` (`railway.json`), reaching FalkorDB over Railway's
+private network. The header shows which planner is available; without a model key, investigations use the
+deterministic planner.
 
 ## Limitations
 
