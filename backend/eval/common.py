@@ -23,6 +23,8 @@ EVAL_DIR = Path(__file__).parent
 RESULTS = EVAL_DIR / "results.json"
 RUNS = EVAL_DIR / "runs"
 ROOT = EVAL_DIR.parent.parent
+OUTPUTS = ("backend/eval/results.json", "backend/eval/runs", "backend/eval/acceptance.json",
+           "backend/tests/checkpoint_report.json")
 
 
 def now() -> str:
@@ -67,7 +69,8 @@ def provenance(source: str) -> dict:
             "nodes": graph.ro_query("MATCH (n) RETURN count(n)").result_set[0][0],
             "edges": graph.ro_query("MATCH ()-[r]->() RETURN count(r)").result_set[0][0],
             "commit": _git("rev-parse", "--short", "HEAD"),
-            "uncommitted_backend_changes": bool(_git("status", "--porcelain", "--", "backend"))}
+            "uncommitted_backend_changes": bool(_git("status", "--porcelain", "--", "backend",
+                                                     *(f":(exclude){path}" for path in OUTPUTS)))}
 
 
 def stats(values: list[float | int | None]) -> dict | None:
