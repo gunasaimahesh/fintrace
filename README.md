@@ -346,8 +346,8 @@ is still to run):
 | Condition | Detection | Positives | Negatives | Unknown IDs | Out of budget | Demo | Tool calls | Verdict at call | LLM requests | LLM tokens | Failures |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | Cold: the agent on a fresh graph | 32/32 | 14/14 | 18/18 | 4/4 | 4/4 | 4/4 | 3 (3–11) | 3 | 2 (2–10) | 9,075 (8,207–69,178) | 1 (1 fell back) |
-| Warm: after learning the NovaPay playbook | 32/32 | 14/14 | 18/18 | – | – | – | 4 (3–12) | 3 (3–4) | 2 (1–10) | 11,532 (5,543–66,404) | 0 |
-| Revisit: same subject, right after cold | 16/16 | 7/7 | 9/9 | – | – | 1/1 | 2 (2–7) | 2 | 1 (1–6) | 5,160 (4,303–45,376) | 0 |
+| Warm: after learning the NovaPay playbook | 32/32 | 14/14 | 18/18 | – | – | – | 4 (3–12) | 3 (3–4) | 2 (1–10) | 11,532.5 (5,543–66,404) | 0 |
+| Revisit: same subject, right after cold | 16/16 | 7/7 | 9/9 | – | – | 1/1 | 2 (2–7) | 2 | 1 (1–6) | 5,160.5 (4,303–45,376) | 0 |
 
 `gemini-3.1-flash-lite`, temperature 0; medians (ranges) over the detection runs. The one failure is a demo run
 that hit the daily quota mid-investigation and was finished by the deterministic planner (its verdict was right).
@@ -356,12 +356,12 @@ Where the playbook applied, it cut the model's work every time:
 
 | Case | Correct | Tool calls (cold → warm) | LLM requests | LLM tokens |
 |---|---|---|---|---|
-| c01 | 2/2 | 10 → 11 | 8 → 2 | 54,962 → 18,665 |
-| c05 | 2/2 | 10 → 12 | 9 → 2 | 59,400 → 24,380 |
-| c14 | 2/2 | 3 → 4 | 2 → 1 | 8,656 → 5,982 |
-| c15 | 2/2 | 3 → 4 | 2 → 1 | 8,358 → 5,549 |
+| c01 | 2/2 | 9.5 → 11 | 8.5 → 2 | 54,962.5 → 18,665 |
+| c05 | 2/2 | 10 → 11.5 | 9 → 2.5 | 59,400 → 24,380.5 |
+| c14 | 2/2 | 3 → 4 | 2 → 1 | 8,656.5 → 5,981.5 |
+| c15 | 2/2 | 3 → 4 | 2 → 1 | 8,358.5 → 5,549 |
 
-It costs about one extra tool call (the playbook re-checks a step the model skips) and saves most of the model's
+It costs one to one and a half extra tool calls (the playbook re-checks a step the model skips) and saves most of the model's
 reasoning turns. With the deterministic planner the playbook runs the same tools as cold, by construction.
 
 **Deterministic planner** (3 repeats):
@@ -371,7 +371,7 @@ reasoning turns. With the deterministic planner the playbook runs the same tools
 | Cold: the agent on a fresh graph | 48/48 | 21/21 | 27/27 | 6/6 | 6/6 | 6/6 | 4 (3–11) | 4 (3–4) | 0 |
 | Warm: after learning the NovaPay playbook | 48/48 | 21/21 | 27/27 | – | – | – | 4 (3–11) | 4 (3–4) | 0 |
 | Revisit: same subject, right after cold | 48/48 | 21/21 | 27/27 | – | – | 6/6 | 2 | 2 | 0 |
-| Baseline: one-entity lookups, same budget | 36/48 | 18/21 | 18/27 | 6/6 | 6/6 | 0/6 | 8 (1–14) | 7 (1–12) | 0 |
+| Baseline: one-entity lookups, same budget | 36/48 | 18/21 | 18/27 | 6/6 | 6/6 | 0/6 | 8.5 (1–14) | 7 (1–12) | 0 |
 
 Every baseline miss is an INSUFFICIENT because the 14 calls ran out before the search was complete (c02, c10, c11,
 c14 and both demo subjects, on every repeat), never a wrong verdict. One scoring rule changed after we saw a

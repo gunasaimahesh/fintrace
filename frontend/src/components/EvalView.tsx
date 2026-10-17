@@ -19,14 +19,17 @@ const GROUPS = [
 const th = "px-2 py-1.5 text-left font-medium text-zinc-500";
 const td = "px-2 py-1.5 align-top";
 
+// At least one decimal, so a median between two runs shows as 8.5 rather than rounding to a run count.
+const num = (v: number, digits: number) => v.toLocaleString(undefined, { maximumFractionDigits: Math.max(digits, 1) });
+
 function spread(s: Spread, digits = 0) {
   if (!s) return "—";
-  const f = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: digits });
+  const f = (v: number) => num(v, digits);
   return s.min === s.max ? f(s.median) : `${f(s.median)} (${f(s.min)}–${f(s.max)})`;
 }
 
 function SpreadCell({ s, digits = 0 }: { s: Spread; digits?: number }) {
-  const f = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: digits });
+  const f = (v: number) => num(v, digits);
   return (
     <td className={`${td} whitespace-nowrap font-mono`}>
       {s ? f(s.median) : <span className="text-zinc-600">—</span>}

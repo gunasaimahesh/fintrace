@@ -22,10 +22,17 @@ def _score(group: dict | None) -> str:
     return f"{group['correct']}/{group['runs']}" if group else "–"
 
 
+def _num(value: float, digits: int = 0) -> str:
+    """Whole numbers without decimals; a median between two runs keeps its half (8.5, not a rounded 8)."""
+    if digits == 0 and float(value).is_integer():
+        return f"{value:,.0f}"
+    return f"{value:,.{max(digits, 1)}f}"
+
+
 def _spread(s: dict | None, digits: int = 0) -> str:
     if not s:
         return "–"
-    f = (lambda v: f"{v:,.{digits}f}")
+    f = (lambda v: _num(v, digits))
     return f(s["median"]) if s["min"] == s["max"] else f"{f(s['median'])} ({f(s['min'])}–{f(s['max'])})"
 
 
@@ -58,7 +65,7 @@ def playbook(result: dict) -> str:
     lines = ["| Case | Correct | Tool calls (cold → warm) | LLM requests | LLM tokens |", "|---|---|---|---|---|"]
     for case_id in warm["playbook_used_on"]:
         d = warm["cases"][case_id]
-        cell = (lambda key: f"{d[key]['cold']:,.0f} → {d[key]['warm']:,.0f}" if key in d else "–")
+        cell = (lambda key: f"{_num(d[key]['cold'])} → {_num(d[key]['warm'])}" if key in d else "–")
         lines.append(f"| {case_id} | {d['correct']} | {cell('tool_calls')} | {cell('llm_requests')} | "
                      f"{cell('llm_tokens')} |")
     return "\n".join(lines)
