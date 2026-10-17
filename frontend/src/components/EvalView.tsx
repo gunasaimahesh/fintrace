@@ -420,8 +420,9 @@ export function EvalView({ active }: { active: boolean }) {
         }
       >
         <p className="text-xs leading-relaxed text-zinc-400">
-          Starting from one member of each labelled laundering instance in the IBM dataset, how many of its other members does each strategy surface within{" "}
-          {retrieval?.config.hops ?? 4} hops? <Command text="python -m backend.eval.retrieval" />
+          Starting from one member of each labelled laundering instance in the IBM dataset, how many of its other members does each strategy surface? The
+          graph strategy follows money up to {retrieval?.config.hops ?? 4} hops each way plus the account's community (no hop limit); lookups go breadth-first
+          up to the same {retrieval?.config.hops ?? 4} hops. <Command text="python -m backend.eval.retrieval" />
         </p>
         {retrieval ? <Retrieval result={retrieval} /> : <Empty>No retrieval runs saved yet.</Empty>}
       </Section>

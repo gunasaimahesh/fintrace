@@ -38,7 +38,7 @@ open http://localhost:8000            # or visit it in a browser
 5. **Eval** tab: every measured result below, read from `backend/eval/results.json`.
 
 ```bash
-docker compose exec app python -m pytest backend/tests -q     # 108 tests, about a minute
+docker compose exec app python -m pytest backend/tests -q     # 126 tests, about a minute
 ```
 
 ## How it works
@@ -246,6 +246,7 @@ sanctioned account.
 | Routes follow money in its direction; a device bridge costs two hops; shared IPs and reversed money are only association | `test_eligible_routes_keep_direction_and_a_device_bridge_costs_two_hops`, `test_a_valid_route_is_found_despite_a_shorter_ip_path`, `test_a_shared_ip_or_money_flowing_back_is_only_association` |
 | CLEAR needs a complete search (to the prescribed depth of 6, or everything reachable); a capped or timed-out search is INSUFFICIENT; a sanctioned account beyond six hops gets a qualified CLEAR | `test_clear_needs_the_prescribed_depth_or_an_exhausted_frontier`, `test_a_capped_or_timed_out_search_is_insufficient_not_clear`, `test_a_sanctioned_account_beyond_six_hops_gets_a_qualified_clear` |
 | The model's statements are bound to facts or rejected; swapping in another number, subject or approval is caught | `test_model_statements_are_bound_to_facts_or_rejected`, `test_swapping_monthly_volume_for_exposure_is_rejected`, `test_another_subjects_path_length_is_rejected`, `test_another_approvals_status_is_rejected` |
+| Only facts about the alert's own entity decide its verdict: a route or a complete search the model ran from another account is reported as context, and a sanctioned subject is SUSPICIOUS as direct exposure, never CLEAR | `test_a_route_the_model_found_from_another_account_does_not_decide_the_subject`, `test_a_complete_search_the_model_ran_from_another_account_does_not_clear_the_subject`, `test_a_sanctioned_subject_is_suspicious_without_a_route_and_is_not_put_up_for_freezing` |
 | An unknown ID stops after one call instead of guessing | `test_an_unknown_id_stops_after_one_call` |
 | The agent and Cursor use the same 11 tools over MCP | `test_the_stdio_server_lists_the_eleven_tools_and_answers` |
 | Nothing in the graph, tool schemas or prompt gives the answer away | `test_no_ground_truth_in_graph`, `test_tool_schemas_and_the_prompt_name_nothing_from_the_scenario` |
@@ -263,7 +264,10 @@ touched. On recall, a route goes STALE only when something it depends on changed
 flow, ring, brokers) goes STALE on any change (`test_a_clear_finding_goes_stale_on_any_change`). The re-run fact
 SUPERSEDES the stale one. Facts are written CURRENT only if the graph is still at the revision the investigation
 started from (`test_a_change_during_the_investigation_is_not_cached`), and a sign-off is refused if the evidence
-under the request changed (`test_sign_off_is_refused_once_the_evidence_changed`).
+under the request changed (`test_sign_off_is_refused_once_the_evidence_changed`). The sign-off commits in one
+write that requires the graph to still be at the revision whose evidence it checked, so neither a change during
+the check nor a second approver racing it can freeze on stale evidence or twice
+(`test_evidence_removed_while_sign_off_checks_it_freezes_nothing`, `test_racing_sign_offs_approve_once`).
 
 **Procedural memory: playbooks.** When a human approves a freeze, the run's tool steps become a `:Playbook` with
 each argument replaced by the role it played (the subject, the sanctioned end of the route, the accounts around
@@ -277,9 +281,14 @@ investigation, it applied to four held-out cases, and with the real model it cut
 [Evaluation](#evaluation)).
 
 **Hunters coordinate only through graph state.** Alerts go PENDING → CLAIMED → COMPLETED | FAILED. A claim is one
-write that stamps a fresh token, a lease and an `:Attempt`; completing commits only if the alert still carries
-that token, so a hunter whose lease lapsed cannot commit. A sweeper returns expired claims and retries failures up
-to three attempts. Three hunters drain the queue (`test_three_hunters_drain_the_queue_without_losing_or_duplicating_work`);
+write that stamps a fresh token, a lease and an `:Attempt`; renewing, completing or failing commits only if the
+alert still carries that token and the lease has not run out
+(`test_a_lapsed_lease_cannot_renew_complete_or_fail_even_before_the_sweep`). The hunter's case, facts, case
+merges and freeze request are written under the same check, in the same query, so a hunter whose claim passed to
+another publishes nothing but its own episode, kept as a record and marked `claim_lost`, and it stops once it
+notices
+(`test_a_hunter_whose_claim_passed_on_mid_run_publishes_nothing_and_the_new_owner_finishes`). A sweeper returns
+expired claims and retries failures up to three attempts. Three hunters drain the queue (`test_three_hunters_drain_the_queue_without_losing_or_duplicating_work`);
 a later hunter reuses an earlier hunter's route and defers to its pending freeze instead of filing another
 (`test_a_later_hunter_reuses_an_earlier_hunters_route_and_defers_to_its_freeze`); cases merge on a shared
 high-risk entity (`test_cases_merge_only_on_a_high_risk_entity_or_two_shared_entities`). Under 20 claimants with
@@ -320,7 +329,7 @@ actual outcomes, per-run measurements and failures, and every run is logged in `
 below are generated by `python -m backend.eval.report`. Controlled cases and IBM retrieval are separate
 measurements and are reported separately. In a local checkout, `python -m backend.eval.acceptance` runs the whole
 acceptance checklist (each row tied to named tests, saved results or repository checks) and records the evidence
-in `backend/eval/acceptance.json`.
+in `backend/eval/acceptance.json`, with the commit it ran at.
 
 ### Controlled cases
 
@@ -331,8 +340,11 @@ merchant, a benign shared device, an isolated new account, a device bridge to a 
 than six hops). Plus two unknown IDs, two runs starved of budget, and the two demo subjects. A verdict counts only with
 the expected route (target and hop count) for suspicious cases, and a complete search for clear ones.
 
-- **Cold:** the agent on a fresh copy of the graph. **Warm:** the same, on a copy holding one playbook learned
-  from the approved NovaPay investigation (not a case here); the subject's own findings are never read.
+- **Cold:** the agent on a fresh copy of the graph. It is guided: its prompt spells out the procedure (search for
+  eligible routes, then follow the money, bound the exposure, check rings, governance and collateral, and file).
+  **Warm:** the same, on a copy holding one playbook learned from the approved NovaPay investigation (not a case
+  here); the subject's own findings are never read. What the playbook adds beyond the prompt is the concrete
+  calls, with arguments bound to this alert's entities by the roles they play, run before the model's first turn.
   **Revisit:** the same subject again, right after the cold run. **Baseline:** one entity per call
   (`lookup_entity`, 25 neighbours a page) with the same 14-call budget and verdict rule, followed breadth-first.
 
@@ -372,7 +384,12 @@ provider latency and our 12-requests-a-minute limit, fell on 11 of the 12 runs a
 43.9 s cold, 64.9 s warm). With the deterministic planner the playbook runs the same tools as cold, by
 construction.
 
-**Deterministic planner** (3 repeats):
+The LLM runs predate `bf9e615`, which scopes verdicts to the subject's own facts, treats a sanctioned subject as
+direct exposure, and fences sign-off and hunters' writes. No saved run explored an account other than its subject
+or had a sanctioned subject, so none of their verdicts would change, and the prompt and tool outputs the model
+sees are unchanged.
+
+**Deterministic planner** (3 repeats, on `bf9e615`):
 
 | Condition | Detection | Positives | Negatives | Unknown IDs | Out of budget | Demo | Tool calls | Verdict at call | Failures |
 |---|---|---|---|---|---|---|---|---|---|
@@ -390,8 +407,10 @@ and route (`run_eval.SCORING`, recorded in the results).
 ### IBM retrieval
 
 Starting from one member of each of the 370 labelled laundering instances in the IBM data (the member with the
-smallest `sha256(instance_id + account_id)`), how many of the instance's other members does each strategy surface
-within four hops? Recall counts only account IDs the planner actually received, after each tool's output limits.
+smallest `sha256(instance_id + account_id)`), how many of the instance's other members does each strategy surface?
+The graph strategy follows money in time order up to four hops each way and adds the account's community
+(`detect_ring`, which no hop limit bounds); the lookup strategies list counterparties breadth-first up to four
+hops. Recall counts only account IDs the planner actually received, after each tool's output limits.
 
 ```bash
 python -m backend.eval.retrieval
@@ -428,8 +447,8 @@ python -m backend.eval.contention --runs 5
 
 5 runs of 20 hunters racing for 200 alerts (0.3 s leases, 8% of claims crash, 6% stall past their lease, 6% fail):
 **0 invariant violations** (no alert lost, none completed twice, attempt numbers unbroken), 69 late commits
-refused and 0 accepted, 101 crashed claims recovered, 238.6 (192.5–240.7) alerts/s; final statuses: 992
-completed, 8 failed after three attempts.
+refused and 0 accepted, 102 crashed claims recovered, 235.1 (174.1–239.9) alerts/s; final statuses: 993
+completed, 7 failed after three attempts. Measured on `bf9e615`, with the lease checks and claim fencing.
 
 ## Running it
 
@@ -459,8 +478,10 @@ agent can call the same 11 tools (`python -m backend.app.mcp_server`; set `FINTR
 ### Public demo
 
 The live demo runs with `PUBLIC_DEMO=1`. Every visitor shares each tenant's graph, so changes are applied one at a
-time and everyone sees them; *Reset tenant* restores the seeded data, and waits until no investigation is using
-the graph. Model runs are capped per hour, overall and per visitor (past the cap an investigation uses the
+time and everyone sees them; *Reset tenant* restores the seeded data. It waits until no investigation or change is
+using the graph, and until it is done the tenant refuses new investigations, drains, changes and approvals
+(`test_a_reset_behind_a_mutation_holds_off_new_work_until_it_ends`). Model investigations are capped per hour, overall and per visitor (a count of investigations, not of tokens or
+spend: one can make several model requests; past the cap an investigation uses the
 deterministic planner and says so), concurrent investigations are bounded, and hunters stay deterministic. See
 `backend/app/demo.py` and the `DEMO_*` settings in `.env.example`.
 
@@ -482,8 +503,13 @@ deterministic planner.
 
 ## FalkorDB issues we hit
 
-Found while building (filed upstream; links added at submission):
+Found while building (reports drafted for upstream; links added once filed):
 
+- A `WHERE` on a `WITH` right after an `OPTIONAL MATCH` is planned inside the optional match (v4.22.1), so a
+  failing test keeps the row with the variable set to NULL instead of dropping it:
+  `OPTIONAL MATCH (m:Meta) WITH m WHERE m.rev = 5 CREATE (:Written)` writes even when `m.rev` is 1. FinTrace's
+  revision-fenced sign-off filters a projected value instead (`WITH coalesce(m.rev, 0) AS at WHERE at = $rev`),
+  which is dropped as expected.
 - `algo.maxFlow` rejects relationship types with parallel edges between the same pair of nodes (undocumented),
   so FinTrace keeps one `FLOWS_TO` summary per account pair.
 - `algo.maxFlow`'s capacity-range error says 2^32, but capacities spanning `[1, 2^32 − 1]` already fail
