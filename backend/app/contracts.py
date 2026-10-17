@@ -22,6 +22,8 @@ from typing import Any
 PRESCRIBED_DEPTH = 6
 MAX_ATTEMPTS = 3
 LEASE_SECONDS = 120
+MAX_CAPACITY = 2**31 - 1
+VERDICT_PREDICATES = ("eligible_route_hops", "no_eligible_route")
 
 
 class AlertStatus(StrEnum):

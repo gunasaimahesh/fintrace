@@ -60,7 +60,7 @@ def explore(depth: int, routes: tuple = (), search: dict | None = None, flagged:
 
 
 def verdict_of(*results: dict) -> Verdict:
-    return gr.derive(gr.extract_facts(list(results)), unknown=False, investigated=True)[1]
+    return gr.derive(gr.extract_facts(list(results)), unknown=False)[1]
 
 
 def run_facts() -> list:
@@ -180,7 +180,7 @@ def test_a_shared_ip_or_money_flowing_back_is_only_association():
 
 def render(*results: dict) -> list[str]:
     facts = gr.extract_facts(list(results))
-    state, verdict, _ = gr.derive(facts, unknown=False, investigated=True)
+    state, verdict, _ = gr.derive(facts, unknown=False)
     return [s.text for s in gr.render(NOVA, state, verdict, facts, ledger())]
 
 
@@ -196,28 +196,46 @@ def test_the_card_states_the_scope_behind_clear_and_insufficient():
 
 def test_every_statement_cites_facts_and_unknown_entities_say_nothing_else():
     facts = run_facts()
-    state, verdict, basis = gr.derive(facts, unknown=False, investigated=True)
+    state, verdict, basis = gr.derive(facts, unknown=False)
     statements = gr.render(NOVA, state, verdict, facts, ledger())
     assert (state, verdict, basis) == (AnswerState.ANSWERED_WITH_PATH, Verdict.SUSPICIOUS, ["F3"])
     assert all(s.facts and set(s.facts) <= {f.id for f in facts} for s in statements)
     unknown = gr.extract_facts([envelope("resolve_entity", {"entity_id": "acct-ghost-999", "found": False})])
-    state, verdict, _ = gr.derive(unknown, unknown=True, investigated=False)
+    state, verdict, _ = gr.derive(unknown, unknown=True)
     assert [s.text for s in gr.render("acct-ghost-999", state, verdict, unknown, EvidenceLedger())] == [
         "acct-ghost-999 is not in the graph, so nothing else was queried."]
 
 
-def test_memory_answers_cite_the_remembered_fact_and_what_changed():
-    fact = {"id": "fact-1", "claim": f"{NOVA} reaches {VORTEX} through {DEVICE}", "verdict": "SUSPICIOUS",
-            "episode_id": "ep-1", "evidence_ids": [DEVICE], "changed_evidence": [], "status": "CURRENT"}
-    current = gr.extract_facts([envelope("recall_memory", {"entity_id": NOVA, "facts": [fact]})])
-    state, verdict, _ = gr.derive(current, unknown=False, investigated=False)
-    [text] = [s.text for s in gr.render(NOVA, state, verdict, current, ledger())]
-    assert (state, verdict) == (AnswerState.ANSWERED_FROM_MEMORY, Verdict.SUSPICIOUS)
-    assert text.startswith(f"Answered from memory: {NOVA} reaches {VORTEX}") and f"({DEVICE}) has changed since" in text
+def remembered(predicate: str, status: str = "CURRENT", **fields) -> dict:
+    base = {"id": f"fact-{predicate}", "kind": "sanctions_exposure", "subject": NOVA, "predicate": predicate,
+            "object": VORTEX, "value": 5, "unit": "hops", "scope": {"path": ROUTE["path"],
+                                                                     "identity_hops": ROUTE["identity_hops"]},
+            "depends_on": ROUTE["path"]["nodes"], "aggregate": False, "valid_rev": 3, "episode_id": "ep-1",
+            "claim": "", "rerun": {"tool": "explore_neighborhood", "args": {"entity_id": NOVA, "depth": 6}},
+            "status": status, "why_stale": None, "changed": []}
+    return {**base, **fields}
 
-    stale = gr.extract_facts([envelope("recall_memory", {"entity_id": NOVA, "facts": [
-        {**fact, "status": "STALE", "changed_evidence": [VOLKOV]}]}), explore(6, (ROUTE,))])
-    state, verdict, _ = gr.derive(stale, unknown=False, investigated=True)
-    texts = [s.text for s in gr.render(NOVA, state, verdict, stale, ledger())]
-    assert state == AnswerState.MEMORY_STALE_REINVESTIGATED
-    assert texts[0].startswith(f"Memory held an earlier SUSPICIOUS finding, but {VOLKOV} changed")
+
+def recalled(*facts: dict) -> dict:
+    return envelope("recall_memory", {"entity_id": NOVA, "facts": list(facts), "approvals": []})
+
+
+def test_a_remembered_route_answers_from_memory_and_renders_like_a_fresh_one():
+    facts = gr.extract_facts([recalled(remembered("eligible_route_hops"))], rev=4)
+    state, verdict, basis = gr.derive(facts, unknown=False)
+    texts = [s.text for s in gr.render(NOVA, state, verdict, facts, ledger())]
+    assert (state, verdict, basis) == (AnswerState.ANSWERED_FROM_MEMORY, Verdict.SUSPICIOUS, ["F1"])
+    assert facts[0].evidence_rev == 3 and facts[0].source.tool == "recall_memory"
+    assert texts[0] == ("From memory: 1 finding recorded by ep-1 still holds, because nothing it depends on has "
+                        "changed since graph revision 3.")
+    assert texts[1].startswith("NovaPay Digital Goods (merch-nova-pay) has an eligible route to sanctioned")
+
+
+def test_stale_memory_says_what_changed_and_fresh_facts_decide():
+    why = "acct-volkov-clearing changed after graph revision 3"
+    facts = gr.extract_facts([recalled(remembered("eligible_route_hops", "STALE", why_stale=why)),
+                              explore(6, (ROUTE,))])
+    state, verdict, basis = gr.derive(facts, unknown=False)
+    texts = [s.text for s in gr.render(NOVA, state, verdict, facts, ledger())]
+    assert (state, verdict, basis) == (AnswerState.MEMORY_STALE_REINVESTIGATED, Verdict.SUSPICIOUS, ["F2"])
+    assert texts[0] == f"The remembered route went stale ({why}), so it could not be reused."

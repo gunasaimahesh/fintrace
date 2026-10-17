@@ -71,6 +71,13 @@ class FakeLLM:
         return SimpleNamespace(choices=[SimpleNamespace(message=turn(request) if callable(turn) else turn)])
 
 
+@pytest.fixture(autouse=True)
+def forget(scratch_key):
+    """Each test starts cold: memory an earlier test wrote to the shared graph is removed."""
+    get_db().select_graph(scratch_key).query(
+        "MATCH (n) WHERE n:SemanticFact OR n:Episode OR n:Step DETACH DELETE n")
+
+
 @pytest.fixture
 def fake_llm(monkeypatch):
     settings = dataclasses.replace(get_settings(), llm_api_key="test-key", llm_model="fake-model")

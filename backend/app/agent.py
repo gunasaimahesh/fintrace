@@ -24,9 +24,10 @@ from mcp import Client
 from mcp.types import CallToolResult
 
 from backend.app import guardrails as gr
+from backend.app import memory
 from backend.app import queries as q
 from backend.app.config import Settings, get_settings
-from backend.app.contracts import PRESCRIBED_DEPTH, current_rev
+from backend.app.contracts import PRESCRIBED_DEPTH, VERDICT_PREDICATES, current_rev
 from backend.app.db import get_db
 from backend.app.db import graph_key as tenant_graph_key
 from backend.app.guardrails import EvidenceLedger, Verdict
@@ -36,8 +37,6 @@ MAX_STEPS = 12
 RESULT_CHARS = 12_000
 RING_TARGET_LIMIT = 25
 BROKER_SCOPE_LIMIT = 50
-INVESTIGATIVE = {"explore_neighborhood", "trace_money_flow", "path_between", "detect_ring", "find_brokers",
-                 "exposure_flow", "trace_governance", "freeze_impact"}
 
 Mode = Literal["auto", "llm", "fallback"]
 Emit = Callable[[dict], Awaitable[None]]
@@ -49,7 +48,9 @@ employees, policies, tickets and approval decisions. The alert entity has alread
 checked: those results are in the alert message.
 
 Rules:
-- If memory holds a CURRENT finding, answer from it without more calls. If a finding is STALE, re-investigate.
+- Memory: facts that recall_memory marks CURRENT still hold, so use them without re-running their tools. Each \
+STALE fact says why, and under rerun gives the call that produced it: repeat that call. If a route or a finding of \
+no route is STALE, investigate again from the start.
 - Exposure means money from the alert entity could reach a sanctioned entity. explore_neighborhood reports \
 these as eligible_routes and says how much of the graph each search covered. Anything reached only by ignoring \
 transfer direction, or through a shared IP, is association, not exposure.
@@ -244,12 +245,27 @@ async def _converse(inv: Investigation, settings: Settings, llm: Any) -> dict:
     raise RuntimeError("the model kept calling tools without answering")
 
 
+async def refresh_stale(inv: Investigation, remembered: dict) -> None:
+    """Repeat only the calls behind stale remembered facts; a stale broker ranking uses the refreshed ring."""
+    calls: dict[str, tuple[dict, str]] = {}
+    for f in remembered["facts"]:
+        if f["status"] == "STALE":
+            calls.setdefault(json.dumps(f["rerun"], sort_keys=True), (f["rerun"], f["why_stale"]))
+    for call, why in calls.values():
+        args = dict(call["args"])
+        ring = inv.latest("detect_ring")
+        if call["tool"] == "find_brokers" and ring:
+            args["community_ids"] = [m["id"] for m in ring["members"]]
+        await inv.ensure(call["tool"], args, f"Re-run {call['tool']}: the remembered result went stale ({why}).")
+
+
 async def fallback_plan(inv: Investigation) -> None:
     """A fixed investigative order: widen, then follow money, ring, governance and collateral to a freeze request."""
     e = inv.entity_id
-    memory = inv.latest("recall_memory") or {"facts": []}
-    statuses = {f["status"] for f in memory["facts"]}
-    if "CURRENT" in statuses and "STALE" not in statuses:
+    remembered = inv.latest("recall_memory") or {"facts": []}
+    verdicts = [f for f in remembered["facts"] if f["predicate"] in VERDICT_PREDICATES]
+    if verdicts and all(f["status"] == "CURRENT" for f in verdicts):
+        await refresh_stale(inv, remembered)
         return
     near = await inv.ensure("explore_neighborhood", {"entity_id": e, "depth": 1},
                             "Start with direct counterparties and devices.")
@@ -337,8 +353,7 @@ def finalize(inv: Investigation, answer: dict | None, model: str | None, started
              statuses: dict[str, str] | None = None) -> dict:
     facts = gr.extract_facts(inv.results, inv.rev)
     facts += gr.status_read_facts(facts, statuses or {}, inv.rev)
-    investigated = any(r["ok"] and r["tool"] in INVESTIGATIVE for r in inv.results)
-    state, verdict, basis = gr.derive(facts, inv.unknown, investigated)
+    state, verdict, basis = gr.derive(facts, inv.unknown)
     statements = gr.render(inv.entity_id, state, verdict, facts, inv.ledger)
 
     request = inv.latest("request_action")
@@ -381,15 +396,18 @@ def finalize(inv: Investigation, answer: dict | None, model: str | None, started
 
 
 async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: int, mode: Mode,
-               case_id: str | None) -> None:
+               case_id: str | None, use_memory: bool) -> None:
     settings = get_settings()
     use_llm = mode == "llm" or (mode == "auto" and settings.llm_enabled)
     started = time.perf_counter()
     graph = get_db().select_graph(key)
+    case_id = case_id or f"case-{uuid.uuid4().hex[:8]}"
+    start_rev = await asyncio.to_thread(current_rev, graph)
+    if use_memory:
+        await asyncio.to_thread(memory.open_case, graph, case_id, entity_id, worker_id)
     async with Client(build_server(key, worker_id)) as client:
-        inv = Investigation(entity_id=entity_id, case_id=case_id or f"case-{uuid.uuid4().hex[:8]}",
-                            max_steps=max_steps, worker_id=worker_id, planner="llm" if use_llm else "fallback",
-                            client=client, emit=emit, rev=await asyncio.to_thread(current_rev, graph))
+        inv = Investigation(entity_id=entity_id, case_id=case_id, max_steps=max_steps, worker_id=worker_id,
+                            planner="llm" if use_llm else "fallback", client=client, emit=emit, rev=start_rev)
         model = settings.llm_model if use_llm else None
         await emit({"type": "run_started", "entity_id": entity_id, "case_id": inv.case_id, "graph": key,
                     "planner": inv.planner, "model": model, "max_steps": max_steps, "worker_id": worker_id})
@@ -399,7 +417,8 @@ async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: 
         if not resolved["ok"]:
             await inv.notice(f"Could not resolve {entity_id}: {resolved['error']}")
         elif not inv.unknown:
-            await inv.call("recall_memory", {"entity_id": entity_id}, "Check memory for earlier findings.")
+            if use_memory:
+                await inv.call("recall_memory", {"entity_id": entity_id}, "Check memory for earlier findings.")
             if use_llm and not settings.llm_enabled:
                 await inv.notice("No LLM is configured (set LLM_API_KEY in .env), so the deterministic planner runs.")
                 use_llm, model, inv.planner = False, None, "fallback"
@@ -415,19 +434,31 @@ async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: 
                 await fallback_plan(inv)
         requests = [r["data"]["request_id"] for r in inv.results if r["ok"] and r["tool"] == "request_action"]
         statuses = await asyncio.to_thread(q.approval_statuses, graph, requests) if requests else {}
-        await emit(finalize(inv, answer, model, started, statuses))
+        final = finalize(inv, answer, model, started, statuses)
+        final["memory"] = None
+        if use_memory:
+            request = inv.latest("request_action")
+            if request:
+                basis = [f for f in final["facts"] if f["id"] in final["verdict_basis"]]
+                await asyncio.to_thread(memory.attach_request_evidence, graph, request["request_id"], start_rev,
+                                        request["target_ids"] + [d for f in basis for d in f["depends_on"]])
+            final["memory"] = await asyncio.to_thread(
+                memory.persist_run, graph, case_id=case_id, entity_id=entity_id, worker_id=worker_id,
+                planner=inv.planner, model=model, start_rev=start_rev, results=inv.results, final=final)
+        await emit(final)
 
 
 async def investigate(entity_id: str, *, graph_key: str | None = None, worker_id: str = "investigator",
-                      max_steps: int = MAX_STEPS, mode: Mode = "auto", case_id: str | None = None
-                      ) -> AsyncIterator[dict]:
+                      max_steps: int = MAX_STEPS, mode: Mode = "auto", case_id: str | None = None,
+                      use_memory: bool = True) -> AsyncIterator[dict]:
     """Stream investigation events: run_started, tool_call, tool_result, notice, then final (or error)."""
     key = graph_key or tenant_graph_key(get_settings().default_tenant)
     queue: asyncio.Queue[dict | None] = asyncio.Queue()
 
     async def produce() -> None:
         try:
-            await _run(queue.put, entity_id.strip(), key, worker_id, max(1, min(max_steps, MAX_STEPS)), mode, case_id)
+            await _run(queue.put, entity_id.strip(), key, worker_id, max(1, min(max_steps, MAX_STEPS)), mode, case_id,
+                       use_memory)
         except Exception as exc:
             await queue.put({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
         finally:

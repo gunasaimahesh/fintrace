@@ -58,6 +58,10 @@ MODEL_PREDICATES = {
     "waiver_compliance": "subject: decision, object: policy, value: BREACH or COMPLIANT",
     "action_status": "subject: approval request, value: status",
 }
+FINDING_NAMES = {"eligible_route_hops": "route", "no_eligible_route": "finding of no route",
+                 "sanctioned_within_reach": "association", "money_trail": "money trail",
+                 "max_flow_capacity": "max-flow bound", "ring_size": "ring", "top_broker": "broker ranking",
+                 "waiver_compliance": "waiver check"}
 UNIT_FAMILY = {"eligible_route_hops": "hops", "no_eligible_route": "hops", "sanctioned_within_reach": "hops",
                "transfer_amount": "USD",
                "max_flow_capacity": "USD", "monthly_volume": "USD", "policy_threshold": "USD", "ring_size": "members"}
@@ -197,9 +201,10 @@ def extract_facts(results: list[dict], rev: int | None = None) -> list[Fact]:
 
     def add(kind: FactKind, subject: str, predicate: str, obj: str | None, value: Any, unit: str | None,
             source: Source, scope: dict | None = None, depends_on: list[str] | None = None,
-            aggregate: bool = False) -> Fact:
+            aggregate: bool = False, evidence_rev: int | None = None) -> Fact:
         fact = Fact(id=f"F{len(facts) + 1}", kind=kind.value, subject=subject, predicate=predicate, object=obj,
-                    value=value, unit=unit, source=source, scope=scope or {}, evidence_rev=rev,
+                    value=value, unit=unit, source=source, scope=scope or {},
+                    evidence_rev=rev if evidence_rev is None else evidence_rev,
                     depends_on=list(dict.fromkeys(depends_on or [subject])), aggregate=aggregate)
         facts.append(fact)
         return fact
@@ -223,9 +228,20 @@ def extract_facts(results: list[dict], rev: int | None = None) -> list[Fact]:
 
         elif tool == "recall_memory":
             for i, mf in enumerate(d["facts"]):
-                add(FactKind(mf.get("kind") or FactKind.SANCTIONS_EXPOSURE), d["entity_id"], "memory_finding",
-                    mf["id"], mf["verdict"], None, src(f"data.facts[{i}]"),
-                    scope={k: mf.get(k) for k in ("status", "claim", "episode_id", "evidence_ids", "changed_evidence")})
+                if mf["status"] == "CURRENT":
+                    memo = {"fact_id": mf["id"], "episode_id": mf["episode_id"], "valid_rev": mf["valid_rev"]}
+                    add(FactKind(mf["kind"]), mf["subject"], mf["predicate"], mf["object"], mf["value"], mf["unit"],
+                        src(f"data.facts[{i}]"), scope={**mf["scope"], "memory": memo},
+                        depends_on=mf["depends_on"], aggregate=mf["aggregate"], evidence_rev=mf["valid_rev"])
+                else:
+                    add(FactKind(mf["kind"]), d["entity_id"], "memory_stale", mf["id"], mf["predicate"], None,
+                        src(f"data.facts[{i}]"), evidence_rev=mf["valid_rev"],
+                        scope={"claim": mf["claim"], "why": mf["why_stale"], "rerun": mf["rerun"],
+                               "episode_id": mf["episode_id"], "valid_rev": mf["valid_rev"]})
+            for i, request in enumerate(d["approvals"]):
+                if request["approver"]:
+                    add(FactKind.ACTION, request["request_id"], "action_status", request["approver"]["id"],
+                        request["status"], None, src(f"data.approvals[{i}]"), scope=_action_scope(request))
 
         elif tool == "explore_neighborhood":
             subject, eligible = d["entity_id"], d["eligible_routes"]
@@ -249,9 +265,10 @@ def extract_facts(results: list[dict], rev: int | None = None) -> list[Fact]:
 
         elif tool == "trace_money_flow":
             for i, hit in enumerate(d["sanctioned"]):
+                legs = [{k: leg[k] for k in ("from", "to", "amount_usd", "time", "tx_id")} for leg in hit["trail"]]
                 trail = add(FactKind.SANCTIONS_EXPOSURE, d["entity_id"], "money_trail", hit["entity"]["id"],
                             len(hit["trail"]), "transfers", src(f"data.sanctioned[{i}]"),
-                            scope={"direction": d["direction"]},
+                            scope={"direction": d["direction"], "legs": legs},
                             depends_on=[n for leg in hit["trail"] for n in (leg["from"], leg["to"])])
                 for j, leg in enumerate(hit["trail"]):
                     add(FactKind.SANCTIONS_EXPOSURE, leg["from"], "transfer_amount", leg["to"], leg["amount_usd"],
@@ -302,7 +319,11 @@ def extract_facts(results: list[dict], rev: int | None = None) -> list[Fact]:
                             scope={"version": policy.get("version"), "required_clearance": policy.get("required_clearance")})
                     add(FactKind.WAIVER_COMPLIANCE, dec["id"], "waiver_compliance", policy["id"],
                         "BREACH" if dec["violations"] else "COMPLIANT", None, src(f"{key}.violations"),
-                        scope={"details": [v["detail"] for v in dec["violations"]], "policy_version": policy.get("version")},
+                        scope={"details": [v["detail"] for v in dec["violations"]],
+                               "policy_version": policy.get("version"), "control": dec.get("control"),
+                               "applies_to": entity, "approved_by": approver["id"] if approver else None,
+                               "approver_clearance": approver.get("clearance") if approver else None,
+                               "sources": [s["id"] for s in dec["sources"]]},
                         depends_on=deps)
             for i, other in enumerate(d["approver_other_decisions"]):
                 add(FactKind.WAIVER_COMPLIANCE, other["decision_id"], "waiver_compliance", other["policy_id"],
@@ -367,38 +388,37 @@ def _first_per(facts: list[Fact], key=lambda f: (f.subject, f.object)) -> list[F
     return out
 
 
+def search_clears(scope: dict) -> bool:
+    return bool(scope["complete"] and (scope["exhausted"] or scope["requested_depth"] >= PRESCRIBED_DEPTH))
+
+
 def clears(fact: Fact) -> bool:
-    scope = fact.scope
-    return (fact.predicate == "no_eligible_route" and scope["complete"]
-            and (scope["exhausted"] or scope["requested_depth"] >= PRESCRIBED_DEPTH))
+    return fact.predicate == "no_eligible_route" and search_clears(fact.scope)
 
 
-def derive(facts: list[Fact], unknown: bool, investigated: bool) -> tuple[AnswerState, Verdict, list[str]]:
-    """Answer state, verdict and the facts the verdict rests on."""
+def _remembered(fact: Fact) -> bool:
+    return bool(fact.scope.get("memory"))
+
+
+def derive(facts: list[Fact], unknown: bool) -> tuple[AnswerState, Verdict, list[str]]:
+    """Answer state, verdict and the facts the verdict rests on. Remembered CURRENT facts count like fresh ones;
+    a fresh fact is preferred when both support the verdict."""
     if unknown:
         return AnswerState.UNKNOWN_ENTITY, Verdict.INSUFFICIENT, [f.id for f in _by(facts, "not_in_graph")]
-    memory = _by(facts, "memory_finding")
-    current = [f for f in memory if f.scope["status"] == "CURRENT"]
-    stale = any(f.scope["status"] == "STALE" for f in memory)
-    if current and not stale and not investigated:
-        try:
-            remembered = Verdict(str(current[0].value).upper())
-        except ValueError:
-            remembered = Verdict.INSUFFICIENT
-        return AnswerState.ANSWERED_FROM_MEMORY, remembered, [current[0].id]
-
     routes = _by(facts, "eligible_route_hops")
     cleared = [f for f in facts if clears(f)]
     if routes:
-        verdict, basis = Verdict.SUSPICIOUS, [min(routes, key=lambda f: f.value).id]
+        verdict, basis = Verdict.SUSPICIOUS, [min(routes, key=lambda f: (f.value, _remembered(f)))]
     elif cleared:
-        verdict, basis = Verdict.CLEAR, [max(cleared, key=lambda f: f.scope["requested_depth"]).id]
+        verdict, basis = Verdict.CLEAR, [max(cleared, key=lambda f: (f.scope["requested_depth"], not _remembered(f)))]
     else:
-        searches = _by(facts, "no_eligible_route") + _by(facts, "eligible_search_incomplete")
-        verdict, basis = Verdict.INSUFFICIENT, [f.id for f in searches]
-    if stale:
-        return AnswerState.MEMORY_STALE_REINVESTIGATED, verdict, basis
-    return (AnswerState.ANSWERED_WITH_PATH if verdict == Verdict.SUSPICIOUS else AnswerState.NOT_IN_GRAPH), verdict, basis
+        verdict, basis = Verdict.INSUFFICIENT, _by(facts, "no_eligible_route") + _by(facts, "eligible_search_incomplete")
+    ids = [f.id for f in basis]
+    if verdict != Verdict.INSUFFICIENT and all(_remembered(f) for f in basis):
+        return AnswerState.ANSWERED_FROM_MEMORY, verdict, ids
+    if _by(facts, "memory_stale"):
+        return AnswerState.MEMORY_STALE_REINVESTIGATED, verdict, ids
+    return (AnswerState.ANSWERED_WITH_PATH if verdict == Verdict.SUSPICIOUS else AnswerState.NOT_IN_GRAPH), verdict, ids
 
 
 @dataclass
@@ -426,17 +446,21 @@ def render(entity_id: str, state: AnswerState, verdict: Verdict, facts: list[Fac
         say(f"{entity_id} is not in the graph, so nothing else was queried.", *_by(facts, "not_in_graph"))
         return out
 
-    memory = _by(facts, "memory_finding")
-    for f in memory:
-        if f.scope["status"] == "STALE":
-            say(f"Memory held an earlier {f.value} finding, but {_and(f.scope['changed_evidence'] or ['its evidence'])} "
-                f"changed after it was recorded, so this was re-investigated from the graph.", f)
-    if state == AnswerState.ANSWERED_FROM_MEMORY:
-        f = next(f for f in memory if f.scope["status"] == "CURRENT")
-        evidence = ", ".join(f.scope["evidence_ids"] or []) or "none recorded"
-        say(f"Answered from memory: {f.scope['claim']} (verdict {f.value}, recorded by episode {f.scope['episode_id']}). "
-            f"None of the entities it rests on ({evidence}) has changed since.", f)
-        return out
+    remembered = [f for f in facts if _remembered(f)]
+    if remembered:
+        episodes = list(dict.fromkeys(f.scope["memory"]["episode_id"] for f in remembered))
+        revision = max(f.scope["memory"]["valid_rev"] for f in remembered)
+        one = len(remembered) == 1
+        say(f"From memory: {_count(len(remembered), 'finding')} recorded by {_and(episodes)} still "
+            f"{'holds' if one else 'hold'}, because nothing {'it depends' if one else 'they depend'} on has changed "
+            f"since graph revision {revision}.", *remembered)
+    stale: dict[str, list[Fact]] = {}
+    for f in _by(facts, "memory_stale"):
+        stale.setdefault(f.scope["why"], []).append(f)
+    for why, group in stale.items():
+        names = _and(list(dict.fromkeys(FINDING_NAMES.get(f.value, f.value) for f in group)))
+        say(f"The remembered {names} went stale ({why}), so {'it' if len(group) == 1 else 'they'} could not "
+            f"be reused.", *group)
 
     routes = _first_per(sorted(_by(facts, "eligible_route_hops"), key=lambda f: f.value), key=lambda f: f.object)
     for n, f in enumerate(routes):
@@ -492,8 +516,8 @@ def render(entity_id: str, state: AnswerState, verdict: Verdict, facts: list[Fac
     for f in _first_per(_by(facts, "money_trail")):
         legs = [t for t in transfers if t.scope.get("trail") == f.id]
         say(f"Money followed in time order from {label(f.subject)}: "
-            + "; ".join(f"{t.subject} → {t.object} {_money(t.value)} at {t.scope['time']}" for t in legs) + ".",
-            f, *legs)
+            + "; ".join(f"{leg['from']} → {leg['to']} {_money(leg['amount_usd'])} at {leg['time']}"
+                        for leg in f.scope["legs"]) + ".", f, *legs)
 
     for f in _first_per(_by(facts, "max_flow_capacity")):
         if f.value:
@@ -513,21 +537,30 @@ def render(entity_id: str, state: AnswerState, verdict: Verdict, facts: list[Fac
             f"so money between the others passes through it.", f)
 
     compliance = _by(facts, "waiver_compliance")
-    for f in _first_per(_by(facts, "waiver_applies_to")):
+    own = [c for c in compliance if not c.scope.get("other")]
+    for f in _first_per(own, key=lambda f: f.subject):
+        scope = f.scope
+        applies = next((a for a in _by(facts, "waiver_applies_to") if a.subject == f.subject), None)
         approval = next((a for a in _by(facts, "approved_by") if a.subject == f.subject), None)
-        check = next((c for c in compliance if c.subject == f.subject and not c.scope.get("other")), None)
+        approver, sources = scope.get("approved_by"), scope.get("sources") or []
+        say(f"{f.subject} waived {scope.get('control') or 'a control'} for {label(scope['applies_to'])}"
+            + (f", approved by {label(approver)} with {scope.get('approver_clearance')} clearance" if approver else "")
+            + (f" (sources: {_and(sources)})" if sources else "") + ".", f, applies, approval)
+        threshold = next((t for t in _by(facts, "policy_threshold") if t.subject == f.object), None)
+        volume = next((v for v in _by(facts, "monthly_volume") if v.scope.get("recorded_on") == f.subject), None)
+        if f.value == "BREACH":
+            say(f"That breaks {f.object}: {'; '.join(scope['details'])}.", f, threshold, volume)
+        else:
+            say(f"That waiver is within {f.object} (version {scope.get('policy_version')}).", f, threshold, volume)
+    checked = {f.subject for f in own}
+    for f in _first_per(_by(facts, "waiver_applies_to")):
+        if f.subject in checked:
+            continue
+        approval = next((a for a in _by(facts, "approved_by") if a.subject == f.subject), None)
         sources = f.scope["sources"]
         say(f"{f.subject} waived {f.value or 'a control'} for {label(f.object)}"
             + (f", approved by {label(approval.object)} with {approval.value} clearance" if approval else "")
             + (f" (sources: {_and(sources)})" if sources else "") + ".", f, approval)
-        if check:
-            threshold = next((t for t in _by(facts, "policy_threshold") if t.subject == check.object), None)
-            volume = next((v for v in _by(facts, "monthly_volume") if v.scope.get("recorded_on") == f.subject), None)
-            if check.value == "BREACH":
-                say(f"That breaks {check.object}: {'; '.join(check.scope['details'])}.", check, threshold, volume)
-            else:
-                say(f"That waiver is within {check.object} (version {check.scope.get('policy_version')}).",
-                    check, threshold, volume)
     for f in _first_per([c for c in compliance if c.scope.get("other")]):
         status = "also in breach" if f.value == "BREACH" else "within policy"
         say(f"{f.scope['approved_by']} also approved {f.subject} for {label(f.scope['applies_to'])}, {status}.", f)

@@ -17,10 +17,12 @@ import pandas as pd
 from falkordb import Graph
 
 from .config import DATA_DIR, get_settings
+from .contracts import MAX_CAPACITY
 from .db import get_db, graph_key
 from .scenario import DAY, HOUR, GraphSpec, build_scenario
 
-INDEXES = [("Entity", "id"), ("Account", "id"), ("Alert", "status"), ("Case", "status")]
+INDEXES = [("Entity", "id"), ("Account", "id"), ("Alert", "status"), ("Case", "status"), ("Episode", "id"),
+           ("SemanticFact", "id")]
 FIXTURE_VERSION = "base-2"
 BATCH = 5_000
 WRITE_TIMEOUT_MS = 120_000
@@ -63,9 +65,6 @@ def load_ibm_transfers(graph: Graph, transfers: pd.DataFrame) -> None:
         MATCH (a:Account {id: r[0]}), (b:Account {id: r[1]})
         CREATE (a)-[:TRANSFERRED {tx_id: r[2], amount: r[3], ts: r[4], channel: r[5], weight: 1}]->(b)
     """, rows)
-
-
-MAX_CAPACITY = 2**31 - 1
 
 
 def build_flow_summary(graph: Graph) -> None:

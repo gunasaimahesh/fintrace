@@ -21,6 +21,7 @@ from typing import Any, Callable
 
 from falkordb import Graph
 
+from backend.app import memory
 from backend.app import queries as q
 
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
@@ -219,15 +220,24 @@ def resolve_entity(ctx: ToolContext, g: RecordingGraph, ev: Evidence, entity_id:
 
 @tool
 def recall_memory(ctx: ToolContext, g: RecordingGraph, ev: Evidence, entity_id: str):
-    """Prior episodes, facts (with staleness) and matching playbooks for an entity."""
+    """Remembered facts (CURRENT, or STALE with the reason), recent episodes, approval requests and playbooks."""
     entity_id = _id(entity_id)
-    result = q.recall_memory(g, entity_id)
+    result = memory.recall(g, entity_id)
     if result is None:
         raise ToolError(f"{entity_id} is not in the graph")
-    evidence_ids = sorted({e for fact in result["facts"] for e in fact["evidence_ids"]} | {entity_id})
-    for info in q.describe_entities(g, evidence_ids).values():
+    nodes = {d for fact in result["facts"] for d in fact["depends_on"] if "|" not in d} | {entity_id}
+    nodes |= {t for request in result["approvals"] for t in request["target_ids"]}
+    for info in q.describe_entities(g, sorted(nodes)).values():
         ev.node(info)
-    rows = len(result["facts"]) + len(result["episodes"]) + len(result["playbooks"])
+    for fact in result["facts"]:
+        if fact["status"] == "CURRENT" and "path" in fact["scope"]:
+            for step in fact["scope"]["path"]["steps"]:
+                forward = step.get("forward", True)
+                ev.edge(step["from"] if forward else step["to"], step["rel"], step["to"] if forward else step["from"])
+    for request in result["approvals"]:
+        if request["approver"]:
+            ev.node({**request["approver"], "labels": ["Employee"]})
+    rows = len(result["facts"]) + len(result["episodes"]) + len(result["playbooks"]) + len(result["approvals"])
     return result, rows, None
 
 

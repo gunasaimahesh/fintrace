@@ -79,13 +79,14 @@ def scenarios() -> list[dict]:
 
 @app.get("/api/investigate")
 async def investigate(entity_id: str, mode: Literal["auto", "llm", "fallback"] = "auto",
-                      max_steps: int = Query(agent.MAX_STEPS, ge=1, le=agent.MAX_STEPS)) -> EventSourceResponse:
+                      max_steps: int = Query(agent.MAX_STEPS, ge=1, le=agent.MAX_STEPS),
+                      memory: bool = True) -> EventSourceResponse:
     eid = _entity_id(entity_id)
 
     async def events():
         # Unnamed messages: a named "error" event would collide with EventSource's own error event.
         async for event in agent.investigate(eid, graph_key=_key(), worker_id="ui-investigator", mode=mode,
-                                             max_steps=max_steps):
+                                             max_steps=max_steps, use_memory=memory):
             yield {"data": json.dumps(event, default=str)}
 
     return EventSourceResponse(events())
@@ -102,7 +103,7 @@ def entity(entity_id: str) -> dict:
 
 
 @app.get("/api/approvals")
-def approvals(status: Literal["PENDING_L3", "APPROVED"] | None = None) -> list[dict]:
+def approvals(status: Literal["PENDING_L3", "APPROVED", "STALE"] | None = None) -> list[dict]:
     return q.list_approvals(_graph(), status=status)
 
 

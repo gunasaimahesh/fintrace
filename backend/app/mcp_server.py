@@ -48,8 +48,9 @@ def build_server(key: str | None = None, worker_id: str = "mcp-client") -> MCPSe
 
     @server.tool(annotations=READ)
     def recall_memory(entity_id: EntityId) -> dict[str, Any]:
-        """Prior investigations of this entity: facts (CURRENT, or STALE when the graph around their evidence
-        has changed since), past episodes, and playbooks that match the entity's topology fingerprint."""
+        """Prior investigations of this entity: typed facts that are CURRENT (still hold; reuse them) or STALE
+        (with the reason, and the tool call that produced them, under `rerun`), recent episodes, approval
+        requests with their status now, and playbooks that match the entity's topology fingerprint."""
         return t.recall_memory(ctx, entity_id=entity_id)
 
     @server.tool(annotations=READ)

@@ -16,7 +16,7 @@ from typing import Iterator
 
 from falkordb import Graph
 
-from backend.app.contracts import PRESCRIBED_DEPTH
+from backend.app.contracts import PRESCRIBED_DEPTH, current_rev
 
 RISK_REL_TYPES = ["FLOWS_TO", "USED_DEVICE", "LOGGED_FROM"]
 RISK_RELS = "|".join(RISK_REL_TYPES)
@@ -563,50 +563,58 @@ def topology_fingerprint(graph: Graph, entity_id: str) -> dict | None:
     return {"features": fingerprint, "patterns": patterns}
 
 
-def recall_memory(graph: Graph, entity_id: str) -> dict | None:
-    """Prior episodes and facts about an entity, with facts marked STALE when their evidence changed."""
-    started = time.perf_counter()
-    fingerprint = topology_fingerprint(graph, entity_id)
-    if fingerprint is None:
-        return None
-    facts = graph.ro_query("""
-        MATCH (f:SemanticFact)-[:ABOUT]->(target:Entity {id: $id})
-        WHERE f.status IN ['CURRENT', 'STALE']
-        OPTIONAL MATCH (f)-[:DERIVED_FROM]->(ev:Entity)
-        WITH f, collect(ev.id) AS evidence_ids, collect(ev.topology_updated_at) AS evidence_ts
-        WITH f, evidence_ids, evidence_ts, any(x IN evidence_ts WHERE x > f.valid_from) AS is_stale
-        RETURN f.id, f.claim, f.verdict, f.valid_from, f.episode_id, evidence_ids,
-               [i IN range(0, size(evidence_ids) - 1) WHERE evidence_ts[i] > f.valid_from | evidence_ids[i]],
-               CASE WHEN is_stale THEN 'STALE' ELSE f.status END
-        ORDER BY f.valid_from DESC
-    """, {"id": entity_id}).result_set
-    episodes = graph.ro_query("""
-        MATCH (ep:Episode)-[:ABOUT]->(x:Entity {id: $id})
-        OPTIONAL MATCH (ep)-[:HAS_STEP]->(s:Step)
-        WITH ep, s ORDER BY s.seq
-        WITH ep, collect(s.tool) AS tools
-        RETURN ep.id, ep.created_at, ep.verdict, ep.answer_state, tools
-        ORDER BY ep.created_at DESC LIMIT 3
-    """, {"id": entity_id}).result_set
-    playbooks = graph.ro_query("""
+def changed_dependencies(graph: Graph, depends_on: list[str], rev: int) -> tuple[list[str], list[str]]:
+    """Which of these node IDs and edge keys (src|REL|dst) are gone, and which nodes were touched after `rev`."""
+    nodes = list(dict.fromkeys(d for d in depends_on if "|" not in d))
+    edges = list(dict.fromkeys(d for d in depends_on if "|" in d))
+    missing, touched = [], []
+    if nodes:
+        rows = graph.ro_query("""
+            UNWIND $ids AS id
+            OPTIONAL MATCH (n:Entity {id: id})
+            RETURN id, n IS NOT NULL, coalesce(n.topology_rev, 0)
+        """, {"ids": nodes}).result_set
+        for nid, exists, node_rev in rows:
+            if not exists:
+                missing.append(nid)
+            elif node_rev > rev:
+                touched.append(nid)
+    if edges:
+        rows = graph.ro_query("""
+            UNWIND range(0, size($edges) - 1) AS i
+            WITH i, $edges[i] AS e
+            OPTIONAL MATCH (a:Entity {id: e[0]})-[r]->(b:Entity {id: e[2]})
+            WHERE type(r) = e[1]
+            RETURN i, count(r) > 0
+        """, {"edges": [e.split("|") for e in edges]}).result_set
+        missing += [edges[i] for i, exists in rows if not exists]
+    return missing, touched
+
+
+def _listed(dependencies: list[str]) -> str:
+    names = [f"{d.split('|')[0]} → {d.split('|')[2]} ({d.split('|')[1]})" if "|" in d else d for d in dependencies]
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
+def describe_change(missing: list[str], touched: list[str], rev: int) -> str:
+    parts = []
+    if missing:
+        parts.append(f"{_listed(missing)} no longer exist{'s' if len(missing) == 1 else ''}")
+    if touched:
+        parts.append(f"{_listed(touched)} changed after graph revision {rev}")
+    return "; ".join(parts)
+
+
+def playbooks_for(graph: Graph, patterns: list[str]) -> list[dict]:
+    rows = graph.ro_query("""
         UNWIND $patterns AS name
         MATCH (pt:PatternType {name: name})<-[:FOR_PATTERN]-(pb:Playbook)-[:FIRST_STEP]->(first:PlaybookStep)
         MATCH path = (first)-[:NEXT*0..12]->(s:PlaybookStep)
         WITH pt, pb, s, length(path) AS pos ORDER BY pos
         RETURN pt.name, pb.id, collect([s.tool, s.default_args])
-    """, {"patterns": fingerprint["patterns"]}).result_set
-    return {
-        "entity_id": entity_id,
-        "facts": [{"id": fid, "claim": claim, "verdict": verdict, "valid_from": valid_from, "episode_id": episode,
-                   "evidence_ids": evidence, "changed_evidence": changed, "status": status}
-                  for fid, claim, verdict, valid_from, episode, evidence, changed, status in facts],
-        "episodes": [{"id": eid, "created_at": created, "verdict": verdict, "answer_state": state, "tools": tools}
-                     for eid, created, verdict, state, tools in episodes],
-        "fingerprint": fingerprint,
-        "playbooks": [{"pattern": pattern, "id": pid, "steps": [{"tool": t, "default_args": a} for t, a in steps]}
-                      for pattern, pid, steps in playbooks],
-        "elapsed_ms": _ms(started),
-    }
+    """, {"patterns": patterns}).result_set
+    return [{"pattern": pattern, "id": pid, "steps": [{"tool": t, "default_args": a} for t, a in steps]}
+            for pattern, pid, steps in rows]
 
 
 def _waiver_violations(decision: dict, approver: dict | None, policy: dict | None) -> list[dict]:
@@ -813,11 +821,12 @@ def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_i
         MATCH (p:Entity {id: $policy}), (e:Entity {id: $approver})
         CREATE (r:Entity:ApprovalRequest {id: $rid, status: 'PENDING_L3', action_type: $action, reason: $reason,
                                           created_at: $now, requested_by: $by, target_ids: $targets,
-                                          excluded_ids: $excluded, required_clearance: $required})
+                                          excluded_ids: $excluded, required_clearance: $required,
+                                          evidence_rev: $rev, depends_on: $targets})
         CREATE (r)-[:FOR_CASE]->(c), (r)-[:UNDER_POLICY]->(p), (r)-[:ROUTED_TO]->(e)
     """, {"case": case_id, "now": now, "subject": target_ids[0], "policy": policy_id, "approver": approver_id,
           "rid": rid, "action": action_type, "reason": reason, "by": requested_by, "targets": target_ids,
-          "excluded": excluded_ids, "required": required})
+          "excluded": excluded_ids, "required": required, "rev": current_rev(graph)})
     for rel, ids in (("TARGETS", target_ids), ("EXCLUDES", excluded_ids)):
         if ids:
             graph.query(f"""
@@ -834,22 +843,30 @@ def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_i
 def approve_action(graph: Graph, request_id: str, approver_id: str, now: int | None = None) -> dict:
     """An approver signs off a pending request; its target accounts are frozen.
 
-    Freezing changes status only, so `topology_updated_at` (and the facts derived from it) stays put.
+    A request whose evidence changed after it was raised becomes STALE instead. Freezing changes status
+    only, so it is not evidence and doesn't bump the revision.
     """
     now = now or int(time.time())
     rows = graph.ro_query("""
         MATCH (r:Entity {id: $rid})-[:UNDER_POLICY]->(p:Entity)
         MATCH (e:Entity {id: $approver}) WHERE e:Employee
         RETURN r:ApprovalRequest, r.status, p.required_clearance_level_for_freeze, p.required_clearance_for_freeze,
-               e.clearance_level, e.clearance
+               e.clearance_level, e.clearance, r.depends_on, r.evidence_rev
     """, {"rid": request_id, "approver": approver_id}).result_set
     if not rows or not rows[0][0]:
         raise ValueError(f"no approval request {request_id} (or {approver_id} is not an employee)")
-    _, status, required_level, required, level, clearance = rows[0]
+    _, status, required_level, required, level, clearance, depends_on, evidence_rev = rows[0]
     if status != "PENDING_L3":
         raise ValueError(f"{request_id} is already {status}")
     if (level or 0) < (required_level or 0):
         raise ValueError(f"{approver_id} has {clearance}; this action requires {required}")
+    if depends_on and evidence_rev is not None:
+        missing, touched = changed_dependencies(graph, depends_on, evidence_rev)
+        if missing or touched:
+            reason = describe_change(missing, touched, evidence_rev)
+            graph.query("MATCH (r:Entity {id: $rid}) SET r.status = 'STALE', r.stale_reason = $reason, "
+                        "r.stale_at = $now", {"rid": request_id, "reason": reason, "now": now})
+            raise ValueError(f"{request_id} is now STALE: {reason}. Re-investigate before freezing.")
     frozen = graph.query("""
         MATCH (r:Entity {id: $rid}), (e:Entity {id: $approver})
         SET r.status = 'APPROVED', r.approved_by = $approver, r.approved_at = $now
