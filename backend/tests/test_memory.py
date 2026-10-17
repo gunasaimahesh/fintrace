@@ -235,7 +235,7 @@ def during_check(monkeypatch, change) -> None:
 def test_evidence_removed_while_sign_off_checks_it_freezes_nothing(fresh_key, monkeypatch):
     graph = get_db().select_graph(fresh_key)
     request = pending_request(fresh_key)
-    during_check(monkeypatch, lambda g: m.delete_transfer(g, route_transfer(g)))
+    during_check(monkeypatch, lambda g: m.delete_identity_link(g, s.NOVA_OPS, s.SHARED_DEVICE, "USED_DEVICE"))
     with pytest.raises(ValueError, match="is now STALE"):
         q.approve_action(graph, request, s.PRIYA)
     assert signed_off(graph, request) == ("STALE", 0, [])
