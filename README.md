@@ -391,9 +391,9 @@ python -m backend.eval.retrieval
 
 | Strategy | Recall | Found any | IDs returned | Not in the instance | Calls | DB queries | DB ms |
 |---|---|---|---|---|---|---|---|
-| `graph`: trace_money_flow out + in (max_hops 4), detect_ring: 3 calls | 0.615 | 367/370 | 67 (2–92) | 65 (0–90) | 3 | 16 (11–17) | 131.8 (122.7–314.3) |
-| `lookup@3`: lookup_entity breadth-first over transfers both ways, 3 calls | 0.679 | 370/370 | 19 (2–70) | 14 (0–62) | 3 | 3 | 3.7 (1.3–15.6) |
-| `lookup@14`: the same, 14 calls (the agent's budget) | 0.816 | 370/370 | 66 (2–345) | 55 (0–335) | 14 (3–14) | 14 (3–14) | 13.9 (2.5–74.1) |
+| `graph`: trace_money_flow out + in (max_hops 4), detect_ring: 3 calls | 0.615 | 367/370 | 67 (2–92) | 65 (0–90) | 3 | 16 (11–17) | 143.8 (132.5–272.2) |
+| `lookup@3`: lookup_entity breadth-first over transfers both ways, 3 calls | 0.679 | 370/370 | 19 (2–70) | 14 (0–62) | 3 | 3 | 3.6 (1.8–32.0) |
+| `lookup@14`: the same, 14 calls (the agent's budget) | 0.816 | 370/370 | 66 (2–345) | 55 (0–335) | 14 (3–14) | 14 (3–14) | 14.2 (2.0–113.5) |
 
 | Pattern family | Instances | `graph` | `lookup@3` | `lookup@14` |
 |---|---|---|---|---|
@@ -419,9 +419,9 @@ python -m backend.eval.contention --runs 5
 ```
 
 5 runs of 20 hunters racing for 200 alerts (0.3 s leases, 8% of claims crash, 6% stall past their lease, 6% fail):
-**0 invariant violations** (no alert lost, none completed twice, attempt numbers unbroken), 66 late commits
-refused and 0 accepted, 102 crashed claims recovered, 236.5 (173.9–238.7) alerts/s; final statuses: 995
-completed, 5 failed after three attempts.
+**0 invariant violations** (no alert lost, none completed twice, attempt numbers unbroken), 69 late commits
+refused and 0 accepted, 101 crashed claims recovered, 238.6 (192.5–240.7) alerts/s; final statuses: 992
+completed, 8 failed after three attempts.
 
 ## Running it
 
