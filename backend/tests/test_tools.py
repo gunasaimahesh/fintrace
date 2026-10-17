@@ -110,3 +110,11 @@ def test_a_freeze_needs_an_on_call_l3_and_happens_only_on_sign_off(fresh_key):
     q.approve_action(graph, request["data"]["request_id"], s.PRIYA)
     status = {e: t.resolve_entity(ctx, entity_id=e)["data"]["status"] for e in (s.VOLKOV, s.BALTIC, s.VIP)}
     assert status == {s.VOLKOV: "FROZEN", s.BALTIC: "FROZEN", s.VIP: "ACTIVE"}
+
+
+def test_a_sanctioned_account_is_never_put_up_for_a_freeze(fresh_key):
+    ctx = t.ToolContext(get_db().select_graph(fresh_key), worker_id="pytest")
+    refused = t.request_action(ctx, target_ids=[s.BALTIC, s.VORTEX], excluded_ids=[], policy_id=s.POLICY,
+                               approver_id=s.PRIYA, reason="pytest", case_id="case-pytest")
+    assert not refused["ok"] and "already blocked" in refused["error"] and s.VORTEX in refused["error"]
+    assert not ctx.graph.ro_query("MATCH (r:ApprovalRequest) RETURN r.id").result_set

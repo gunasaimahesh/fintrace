@@ -38,7 +38,7 @@ open http://localhost:8000            # or visit it in a browser
 5. **Eval** tab: every measured result below, read from `backend/eval/results.json`.
 
 ```bash
-docker compose exec app python -m pytest backend/tests -q     # 126 tests, about a minute
+docker compose exec app python -m pytest backend/tests -q     # 127 tests, about a minute
 ```
 
 ## How it works
@@ -246,7 +246,7 @@ sanctioned account.
 | Routes follow money in its direction; a device bridge costs two hops; shared IPs and reversed money are only association | `test_eligible_routes_keep_direction_and_a_device_bridge_costs_two_hops`, `test_a_valid_route_is_found_despite_a_shorter_ip_path`, `test_a_shared_ip_or_money_flowing_back_is_only_association` |
 | CLEAR needs a complete search (to the prescribed depth of 6, or everything reachable); a capped or timed-out search is INSUFFICIENT; a sanctioned account beyond six hops gets a qualified CLEAR | `test_clear_needs_the_prescribed_depth_or_an_exhausted_frontier`, `test_a_capped_or_timed_out_search_is_insufficient_not_clear`, `test_a_sanctioned_account_beyond_six_hops_gets_a_qualified_clear` |
 | The model's statements are bound to facts or rejected; swapping in another number, subject or approval is caught | `test_model_statements_are_bound_to_facts_or_rejected`, `test_swapping_monthly_volume_for_exposure_is_rejected`, `test_another_subjects_path_length_is_rejected`, `test_another_approvals_status_is_rejected` |
-| Only facts about the alert's own entity decide its verdict: a route or a complete search the model ran from another account is reported as context, and a sanctioned subject is SUSPICIOUS as direct exposure, never CLEAR | `test_a_route_the_model_found_from_another_account_does_not_decide_the_subject`, `test_a_complete_search_the_model_ran_from_another_account_does_not_clear_the_subject`, `test_a_sanctioned_subject_is_suspicious_without_a_route_and_is_not_put_up_for_freezing` |
+| Only facts about the alert's own entity decide its verdict: a route or a complete search the model ran from another account is reported as context, and a sanctioned subject is SUSPICIOUS as direct exposure, never CLEAR (it is already blocked, so no freeze request may target it) | `test_a_route_the_model_found_from_another_account_does_not_decide_the_subject`, `test_a_complete_search_the_model_ran_from_another_account_does_not_clear_the_subject`, `test_a_sanctioned_subject_is_suspicious_without_a_route_and_is_not_put_up_for_freezing`, `test_a_sanctioned_account_is_never_put_up_for_a_freeze` |
 | An unknown ID stops after one call instead of guessing | `test_an_unknown_id_stops_after_one_call` |
 | The agent and Cursor use the same 11 tools over MCP | `test_the_stdio_server_lists_the_eleven_tools_and_answers` |
 | Nothing in the graph, tool schemas or prompt gives the answer away | `test_no_ground_truth_in_graph`, `test_tool_schemas_and_the_prompt_name_nothing_from_the_scenario` |

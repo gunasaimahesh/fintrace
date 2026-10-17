@@ -810,6 +810,8 @@ def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_i
         raise ValueError(f"unknown entities: {missing}")
     if not_accounts := [t for t in target_ids if "Account" not in entities[t]["labels"]]:
         raise ValueError(f"only accounts can be frozen; not accounts: {not_accounts}")
+    if sanctioned := [t for t in target_ids if "Sanctioned" in entities[t]["labels"]]:
+        raise ValueError(f"sanctioned accounts are already blocked, so they are not put up for a freeze: {sanctioned}")
 
     rows = graph.ro_query("""
         MATCH (p:Entity {id: $policy}) WHERE p:PolicyDoc
