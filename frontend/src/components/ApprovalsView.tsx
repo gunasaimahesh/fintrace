@@ -81,7 +81,7 @@ function Request({ request, tenant, refresh, onActed }: RequestProps) {
       {error && request.status !== "STALE" && <div className="text-rose-300">{error}</div>}
       {request.status === "PENDING_L3" && !result && approver && (
         <button onClick={signOff} disabled={busy} className={`${danger} self-start`}>
-          {busy ? "Signing off…" : `Sign off as ${approver.name} (${approver.clearance})`}
+          {busy ? "Signing off…" : `Sign off as ${approver.name} (${approver.clearance}, simulated)`}
         </button>
       )}
     </li>
@@ -107,6 +107,9 @@ export function ApprovalsView({ tenant, board, refresh }: Props) {
         <p className="text-xs leading-relaxed text-zinc-500">
           Agents never freeze anything. They file a request under the freeze policy, routed to an on-call approver with the clearance it requires. Sign-off
           re-checks the evidence the request was filed on: if any of it changed since, the request goes stale instead of freezing.
+        </p>
+        <p className="text-xs leading-relaxed text-amber-200/80">
+          Sign-off here is simulated: you act as the approver the request was routed to, and nothing authenticates you.
         </p>
         {shown.length ? (
           <ul className="flex flex-col gap-3">

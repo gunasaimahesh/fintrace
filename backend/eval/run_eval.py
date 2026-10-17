@@ -17,7 +17,8 @@ demo subjects, which development used and the playbook was learned from.
 
 LLM runs can be staged within a provider quota: --merge adds a stage's runs to the saved ones (a rerun of the
 same case, condition and repeat replaces the earlier one), and --first-repeat numbers later repeats. --rescore
-applies the current scoring rules (SCORING) to the saved runs without running anything.
+applies the current scoring rules (SCORING) to the saved runs without running anything, and keeps the rest of
+the saved configuration (commit, model, pacing). Each stage records the commit it ran at.
 """
 
 from __future__ import annotations
@@ -42,6 +43,8 @@ from backend.eval.common import (RESULTS, RUNS, RetryCounter, db_work, now, prov
                                  source_graph, stats)
 
 CONDITIONS = ("cold", "warm", "revisit", "baseline")
+MEMORY = {"cold": "procedures", "warm": "procedures", "revisit": "on"}
+CODE_KEYS = ("commit", "uncommitted_backend_changes")
 GROUPS = ("positive", "negative", "unknown", "incomplete", "demo")
 DEMO = [("d01", s.NOVAPAY, {"verdict": "SUSPICIOUS", "target": s.VORTEX, "hops": 5}),
         ("d02", s.VIP, {"verdict": "CLEAR", "target": None, "hops": None})]
@@ -236,15 +239,15 @@ async def evaluate(planner: str, repeats: range, case_ids: list[str], conditions
                 if {"cold", "revisit"} & set(conditions):
                     with scratch(source) as key:
                         with RetryCounter() as retries:
-                            record(item, "cold", repeat, await run_agent(item, key, planner, "procedures"),
+                            record(item, "cold", repeat, await run_agent(item, key, planner, MEMORY["cold"]),
                                    retries.count)
                         if "revisit" in conditions and (detection or item["group"] == "demo"):
                             with RetryCounter() as retries:
-                                record(item, "revisit", repeat, await run_agent(item, key, planner, "on"),
+                                record(item, "revisit", repeat, await run_agent(item, key, planner, MEMORY["revisit"]),
                                        retries.count)
                 if "warm" in conditions and detection:
                     with scratch(template_key) as key, RetryCounter() as retries:
-                        record(item, "warm", repeat, await run_agent(item, key, planner, "procedures"),
+                        record(item, "warm", repeat, await run_agent(item, key, planner, MEMORY["warm"]),
                                retries.count)
                 if "baseline" in conditions:
                     with RetryCounter() as retries:
@@ -342,6 +345,7 @@ def config(planner: str, repeats: range, conditions: list[str], source: str) -> 
         "llm_requests_per_minute": settings.llm_requests_per_minute or None,
         "repeats": [repeats.start, repeats.stop - 1],
         "conditions": conditions,
+        "memory": {c: MEMORY[c] for c in conditions if c in MEMORY},
         "max_steps": agent.MAX_STEPS,
         "depth": PRESCRIBED_DEPTH,
         "result_chars": agent.RESULT_CHARS,
@@ -357,6 +361,7 @@ def config(planner: str, repeats: range, conditions: list[str], source: str) -> 
 
 def run_stage(args, saved: dict | None) -> tuple[list[dict], list[dict], dict | None]:
     repeats = range(args.first_repeat, args.first_repeat + args.repeats)
+    code = {k: v for k, v in provenance(source_graph()).items() if k in CODE_KEYS}
     started_at, started = now(), time.perf_counter()
     RUNS.mkdir(parents=True, exist_ok=True)
     path = RUNS / f"eval-{args.planner}-{started_at.replace(':', '').replace('-', '')}.jsonl"
@@ -372,7 +377,7 @@ def run_stage(args, saved: dict | None) -> tuple[list[dict], list[dict], dict | 
              "log": str(path.relative_to(RUNS.parent.parent.parent)),
              "conditions": [c for c in CONDITIONS if any(r["condition"] == c for r in runs)],
              "cases": args.cases or "all", "repeats": [repeats.start, repeats.stop - 1], "runs": len(runs),
-             "stopped_early": extra["stopped_early"]}
+             "stopped_early": extra["stopped_early"], **code}
     if not saved:
         return runs, [stage], extra["playbook"]
     fresh = {(r["condition"], r["case_id"], r["repeat"]) for r in runs}
@@ -408,9 +413,11 @@ def main() -> None:
         run.update(score(item, run), also_correct=item.get("also_correct"))
     summary = summarize(runs)
     numbers = [r["repeat"] for r in runs] or [args.first_repeat]
-    result = {"config": config(args.planner, range(min(numbers), max(numbers) + 1),
-                               [c for c in CONDITIONS if any(r["condition"] == c for r in runs)], source),
-              "stages": stages, "playbook": playbook, "summary": summary, "runs": runs}
+    settings = config(args.planner, range(min(numbers), max(numbers) + 1),
+                      [c for c in CONDITIONS if any(r["condition"] == c for r in runs)], source)
+    if args.rescore:
+        settings = {**settings, **{k: v for k, v in saved["config"].items() if k != "scoring"}}
+    result = {"config": settings, "stages": stages, "playbook": playbook, "summary": summary, "runs": runs}
     if not args.no_save:
         save(["controlled", args.planner], result)
     for condition, c in summary["conditions"].items():

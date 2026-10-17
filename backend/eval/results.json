@@ -17,6 +17,11 @@
      "revisit",
      "baseline"
     ],
+    "memory": {
+     "cold": "procedures",
+     "warm": "procedures",
+     "revisit": "on"
+    },
     "max_steps": 14,
     "depth": 6,
     "result_chars": 12000,
@@ -25199,6 +25204,11 @@
      "warm",
      "revisit"
     ],
+    "memory": {
+     "cold": "procedures",
+     "warm": "procedures",
+     "revisit": "on"
+    },
     "max_steps": 14,
     "depth": 6,
     "result_chars": 12000,
@@ -36868,7 +36878,7 @@
    ]
   }
  },
- "updated_at": "2026-10-17T14:46:45Z",
+ "updated_at": "2026-10-17T15:21:00Z",
  "contention": {
   "at": "2026-10-17T13:20:53Z",
   "config": {
