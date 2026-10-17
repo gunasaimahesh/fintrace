@@ -249,7 +249,7 @@ sanctioned account.
 | An unknown ID stops after one call instead of guessing | `test_an_unknown_id_stops_after_one_call` |
 | The agent and Cursor use the same 11 tools over MCP | `test_the_stdio_server_lists_the_eleven_tools_and_answers` |
 | Nothing in the graph, tool schemas or prompt gives the answer away | `test_no_ground_truth_in_graph`, `test_tool_schemas_and_the_prompt_name_nothing_from_the_scenario` |
-| On 16 labelled cases the agent's verdict and route were right on every run (32 with the real model, 48 with the deterministic planner); one-entity lookups with the same budget ran out of calls on 12 of 48 | [Evaluation](#evaluation) |
+| On 16 labelled cases the agent's verdict and route were right on every run (48 with the real model, 48 with the deterministic planner); one-entity lookups with the same budget and verdict rule ended INSUFFICIENT on 12 of 48 with either planner, never with a wrong verdict | [Evaluation](#evaluation) |
 
 ## Track 2: Memory & Coordination
 
@@ -272,8 +272,9 @@ binds its roles from the new subject's live results step by step, and never repl
 decides any freeze afresh (`test_a_playbook_is_learned_from_an_approved_run_and_holds_roles_not_ids`,
 `test_it_matches_held_out_subjects_by_topology_alone`,
 `test_on_a_lookalike_it_stops_where_the_evidence_does_and_the_answer_stays_clear`). Learned from the NovaPay
-investigation, it applied to four held-out cases, and with the real model it cut LLM requests and tokens on every
-one without changing a verdict (table in [Evaluation](#evaluation)).
+investigation, it applied to four held-out cases, and with the real model it cut LLM requests and tokens on all
+12 of their runs without changing a verdict, at the cost of one or two extra tool calls (table in
+[Evaluation](#evaluation)).
 
 **Hunters coordinate only through graph state.** Alerts go PENDING → CLAIMED → COMPLETED | FAILED. A claim is one
 write that stamps a fresh token, a lease and an `:Attempt`; completing commits only if the alert still carries
@@ -340,29 +341,36 @@ python -m backend.eval.run_eval --planner fallback --repeats 3
 LLM_REQUESTS_PER_MINUTE=12 python -m backend.eval.run_eval --planner llm --repeats 3
 ```
 
-**LLM planner** (2 of 3 planned repeats so far, stopped at the provider's free-tier daily quota; the LLM baseline
-is still to run):
+**LLM planner** (3 repeats. Repeats 1 and 2 ran on commit `d1384dd` with uncommitted backend changes, on the
+provider's free tier; repeat 3 and all three baseline repeats ran on `3b3c5c7`. Revisit was added from repeat 2,
+and repeat 2 stopped at the free-tier daily quota before its last Revisit run, a demo subject):
 
 | Condition | Detection | Positives | Negatives | Unknown IDs | Out of budget | Demo | Tool calls | Verdict at call | LLM requests | LLM tokens | Failures |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| Cold: the agent on a fresh graph | 32/32 | 14/14 | 18/18 | 4/4 | 4/4 | 4/4 | 3 (3–11) | 3 | 2 (2–10) | 9,075 (8,207–69,178) | 1 (1 fell back) |
-| Warm: after learning the NovaPay playbook | 32/32 | 14/14 | 18/18 | – | – | – | 4 (3–12) | 3 (3–4) | 2 (1–10) | 11,532.5 (5,543–66,404) | 0 |
-| Revisit: same subject, right after cold | 16/16 | 7/7 | 9/9 | – | – | 1/1 | 2 (2–7) | 2 | 1 (1–6) | 5,160.5 (4,303–45,376) | 0 |
+| Cold: the agent on a fresh graph | 48/48 | 21/21 | 27/27 | 6/6 | 6/6 | 6/6 | 3 (3–11) | 3 | 2 (2–10) | 9,198 (8,199–69,178) | 1 (1 fell back) |
+| Warm: after learning the NovaPay playbook | 48/48 | 21/21 | 27/27 | – | – | – | 4 (3–12) | 3 (3–4) | 2 (1–10) | 9,203.5 (5,543–66,404) | 0 |
+| Revisit: same subject, right after cold | 32/32 | 14/14 | 18/18 | – | – | 3/3 | 2 (2–7) | 2 (2–3) | 1 (1–6) | 5,281.5 (4,303–45,376) | 0 |
+| Baseline: one-entity lookups, same budget | 36/48 | 21/21 | 15/27 | 6/6 | 6/6 | 0/6 | 9.5 (2–14) | 7 (1–12) | 8 (2–14) | 11,149 (1,502–31,203) | 0 |
 
 `gemini-3.1-flash-lite`, temperature 0; medians (ranges) over the detection runs. The one failure is a demo run
 that hit the daily quota mid-investigation and was finished by the deterministic planner (its verdict was right).
+With the model choosing the lookups, the baseline found every positive but ended INSUFFICIENT on 12 of the 27
+negatives, on every repeat: it ran out of calls on c11, c12 and c14, and stopped after 12 calls with the search
+still incomplete on c10. It never gave a wrong verdict.
 
-Where the playbook applied, it cut the model's work every time:
+Where the playbook applied, it cut LLM requests and tokens on all 12 runs:
 
 | Case | Correct | Tool calls (cold → warm) | LLM requests | LLM tokens |
 |---|---|---|---|---|
-| c01 | 2/2 | 9.5 → 11 | 8.5 → 2 | 54,962.5 → 18,665 |
-| c05 | 2/2 | 10 → 11.5 | 9 → 2.5 | 59,400 → 24,380.5 |
-| c14 | 2/2 | 3 → 4 | 2 → 1 | 8,656.5 → 5,981.5 |
-| c15 | 2/2 | 3 → 4 | 2 → 1 | 8,358.5 → 5,549 |
+| c01 | 3/3 | 10 → 11 | 9 → 2 | 59,043 → 18,662 |
+| c05 | 3/3 | 10 → 12 | 9 → 3 | 59,418 → 29,291 |
+| c14 | 3/3 | 3 → 4 | 2 → 1 | 8,660 → 5,984 |
+| c15 | 3/3 | 3 → 4 | 2 → 1 | 8,359 → 5,552 |
 
-It costs one to one and a half extra tool calls (the playbook re-checks a step the model skips) and saves most of the model's
-reasoning turns. With the deterministic planner the playbook runs the same tools as cold, by construction.
+It costs one or two extra tool calls (the playbook re-checks a step the model skips). Wall time, which is mostly
+provider latency and our 12-requests-a-minute limit, fell on 11 of the 12 runs and rose on one (c05, repeat 1:
+43.9 s cold, 64.9 s warm). With the deterministic planner the playbook runs the same tools as cold, by
+construction.
 
 **Deterministic planner** (3 repeats):
 
@@ -373,8 +381,8 @@ reasoning turns. With the deterministic planner the playbook runs the same tools
 | Revisit: same subject, right after cold | 48/48 | 21/21 | 27/27 | – | – | 6/6 | 2 | 2 | 0 |
 | Baseline: one-entity lookups, same budget | 36/48 | 18/21 | 18/27 | 6/6 | 6/6 | 0/6 | 8.5 (1–14) | 7 (1–12) | 0 |
 
-Every baseline miss is an INSUFFICIENT because the 14 calls ran out before the search was complete (c02, c10, c11,
-c14 and both demo subjects, on every repeat), never a wrong verdict. One scoring rule changed after we saw a
+Every deterministic baseline miss is an INSUFFICIENT because the 14 calls ran out before the search was complete
+(c02, c10, c11, c14 and both demo subjects, on every repeat), never a wrong verdict. One scoring rule changed after we saw a
 result, and we say so: a three-call run on c01's subject was expected to end INSUFFICIENT, but the model
 established c01's five-hop route within those three calls. Out-of-budget runs now count as correct if they end INSUFFICIENT *or* establish the subject's true verdict
 and route (`run_eval.SCORING`, recorded in the results).

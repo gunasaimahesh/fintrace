@@ -79,6 +79,8 @@ function Controlled({ result }: { result: ControlledResult }) {
   const llm = config.planner === "llm";
   const repeats = Array.isArray(config.repeats) ? config.repeats : [1, config.repeats];
   const stopped = [...(result.stages ?? []).map((s) => s.stopped_early), result.stopped_early].filter(Boolean);
+  const stageCommits = (result.stages ?? []).flatMap((s) => (s.commit ? [`${s.commit}${s.uncommitted_backend_changes ? " (with uncommitted backend changes)" : ""}`] : []));
+  const commits = stageCommits.length ? [...new Set(stageCommits)] : [String(config.commit)];
   const misses = Object.entries(summary.cases).filter(([, c]) => rows.some((r) => c[r.id] && ratio(c[r.id]!.correct).correct < ratio(c[r.id]!.correct).runs));
   const warm = summary.warm_vs_cold;
   return (
@@ -146,8 +148,8 @@ function Controlled({ result }: { result: ControlledResult }) {
         Detection covers the positive and negative cases; medians (with ranges) are over those runs. A verdict is correct only with the expected route
         (target and hop count) for suspicious cases and an exhaustive or full-depth search for clear ones. Unknown IDs must be reported as unknown, and
         out-of-budget runs must end insufficient rather than guess. {llm ? `${config.model}, temperature 0` : "Deterministic planner"} · repeats {repeats[0]}–
-        {repeats[1]} · at most {config.max_steps} tool calls · prescribed depth {config.depth} · graph <span className="font-mono">{config.graph}</span> · commit{" "}
-        <span className="font-mono">{config.commit}</span>
+        {repeats[1]} · at most {config.max_steps} tool calls · prescribed depth {config.depth} · graph <span className="font-mono">{config.graph}</span> · {commits.length > 1 ? "commits" : "commit"}{" "}
+        <span className="font-mono">{commits.join(", ")}</span>
       </p>
       {stopped.map((s) => (
         <p key={s} className="text-xs text-amber-300">

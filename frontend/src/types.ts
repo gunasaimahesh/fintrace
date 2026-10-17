@@ -383,7 +383,16 @@ export type CaseSummary = {
 
 export type Delta = { runs: number; correct: string } & Partial<Record<"tool_calls" | "elapsed_ms" | "llm_requests" | "llm_tokens", Record<string, number>>>;
 
-export type Stage = { started_at: string; finished_at: string; conditions: Condition[]; repeats: number[]; runs: number; stopped_early: string | null };
+export type Stage = {
+  started_at: string;
+  finished_at: string;
+  conditions: Condition[];
+  repeats: number[];
+  runs: number;
+  stopped_early: string | null;
+  commit?: string;
+  uncommitted_backend_changes?: boolean;
+};
 
 export type ControlledResult = {
   config: {
