@@ -49,10 +49,12 @@ def build_server(key: str | None = None, worker_id: str = "mcp-client") -> MCPSe
     @server.tool(annotations=READ)
     def recall_memory(entity_id: EntityId, facts: bool = True) -> dict[str, Any]:
         """Prior investigations of this entity: typed facts that are CURRENT (still hold; reuse them) or STALE
-        (with the reason, and the tool call that produced them, under `rerun`), recent episodes, approval
-        requests with their status now, and playbooks that match the entity's topology fingerprint. Playbooks
-        are procedures learned from investigations a human verified: ordered tool steps whose arguments are
-        roles to bind from this entity's own results. With facts=false, only the playbooks are returned."""
+        (with the reason, and the tool call that produced them, under `rerun`); under `shared`, routes other
+        investigations found that pass through it and still hold (from the entity onward, each is an eligible
+        route of its own); recent episodes, approval requests with their status now, and playbooks that match
+        the entity's topology fingerprint. Playbooks are procedures learned from investigations a human verified:
+        ordered tool steps whose arguments are roles to bind from this entity's own results. With facts=false,
+        only the playbooks are returned."""
         return t.recall_memory(ctx, entity_id=entity_id, facts=facts)
 
     @server.tool(annotations=READ)
@@ -131,7 +133,8 @@ def build_server(key: str | None = None, worker_id: str = "mcp-client") -> MCPSe
     def freeze_impact(target_ids: EntityIds) -> dict[str, Any]:
         """Before freezing: accounts outside `target_ids` that share a device or IP with them, split into
         legitimate collateral (leave them and the infrastructure they share untouched) and accounts with an
-        eligible route of their own to a sanctioned account (add those to the freeze)."""
+        eligible route of their own to a sanctioned account (add those to the freeze). Also lists targets that
+        already await sign-off in another pending request (leave those out of a new one)."""
         return t.freeze_impact(ctx, target_ids=target_ids)
 
     @server.tool(annotations=WRITE)
@@ -146,7 +149,8 @@ def build_server(key: str | None = None, worker_id: str = "mcp-client") -> MCPSe
         action_type: Annotated[Literal["FREEZE"], Field(description="Requested action")] = "FREEZE",
     ) -> dict[str, Any]:
         """Ask the on-call approver to sign off a freeze. Creates a pending approval request linked to the case,
-        targets, exclusions, policy and approver. Nothing is frozen until a human approves it."""
+        targets, exclusions, policy and approver. Nothing is frozen until a human approves it. An account can be
+        in only one pending request, so a request including one that already awaits sign-off is refused."""
         return t.request_action(ctx, target_ids=target_ids, policy_id=policy_id, approver_id=approver_id,
                                 reason=reason, case_id=case_id, excluded_ids=excluded_ids, action_type=action_type)
 

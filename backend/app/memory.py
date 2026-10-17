@@ -25,7 +25,7 @@ from falkordb import Graph
 from backend.app import playbook as pb
 from backend.app import queries as q
 from backend.app.contracts import PERSISTED_KINDS, VERDICT_PREDICATES, current_rev
-from backend.app.guardrails import search_clears
+from backend.app.guardrails import path_dependencies, search_clears
 
 PERSISTED = {"eligible_route_hops", "no_eligible_route", "sanctioned_within_reach", "money_trail",
              "max_flow_capacity", "ring_size", "top_broker", "waiver_compliance"}
@@ -78,17 +78,53 @@ def _fact(props: dict, rev: int, graph: Graph) -> dict:
     return fact
 
 
+def shared_routes(graph: Graph, entity_id: str) -> list[dict]:
+    """Routes that other investigations found and that pass through this entity. From the entity onward, each is
+    an eligible route of its own, and it still holds if no node or edge on that part changed since it was found."""
+    rows = graph.ro_query("""
+        MATCH (f:SemanticFact {predicate: 'eligible_route_hops'})
+        WHERE f.status = 'CURRENT' AND f.subject <> $id AND $id IN f.depends_on
+        MATCH (f)-[:FROM_EPISODE]->(ep:Episode)
+        RETURN f, ep.worker_id, ep.case_id
+        ORDER BY f.created_at
+    """, {"id": entity_id}).result_set
+    routes, seen = [], set()
+    for node, worker, case in rows:
+        props = node.properties
+        scope = json.loads(props["scope"])
+        nodes, identity = scope["path"]["nodes"], scope.get("identity_hops") or []
+        if entity_id not in nodes or entity_id in {h["id"] for h in identity}:
+            continue
+        i = nodes.index(entity_id)
+        part = {"nodes": nodes[i:], "steps": scope["path"]["steps"][i:]}
+        key = (props["object"], tuple(part["nodes"]))
+        if len(part["nodes"]) < 2 or key in seen:
+            continue
+        seen.add(key)
+        depends_on = path_dependencies(part)
+        missing, touched = q.changed_dependencies(graph, depends_on, props["valid_rev"])
+        if missing or touched:
+            continue
+        routes.append({"fact_id": props["id"], "episode_id": props["episode_id"], "case_id": case,
+                       "worker_id": worker, "found_from": props["subject"], "target": props["object"],
+                       "hops": len(part["nodes"]) - 1, "path": part,
+                       "identity_hops": [h for h in identity if h["id"] in part["nodes"][1:]],
+                       "valid_rev": props["valid_rev"], "depends_on": depends_on})
+    return routes
+
+
 def recall(graph: Graph, entity_id: str, facts: bool = True) -> dict | None:
     """What memory holds about an entity: facts (CURRENT, or STALE with the reason and the call that would
-    refresh them), recent episodes, approval requests with their status read now, and matching playbooks.
-    With `facts` false, only the playbooks: procedural memory without remembered findings."""
+    refresh them), routes other investigations found through it, recent episodes, approval requests with their
+    status read now, and matching playbooks. With `facts` false, only the playbooks: procedural memory without
+    remembered findings."""
     started = time.perf_counter()
     fingerprint = q.topology_fingerprint(graph, entity_id)
     if fingerprint is None:
         return None
     rev = current_rev(graph)
     if not facts:
-        return {"entity_id": entity_id, "rev": rev, "facts": [], "episodes": [], "approvals": [],
+        return {"entity_id": entity_id, "rev": rev, "facts": [], "shared": [], "episodes": [], "approvals": [],
                 "fingerprint": fingerprint, "playbooks": q.playbooks_for(graph, fingerprint["patterns"]),
                 "elapsed_ms": round((time.perf_counter() - started) * 1000, 1)}
     rows = graph.ro_query("""
@@ -118,6 +154,7 @@ def recall(graph: Graph, entity_id: str, facts: bool = True) -> dict | None:
         "entity_id": entity_id,
         "rev": rev,
         "facts": remembered,
+        "shared": shared_routes(graph, entity_id),
         "episodes": [{"id": eid, "case_id": case, "created_at": created, "verdict": verdict, "answer_state": state,
                       "planner": planner, "evidence_rev": ev_rev, "facts_cached": cached, "tools": tools}
                      for eid, case, created, verdict, state, planner, ev_rev, cached, tools in episodes],
@@ -241,8 +278,93 @@ def persist_run(graph: Graph, *, case_id: str, entity_id: str, worker_id: str, p
             MATCH (f:SemanticFact {id: s[0]}) WHERE f.status = 'CURRENT'
             SET f.status = 'STALE', f.stale_reason = s[1]
         """, {"stale": stale})
+
+    reused = list(dict.fromkeys(f["scope"]["shared"]["fact_id"] for f in final["facts"] if f["scope"].get("shared")))
+    if reused:
+        graph.query("""
+            MATCH (ep:Episode {id: $ep})
+            UNWIND $ids AS fid
+            MATCH (f:SemanticFact {id: fid})
+            MERGE (ep)-[:REUSED]->(f)
+        """, {"ep": episode, "ids": reused})
+    deferred = [[f["subject"], f["value"]] for f in final["facts"] if f["predicate"] == "already_requested"]
+    if deferred:
+        graph.query("""
+            MATCH (ep:Episode {id: $ep})
+            UNWIND $deferred AS d
+            MATCH (r:ApprovalRequest {id: d[0]})
+            MERGE (ep)-[w:DEFERRED_TO]->(r)
+            ON CREATE SET w.targets = d[1]
+        """, {"ep": episode, "deferred": deferred})
+    case = None
+    if final["verdict"] == "SUSPICIOUS":
+        basis = [f for f in final["facts"] if f["id"] in final["verdict_basis"]]
+        targets = (final["approval_request"] or {}).get("target_ids") or []
+        case = link_case(graph, case_id, [d for f in basis for d in f["depends_on"] if "|" not in d] + targets,
+                         worker_id, now)
     return {"episode_id": episode, "case_id": case_id, "facts_written": written, "cached": note is None,
-            "note": note, "superseded": sorted(superseded), "marked_stale": [s[0] for s in stale]}
+            "note": note, "superseded": sorted(superseded), "marked_stale": [s[0] for s in stale],
+            "reused": reused, "deferred_to": [d[0] for d in deferred], "case": case}
+
+
+HIGH_RISK = "x:Sanctioned OR x.risk_flags IS NOT NULL"
+
+
+def link_case(graph: Graph, case_id: str, evidence: list[str], worker_id: str, now: float | None = None) -> dict:
+    """Attach evidence to a case and merge it with every case that shares a high-risk entity (a sanctioned account
+    or a flagged device) or at least two entities with it. The case of the earliest alert stays canonical (the
+    earliest opened, without alerts), so concurrent hunters converge on the same one."""
+    now = now or time.time()
+    graph.query("""
+        MATCH (c:Case {id: $case})
+        UNWIND $ids AS eid
+        MATCH (x:Entity {id: eid}) WHERE NOT x:Case
+        MERGE (c)-[:EVIDENCE]->(x)
+    """, {"case": case_id, "ids": list(dict.fromkeys(evidence))})
+    overlaps = graph.ro_query(f"""
+        MATCH (c:Case {{id: $case}})-[:EVIDENCE]->(x:Entity)<-[:EVIDENCE]-(o:Case)
+        WHERE o <> c
+        WITH o, collect(x.id) AS shared, sum(CASE WHEN {HIGH_RISK} THEN 1 ELSE 0 END) AS risky
+        WHERE risky > 0 OR size(shared) >= 2
+        OPTIONAL MATCH (o)-[:MERGED_INTO]->(root:Case)
+        RETURN o.id, coalesce(root.id, o.id), shared, risky > 0
+    """, {"case": case_id}).result_set
+    own_root = graph.ro_query("MATCH (:Case {id: $case})-[:MERGED_INTO]->(r:Case) RETURN r.id",
+                              {"case": case_id}).result_set
+    group = {own_root[0][0] if own_root else case_id} | {root for _, root, _, _ in overlaps}
+    order = graph.ro_query("""
+        UNWIND $ids AS cid
+        MATCH (c:Case {id: cid})
+        OPTIONAL MATCH (al:Alert {case_id: cid})
+        RETURN cid, min(al.created_at), c.created_at
+    """, {"ids": sorted(group)}).result_set
+    canonical = min(order, key=lambda r: (r[1] is None, r[1] if r[1] is not None else r[2], r[0]))[0]
+    shared = sorted({x for _, _, xs, _ in overlaps for x in xs})
+    rule = ("shares a high-risk entity" if any(risky for *_, risky in overlaps)
+            else "shares two or more entities") if overlaps else None
+    merging = sorted(group - {canonical})
+    if merging:
+        params = {"canonical": canonical, "merging": merging, "now": now, "shared": shared, "rule": rule,
+                  "worker": worker_id}
+        graph.query("""
+            MATCH (k:Case {id: $canonical})
+            UNWIND $merging AS mid
+            MATCH (child:Case)-[old:MERGED_INTO]->(:Case {id: mid})
+            MERGE (child)-[moved:MERGED_INTO]->(k)
+            ON CREATE SET moved.at = old.at, moved.shared = old.shared, moved.rule = old.rule, moved.by = old.by
+            DELETE old
+        """, params)
+        graph.query("""
+            MATCH (k:Case {id: $canonical})
+            UNWIND $merging AS mid
+            MATCH (m:Case {id: mid})
+            MERGE (m)-[e:MERGED_INTO]->(k)
+            ON CREATE SET e.at = $now, e.shared = $shared, e.rule = $rule, e.by = $worker
+            SET m.status = 'MERGED'
+        """, params)
+    return {"case_id": case_id, "evidence": len(set(evidence)), "canonical": canonical,
+            "merged_into": canonical if canonical != case_id else None,
+            "merged": [m for m in merging if m != case_id], "shared": shared, "rule": rule}
 
 
 def learn_playbook(graph: Graph, request_id: str, now: float | None = None) -> dict | None:

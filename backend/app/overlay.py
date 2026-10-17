@@ -29,7 +29,7 @@ from pathlib import Path
 from falkordb import Graph
 
 from .config import ROOT, get_settings
-from .contracts import MAX_CAPACITY, PRESCRIBED_DEPTH, AlertStatus
+from .contracts import ALERT_RULES, MAX_CAPACITY, PRESCRIBED_DEPTH, AlertStatus
 from .db import get_db, graph_key
 from .queries import RISK_RELS, dataset_meta, internal_id
 from .scenario import ACCOUNT, DAY, HOUR, MINUTE, NOVAPAY, GraphSpec
@@ -42,8 +42,7 @@ MIN_ANCHOR_DISTANCE = 7
 ANCHOR_MARGIN = 5
 TX_PREFIX = "ov1-"
 CASES_PATH = ROOT / "backend" / "eval" / "cases.json"
-RULES = ("large_outbound_wire", "new_counterparty_burst", "velocity_spike", "dormant_reactivation",
-         "cross_border_wire", "merchant_volume_jump")
+RULES = ALERT_RULES
 REVEALING = ("mule", "shell", "sdn", "launder", "ring", "fraud", "risk", "sanction", "suspicious", "clean",
              "positive", "negative", "control", "expected", "heldout", "test", "case", "layer", "exit",
              "nova", "vortex", "volkov", "baltic", "orion", "8821")

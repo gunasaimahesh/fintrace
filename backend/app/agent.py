@@ -35,7 +35,7 @@ from backend.app.db import graph_key as tenant_graph_key
 from backend.app.guardrails import EvidenceLedger, Verdict
 from backend.app.mcp_server import build_server
 
-MAX_STEPS = 12
+MAX_STEPS = 14
 RESULT_CHARS = 12_000
 RING_TARGET_LIMIT = 25
 BROKER_SCOPE_LIMIT = 50
@@ -53,8 +53,10 @@ checked: those results are in the alert message.
 Rules:
 - Memory: facts that recall_memory marks CURRENT still hold, so use them without re-running their tools. Each \
 STALE fact says why, and under rerun gives the call that produced it: repeat that call. If a route or a finding of \
-no route is STALE, investigate again from the start. If a learned playbook already ran steps for this alert, their \
-results are in the alert message too: don't repeat them.
+no route is STALE, investigate again from the start. Under shared, recall_memory lists routes other \
+investigations found through the alert entity that still hold: from the entity onward each is an eligible route of \
+its own, so finish the case from it instead of searching again. If a learned playbook already ran steps for this \
+alert, their results are in the alert message too: don't repeat them.
 - Exposure means money from the alert entity could reach a sanctioned entity. explore_neighborhood reports \
 these as eligible_routes and says how much of the graph each search covered. Anything reached only by ignoring \
 transfer direction, or through a shared IP, is association, not exposure.
@@ -70,7 +72,8 @@ the ring's members).
   4. Check the company's own decisions about the alert entity, and who may approve a freeze (trace_governance).
   5. Run freeze_impact on the accounts you would freeze: the alert entity and every account on the route and the \
 money trail except the sanctioned one, plus the members of a small ring. Leave out the legitimate customers and \
-shared infrastructure it reports, and add any account it reports as also exposed.
+shared infrastructure it reports, and add any account it reports as also exposed. Accounts it reports as already \
+awaiting sign-off in another request stay out of yours; if none are left, file nothing.
   6. File the freeze with request_action: case_id {case_id}, the freeze policy, an on-call approver with the \
 required clearance, the accounts to freeze and the ones left out. Nothing is frozen until a human signs off. Never \
 target a sanctioned account; it is already blocked.
@@ -289,9 +292,10 @@ async def refresh_stale(inv: Investigation, remembered: dict) -> None:
 
 
 def choose_playbook(inv: Investigation) -> dict | None:
-    """The best-supported matching playbook, unless remembered findings already answer the alert."""
+    """The best-supported matching playbook, unless remembered findings, or a route another investigation found
+    through the alert entity, already answer it."""
     remembered = inv.latest("recall_memory")
-    if not remembered or not remembered["playbooks"]:
+    if not remembered or not remembered["playbooks"] or remembered.get("shared"):
         return None
     verdicts = [f for f in remembered["facts"] if f["predicate"] in VERDICT_PREDICATES]
     if verdicts and all(f["status"] == "CURRENT" for f in verdicts):
@@ -333,21 +337,44 @@ async def apply_playbook(inv: Investigation, playbook: dict) -> None:
 
 
 async def fallback_plan(inv: Investigation) -> None:
-    """A fixed investigative order: widen, then follow money, ring, governance and collateral to a freeze request."""
-    e = inv.entity_id
-    remembered = inv.latest("recall_memory") or {"facts": []}
+    """A fixed investigative order: widen, then follow money, ring, governance and collateral to a freeze request.
+    A route another investigation already found through the alert entity stands in for the search."""
+    remembered = inv.latest("recall_memory") or {"facts": [], "shared": []}
     verdicts = [f for f in remembered["facts"] if f["predicate"] in VERDICT_PREDICATES]
     if verdicts and all(f["status"] == "CURRENT" for f in verdicts):
         await refresh_stale(inv, remembered)
         return
+    if hit := shared_hit(remembered):
+        origin = hit["shared"]
+        await inv.notice(f"{origin['worker_id']} already found a route from {origin['found_from']} through "
+                         f"{inv.entity_id} to sanctioned {hit['entity']['id']} ({origin['case_id']}, "
+                         f"{origin['episode_id']}). Nothing on it from {inv.entity_id} onward has changed, so the "
+                         f"{PRESCRIBED_DEPTH}-hop search is skipped and the case continues from that route.")
+    elif (hit := await search_route(inv)) is None:
+        return
+    await finish_case(inv, hit)
+
+
+def shared_hit(remembered: dict) -> dict | None:
+    """The shortest route recalled from another investigation, shaped like an eligible route from exploration."""
+    shared = remembered.get("shared") or []
+    if not shared:
+        return None
+    best = min(shared, key=lambda r: r["hops"])
+    return {"entity": {"id": best["target"]}, "hops": best["hops"], "path": best["path"],
+            "identity_hops": best["identity_hops"], "shared": best}
+
+
+async def search_route(inv: Investigation) -> dict | None:
+    e = inv.entity_id
     near = await inv.ensure("explore_neighborhood", {"entity_id": e, "depth": 1},
                             "Start with direct counterparties and devices.")
     if not near or near["total_reached"] == 0:
-        return
+        return None
     deep = await inv.ensure("explore_neighborhood", {"entity_id": e, "depth": PRESCRIBED_DEPTH},
                             f"Widen to {PRESCRIBED_DEPTH} hops, and search the routes money could actually take.")
     if not deep:
-        return
+        return None
     routes = deep["eligible_routes"]["routes"]
     if not routes:
         if not deep["eligible_routes"]["scope"]["complete"]:
@@ -355,9 +382,19 @@ async def fallback_plan(inv: Investigation) -> None:
         elif any("Sanctioned" in h["entity"]["labels"] for h in deep["flagged"]):
             await inv.notice("A sanctioned entity is within reach, but no eligible route leads there, so the "
                              "investigation stops at association.")
-        return
+        return None
+    return min(routes, key=lambda r: r["hops"])
 
-    hit = min(routes, key=lambda r: r["hops"])
+
+def _unrequested(impact: dict, targets: list[str]) -> list[str]:
+    covered = {t for p in impact.get("already_requested", []) for t in p["target_ids"]}
+    return [t for t in targets if t not in covered]
+
+
+async def finish_case(inv: Investigation, hit: dict) -> None:
+    """From an eligible route: money trail, exposure bound, ring and broker, governance, collateral, then a freeze
+    request for the accounts no other case has already put up for sign-off."""
+    e = inv.entity_id
     target, nodes = hit["entity"]["id"], hit["path"]["nodes"]
     devices = [h for h in hit["identity_hops"] if h["type"] == "Device"]
     bridge = devices[-1] if devices else None
@@ -390,14 +427,31 @@ async def fallback_plan(inv: Investigation) -> None:
         return
     excluded = [c["id"] for c in impact["collateral"]]
     excluded += [i["id"] for i in impact["infrastructure"] if not i["safe_to_block"]]
+    origin = hit.get("shared")
     reason = (f"{e} has an eligible route to sanctioned {target} in {hit['hops']} hops"
               + (f" through shared device {bridge['id']}" if bridge else "")
+              + (f" (found by {origin['worker_id']} in {origin['case_id']})" if origin else "")
               + (f"; up to ${exposure['max_flow_usd']:,.0f} could reach it" if exposure else "") + ".")
     approver = approvers[0]
-    await inv.ensure("request_action", {"target_ids": targets, "policy_id": policy["id"],
-                                        "approver_id": approver["id"], "reason": reason, "case_id": inv.case_id,
-                                        "excluded_ids": excluded, "action_type": "FREEZE"},
-                     f"Route the freeze to {approver['name']}, on call with {approver['clearance']} clearance.")
+    for attempt in range(2):
+        if not (targets := _unrequested(impact, targets)):
+            await inv.notice("Every account to freeze already awaits sign-off in another case's request, so no "
+                             "new request is filed.")
+            return
+        args = {"target_ids": targets, "policy_id": policy["id"], "approver_id": approver["id"], "reason": reason,
+                "case_id": inv.case_id, "excluded_ids": excluded, "action_type": "FREEZE"}
+        if await inv.ensure("request_action", args, f"Route the freeze to {approver['name']}, on call with "
+                                                    f"{approver['clearance']} clearance.") is not None:
+            return
+        failure = inv.results[-1]
+        raced = failure["tool"] == "request_action" and "already awaiting sign-off" in (failure["error"] or "")
+        if attempt or not raced:
+            return
+        recheck = await inv.call("freeze_impact", {"target_ids": targets},
+                                 "Another case filed for some of these accounts meanwhile: check which are left.")
+        if not recheck["ok"]:
+            return
+        impact = recheck["data"]
 
 
 def freeze_targets(inv: Investigation, hit: dict, flow: dict | None, ring: dict | None) -> list[str]:

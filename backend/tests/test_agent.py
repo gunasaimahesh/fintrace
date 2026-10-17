@@ -73,9 +73,10 @@ class FakeLLM:
 
 @pytest.fixture(autouse=True)
 def forget(scratch_key):
-    """Each test starts cold: memory an earlier test wrote to the shared graph is removed."""
+    """Each test starts cold: memory, cases and pending requests an earlier test wrote to the shared graph are
+    removed (an account can be in only one pending request)."""
     get_db().select_graph(scratch_key).query(
-        "MATCH (n) WHERE n:SemanticFact OR n:Episode OR n:Step DETACH DELETE n")
+        "MATCH (n) WHERE n:SemanticFact OR n:Episode OR n:Step OR n:Case OR n:ApprovalRequest DETACH DELETE n")
 
 
 @pytest.fixture
@@ -246,15 +247,17 @@ def test_the_model_verdict_never_overrides_the_facts(scratch_key, fake_llm):
 
 
 def test_the_tool_budget_caps_a_model_that_never_stops(scratch_key, fake_llm):
-    burst = calls(*EXPLORE, ("detect_ring", {"entity_id": s.VOLKOV}))
+    burst = calls(*EXPLORE, ("detect_ring", {"entity_id": s.VOLKOV}), ("trace_money_flow", {"entity_id": s.VOLKOV}),
+                  ("find_brokers", {"entity_id": s.VOLKOV}))
     llm = fake_llm(lambda request: burst if "tools" in request else answer(verdict="SUSPICIOUS", statements=[]))
     events, final = run(s.NOVAPAY, scratch_key)
     assert final["tool_calls"] == agent.MAX_STEPS and final["budget_exhausted"]
     assert len(tools_called(events)) == agent.MAX_STEPS
     last = llm.requests[-1]
-    assert "tools" not in last and "All 12 tool calls are used" in last["messages"][-1]["content"]
+    assert "tools" not in last and f"All {agent.MAX_STEPS} tool calls are used" in last["messages"][-1]["content"]
     skipped = [m for m in last["messages"] if m["role"] == "tool" and "budget exhausted" in m["content"]]
-    assert len(skipped) == 2
+    ran_of_last_burst = (agent.MAX_STEPS - 2) % len(burst.tool_calls)  # after resolve_entity and recall_memory
+    assert ran_of_last_burst and len(skipped) == len(burst.tool_calls) - ran_of_last_burst
 
 
 def test_an_llm_failure_hands_over_to_the_fallback_without_repeating_calls(scratch_key, fake_llm):

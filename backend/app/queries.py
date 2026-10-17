@@ -772,8 +772,25 @@ def freeze_impact(graph: Graph, target_ids: list[str]) -> dict:
         "infrastructure": infrastructure,
         "collateral": sorted(collateral.values(), key=lambda c: -(c["monthly_volume_usd"] or 0)),
         "also_exposed": sorted(exposed.values(), key=lambda c: c["route_hops"]),
+        "already_requested": pending_requests(graph, target_ids),
         "elapsed_ms": _ms(started),
     }
+
+
+def pending_requests(graph: Graph, target_ids: list[str]) -> list[dict]:
+    """Pending freeze requests that already target any of these accounts, oldest first, with the case and the
+    episode that filed them (none yet if that investigation is still running)."""
+    rows = graph.ro_query("""
+        MATCH (r:ApprovalRequest)
+        WHERE r.status = 'PENDING_L3' AND any(t IN r.target_ids WHERE t IN $targets)
+        OPTIONAL MATCH (r)-[:FOR_CASE]->(c:Case)
+        OPTIONAL MATCH (ep:Episode {request_id: r.id})
+        RETURN r.id, c.id, r.requested_by, [t IN r.target_ids WHERE t IN $targets], r.created_at, collect(ep.id)
+        ORDER BY r.created_at, r.id
+    """, {"targets": target_ids}).result_set
+    return [{"request_id": rid, "case_id": case, "requested_by": by, "target_ids": overlap, "created_at": created,
+             "episode_id": episodes[0] if episodes else None}
+            for rid, case, by, overlap, created, episodes in rows]
 
 
 def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_ids: list[str], action_type: str,
@@ -819,19 +836,31 @@ def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_i
                     "approver": {"id": approver_id, "name": name, "clearance": clearance}, "entities": entities}
 
     rid = f"apr-{uuid.uuid4().hex[:8]}"
-    graph.query("""
-        MERGE (c:Entity:Case {id: $case})
-        ON CREATE SET c.status = 'OPEN', c.created_at = $now, c.subject_id = $subject
-        WITH c
+    # Check and CREATE stay in one write query: FalkorDB runs writes one at a time, so two investigations
+    # racing to freeze the same account cannot both file.
+    clashes = graph.query("""
         MATCH (p:Entity {id: $policy}), (e:Entity {id: $approver})
-        CREATE (r:Entity:ApprovalRequest {id: $rid, status: 'PENDING_L3', action_type: $action, reason: $reason,
-                                          created_at: $now, requested_by: $by, target_ids: $targets,
-                                          excluded_ids: $excluded, required_clearance: $required,
-                                          evidence_rev: $rev, depends_on: $targets})
-        CREATE (r)-[:FOR_CASE]->(c), (r)-[:UNDER_POLICY]->(p), (r)-[:ROUTED_TO]->(e)
+        OPTIONAL MATCH (other:ApprovalRequest)
+        WHERE other.status = 'PENDING_L3' AND any(t IN other.target_ids WHERE t IN $targets)
+        OPTIONAL MATCH (other)-[:FOR_CASE]->(oc:Case)
+        WITH p, e, collect(CASE WHEN other IS NULL THEN NULL
+                                ELSE [other.id, oc.id, [t IN other.target_ids WHERE t IN $targets]] END) AS clashes
+        FOREACH (_ IN CASE WHEN size(clashes) = 0 THEN [1] ELSE [] END |
+            MERGE (c:Entity:Case {id: $case})
+            ON CREATE SET c.status = 'OPEN', c.created_at = $now, c.subject_id = $subject
+            CREATE (r:Entity:ApprovalRequest {id: $rid, status: 'PENDING_L3', action_type: $action, reason: $reason,
+                                              created_at: $now, requested_by: $by, target_ids: $targets,
+                                              excluded_ids: $excluded, required_clearance: $required,
+                                              evidence_rev: $rev, depends_on: $targets})
+            CREATE (r)-[:FOR_CASE]->(c), (r)-[:UNDER_POLICY]->(p), (r)-[:ROUTED_TO]->(e))
+        RETURN clashes
     """, {"case": case_id, "now": now, "subject": target_ids[0], "policy": policy_id, "approver": approver_id,
           "rid": rid, "action": action_type, "reason": reason, "by": requested_by, "targets": target_ids,
-          "excluded": excluded_ids, "required": required, "rev": current_rev(graph)})
+          "excluded": excluded_ids, "required": required, "rev": current_rev(graph)}).result_set[0][0]
+    if clashes:
+        listed = "; ".join(f"{', '.join(overlap)} in {other} ({case})" for other, case, overlap in clashes)
+        raise ValueError(f"already awaiting sign-off: {listed}. An account can be in only one pending request: "
+                         f"leave those out and request the rest, if any.")
     for rel, ids in (("TARGETS", target_ids), ("EXCLUDES", excluded_ids)):
         if ids:
             graph.query(f"""

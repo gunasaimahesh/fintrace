@@ -187,7 +187,7 @@ def route_breaks(path: dict) -> list[str]:
     return list(dict.fromkeys(breaks))
 
 
-def _path_dependencies(path: dict) -> list[str]:
+def path_dependencies(path: dict) -> list[str]:
     deps = list(path["nodes"])
     for step in path["steps"]:
         src, dst = (step["from"], step["to"]) if step.get("forward", True) else (step["to"], step["from"])
@@ -242,6 +242,13 @@ def extract_facts(results: list[dict], rev: int | None = None) -> list[Fact]:
                 if request["approver"]:
                     add(FactKind.ACTION, request["request_id"], "action_status", request["approver"]["id"],
                         request["status"], None, src(f"data.approvals[{i}]"), scope=_action_scope(request))
+            for i, route in enumerate(d.get("shared", [])):
+                origin = {k: route[k] for k in ("fact_id", "episode_id", "case_id", "worker_id", "found_from",
+                                                "valid_rev")}
+                add(FactKind.SANCTIONS_EXPOSURE, d["entity_id"], "eligible_route_hops", route["target"], route["hops"],
+                    "hops", src(f"data.shared[{i}]"),
+                    scope={"path": route["path"], "identity_hops": route["identity_hops"], "shared": origin},
+                    depends_on=route["depends_on"])
 
         elif tool == "explore_neighborhood":
             subject, eligible = d["entity_id"], d["eligible_routes"]
@@ -250,7 +257,7 @@ def extract_facts(results: list[dict], rev: int | None = None) -> list[Fact]:
                 add(FactKind.SANCTIONS_EXPOSURE, subject, "eligible_route_hops", route["entity"]["id"], route["hops"],
                     "hops", src(f"data.eligible_routes.routes[{i}]"),
                     scope={"path": route["path"], "identity_hops": route["identity_hops"], "search": scope},
-                    depends_on=_path_dependencies(route["path"]))
+                    depends_on=path_dependencies(route["path"]))
             if not eligible["routes"]:
                 predicate = "no_eligible_route" if scope["complete"] else "eligible_search_incomplete"
                 add(FactKind.SANCTIONS_EXPOSURE, subject, predicate, None, scope["completed_depth"], "hops",
@@ -261,7 +268,7 @@ def extract_facts(results: list[dict], rev: int | None = None) -> list[Fact]:
                     "sanctioned_within_reach" if sanctioned else "risk_flag_within_reach",
                     hit["entity"]["id"], hit["depth"], "hops", src(f"data.flagged[{i}]"),
                     scope={"path": hit["path"], "breaks": route_breaks(hit["path"])},
-                    depends_on=_path_dependencies(hit["path"]))
+                    depends_on=path_dependencies(hit["path"]))
 
         elif tool == "trace_money_flow":
             for i, hit in enumerate(d["sanctioned"]):
@@ -346,6 +353,11 @@ def extract_facts(results: list[dict], rev: int | None = None) -> list[Fact]:
                 add(FactKind.ACTION, a["id"], "also_exposed", a["sanctioned"], a["route_hops"], "hops",
                     src(f"data.also_exposed[{i}]"), scope={"shared_via": a["shared_via"]},
                     depends_on=[a["id"], *a["shared_via"]])
+            for i, p in enumerate(d.get("already_requested", [])):
+                add(FactKind.ACTION, p["request_id"], "already_requested", p["case_id"], p["target_ids"], None,
+                    src(f"data.already_requested[{i}]"),
+                    scope={"requested_by": p["requested_by"], "episode_id": p["episode_id"]},
+                    depends_on=[p["request_id"], *p["target_ids"]])
 
         elif tool == "request_action":
             add(FactKind.ACTION, d["request_id"], "action_status", d["approver"]["id"], d["status"], None,
@@ -354,7 +366,7 @@ def extract_facts(results: list[dict], rev: int | None = None) -> list[Fact]:
         elif tool == "path_between" and d.get("connected"):
             add(FactKind.SANCTIONS_EXPOSURE, d["from_id"], "shortest_connection_hops", d["to_id"], d["hops"], "hops",
                 src("data.hops"), scope={"path": d["path"], "breaks": route_breaks(d["path"])},
-                depends_on=_path_dependencies(d["path"]))
+                depends_on=path_dependencies(d["path"]))
     return facts
 
 
@@ -465,6 +477,10 @@ def render(entity_id: str, state: AnswerState, verdict: Verdict, facts: list[Fac
 
     routes = _first_per(sorted(_by(facts, "eligible_route_hops"), key=lambda f: f.value), key=lambda f: f.object)
     for n, f in enumerate(routes):
+        if origin := f.scope.get("shared"):
+            say(f"From shared memory: {origin['worker_id']} found a route from {label(origin['found_from'])} through "
+                f"{label(f.subject)} to sanctioned {label(f.object)} ({origin['case_id']}, {origin['episode_id']}), "
+                f"and nothing on it from {f.subject} onward has changed since graph revision {origin['valid_rev']}.", f)
         if n == 0:
             say(f"{label(f.subject)} has an eligible route to sanctioned {label(f.object)} in {f.value} hops: "
                 f"{' → '.join(f.scope['path']['nodes'])}.", f)
@@ -592,6 +608,14 @@ def render(entity_id: str, state: AnswerState, verdict: Verdict, facts: list[Fac
             say(f"Freeze request {f.subject} was signed off by {approver}; {targets} frozen.", f)
         else:
             say(f"Freeze request {f.subject} is {f.value}.", f)
+    for f in _first_per(_by(facts, "already_requested"), key=lambda f: f.subject):
+        accounts = [t for t in f.value if t not in requested]
+        if not accounts:
+            continue
+        by = f.scope.get("requested_by")
+        say(f"{_and(accounts)} already {'awaits' if len(accounts) == 1 else 'await'} sign-off in freeze request "
+            f"{f.subject} ({f.object}" + (f", requested by {by}" if by else "") + "), so "
+            + ("this case's request leaves them out." if latest else "no new request was filed for them."), f)
     return out
 
 

@@ -2,7 +2,7 @@
 
 Usage (from the repo root):
     python -m backend.app.seed_data --reset
-    python -m backend.app.seed_data --tenant globex-eu --reset
+    python -m backend.app.seed_data --tenant globex-eu --profile small --reset
 """
 
 from __future__ import annotations
@@ -25,6 +25,8 @@ from .scenario import DAY, HOUR, GraphSpec, build_scenario
 INDEXES = [("Entity", "id"), ("Account", "id"), ("Alert", "status"), ("Case", "status"), ("Episode", "id"),
            ("SemanticFact", "id"), ("Playbook", "id")]
 FIXTURE_VERSION = "base-3"
+SMALL_FIXTURE_VERSION = "small-1"
+SMALL_ALERTS = [("merch-nova-pay", "merchant_volume_jump", 5), ("acct-tier1-payroll", "cross_border_wire", 3)]
 BATCH = 5_000
 WRITE_TIMEOUT_MS = 120_000
 DEVICE_SHARE = 0.25
@@ -157,8 +159,23 @@ def load_spec(graph: Graph, spec: GraphSpec) -> None:
         """, rows)
 
 
-def seed(tenant: str, reset: bool) -> None:
+def plant_alerts(graph: Graph, alerts: list[tuple[str, str, int]], created_at: int) -> None:
+    graph.query("""
+        UNWIND range(0, size($alerts) - 1) AS i
+        WITH i, $alerts[i] AS a
+        MATCH (x:Entity {id: a[1]})
+        CREATE (al:Entity:Alert {id: a[0], status: 'PENDING', subject_id: a[1], rule: a[2], priority: a[3],
+                                 created_at: $at + i * 60})
+        CREATE (al)-[:ALERT_ON]->(x)
+    """, {"alerts": [[f"alert-{2001 + i}", *alert] for i, alert in enumerate(alerts)], "at": created_at})
+
+
+def seed(tenant: str, reset: bool, profile: str = "full", snapshot: bool = True) -> None:
+    """`full` loads the IBM slice, the planted scenario, company sources and the challenge overlay. `small` is a
+    second tenant's fixture: the planted scenario with only the IBM accounts it attaches to, company sources and
+    two alerts of its own."""
     from .overlay import apply_overlay, write_cases  # the overlay builds on this module
+    from .tenants import snapshot as take_snapshot
 
     db = get_db()
     key = graph_key(tenant)
@@ -171,27 +188,45 @@ def seed(tenant: str, reset: bool) -> None:
     manifest = json.loads((DATA_DIR / "slice_manifest.json").read_text())
     anchors = json.loads((DATA_DIR / "scenario_anchors.json").read_text())
     accounts = pd.read_csv(DATA_DIR / "ibm_aml_hi_small_accounts.csv.gz", keep_default_na=False)
-    transfers = pd.read_csv(DATA_DIR / "ibm_aml_hi_small_slice.csv.gz")
     window = (int(manifest["ts_range"][0]), int(manifest["ts_range"][1]))
     base_ts = window[1] // DAY * DAY - 2 * DAY + 8 * HOUR
     loaded_at = int(time.time())
+    fixture = FIXTURE_VERSION if profile == "full" else SMALL_FIXTURE_VERSION
 
-    steps = [
-        ("indexes", lambda: create_indexes(graph)),
-        ("IBM accounts", lambda: load_ibm_accounts(graph, accounts, loaded_at)),
-        ("IBM transfers", lambda: load_ibm_transfers(graph, transfers)),
-        ("identity layer", lambda: load_spec(graph, build_identity_layer(accounts, window, loaded_at))),
-        ("planted scenario", lambda: load_spec(graph, build_scenario(anchors, window, base_ts, loaded_at))),
-        ("company sources", lambda: load_company(graph)),
-        ("FLOWS_TO summaries", lambda: build_flow_summary(graph)),
-        ("meta", lambda: graph.query("""
+    def meta() -> None:
+        graph.query("""
             CREATE (:Meta {key: 'dataset', source: $source, as_of_ts: $as_of, window_start: $start,
                            scenario_base_ts: $base, loaded_at: $loaded_at, rev: 0, fixture_version: $fixture})
         """, {"source": manifest["source"], "as_of": window[1], "start": window[0], "base": base_ts,
-              "loaded_at": loaded_at, "fixture": FIXTURE_VERSION})),
-        # After the summaries and Meta: it reads the data window from Meta and summarizes its own transfers.
-        ("challenge overlay", lambda: write_cases(apply_overlay(graph), FIXTURE_VERSION)),
-    ]
+              "loaded_at": loaded_at, "fixture": fixture})
+
+    if profile == "full":
+        transfers = pd.read_csv(DATA_DIR / "ibm_aml_hi_small_slice.csv.gz")
+        steps = [
+            ("indexes", lambda: create_indexes(graph)),
+            ("IBM accounts", lambda: load_ibm_accounts(graph, accounts, loaded_at)),
+            ("IBM transfers", lambda: load_ibm_transfers(graph, transfers)),
+            ("identity layer", lambda: load_spec(graph, build_identity_layer(accounts, window, loaded_at))),
+            ("planted scenario", lambda: load_spec(graph, build_scenario(anchors, window, base_ts, loaded_at))),
+            ("company sources", lambda: load_company(graph)),
+            ("FLOWS_TO summaries", lambda: build_flow_summary(graph)),
+            ("meta", meta),
+            # After the summaries and Meta: it reads the data window from Meta and summarizes its own transfers.
+            ("challenge overlay", lambda: write_cases(apply_overlay(graph), FIXTURE_VERSION)),
+        ]
+    else:
+        attached = accounts[accounts["account_id"].isin({a for ids in anchors.values() for a in ids})]
+        steps = [
+            ("indexes", lambda: create_indexes(graph)),
+            ("attached IBM accounts", lambda: load_ibm_accounts(graph, attached, loaded_at)),
+            ("planted scenario", lambda: load_spec(graph, build_scenario(anchors, window, base_ts, loaded_at))),
+            ("company sources", lambda: load_company(graph)),
+            ("FLOWS_TO summaries", lambda: build_flow_summary(graph)),
+            ("meta", meta),
+            ("alerts", lambda: plant_alerts(graph, SMALL_ALERTS, base_ts + 12 * HOUR)),
+        ]
+    if snapshot:
+        steps.append(("pristine snapshot", lambda: take_snapshot(tenant)))
     for name, step in steps:
         started = time.perf_counter()
         step()
@@ -206,8 +241,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Load the FinTrace demo graph into FalkorDB.")
     parser.add_argument("--tenant", default=get_settings().default_tenant)
     parser.add_argument("--reset", action="store_true", help="delete and rebuild the graph if it exists")
+    parser.add_argument("--profile", choices=["full", "small"], default="full",
+                        help="small: a second tenant's fixture without the IBM slice")
+    parser.add_argument("--no-snapshot", action="store_true", help="skip the pristine copy that resets restore")
     args = parser.parse_args()
-    seed(args.tenant, args.reset)
+    seed(args.tenant, args.reset, args.profile, snapshot=not args.no_snapshot)
 
 
 if __name__ == "__main__":

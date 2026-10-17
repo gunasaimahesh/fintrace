@@ -226,18 +226,20 @@ def recall_memory(ctx: ToolContext, g: RecordingGraph, ev: Evidence, entity_id: 
     if result is None:
         raise ToolError(f"{entity_id} is not in the graph")
     nodes = {d for fact in result["facts"] for d in fact["depends_on"] if "|" not in d} | {entity_id}
+    nodes |= {d for route in result["shared"] for d in route["depends_on"] if "|" not in d}
     nodes |= {t for request in result["approvals"] for t in request["target_ids"]}
     for info in q.describe_entities(g, sorted(nodes)).values():
         ev.node(info)
-    for fact in result["facts"]:
-        if fact["status"] == "CURRENT" and "path" in fact["scope"]:
-            for step in fact["scope"]["path"]["steps"]:
-                forward = step.get("forward", True)
-                ev.edge(step["from"] if forward else step["to"], step["rel"], step["to"] if forward else step["from"])
+    paths = [f["scope"]["path"] for f in result["facts"] if f["status"] == "CURRENT" and "path" in f["scope"]]
+    for path in paths + [route["path"] for route in result["shared"]]:
+        for step in path["steps"]:
+            forward = step.get("forward", True)
+            ev.edge(step["from"] if forward else step["to"], step["rel"], step["to"] if forward else step["from"])
     for request in result["approvals"]:
         if request["approver"]:
             ev.node({**request["approver"], "labels": ["Employee"]})
-    rows = len(result["facts"]) + len(result["episodes"]) + len(result["playbooks"]) + len(result["approvals"])
+    rows = (len(result["facts"]) + len(result["shared"]) + len(result["episodes"]) + len(result["playbooks"])
+            + len(result["approvals"]))
     return result, rows, None
 
 
@@ -517,8 +519,16 @@ def freeze_impact(ctx: ToolContext, g: RecordingGraph, ev: Evidence, target_ids:
         advice.append("Not customers to protect: " + "; ".join(
             f"{a['id']} has its own eligible route to {a['sanctioned']} in {a['route_hops']} hops"
             for a in result["also_exposed"]) + ". Add them to the freeze.")
+    for p in result["already_requested"]:
+        ev.node({"id": p["request_id"], "labels": ["ApprovalRequest"], "name": "FREEZE awaiting sign-off"})
+        for t in p["target_ids"]:
+            ev.edge(p["request_id"], "TARGETS", t)
+        advice.append(f"{', '.join(p['target_ids'])} already await sign-off in {p['request_id']} ({p['case_id']}): "
+                      f"leave them out of a new request.")
     data = {**{k: v for k, v in result.items() if k != "elapsed_ms"}, "recommendation": " ".join(advice)}
-    return data, len(result["collateral"]) + len(result["also_exposed"]) + len(result["infrastructure"]), None
+    rows = (len(result["collateral"]) + len(result["also_exposed"]) + len(result["infrastructure"])
+            + len(result["already_requested"]))
+    return data, rows, None
 
 
 @tool

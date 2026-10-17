@@ -33,6 +33,10 @@ class AlertStatus(StrEnum):
     FAILED = "FAILED"
 
 
+ALERT_RULES = ("large_outbound_wire", "new_counterparty_burst", "velocity_spike", "dormant_reactivation",
+               "cross_border_wire", "merchant_volume_jump")
+
+
 class FactKind(StrEnum):
     SANCTIONS_EXPOSURE = "sanctions_exposure"
     WAIVER_COMPLIANCE = "waiver_compliance"
