@@ -5,16 +5,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from backend.app import board, memory, mutations
+from backend.app import agent, board, memory, mutations
 from backend.app import coordination as co
 from backend.app import queries as q
 from backend.app import scenario as s
-from backend.app.contracts import MAX_ATTEMPTS
+from backend.app.contracts import LEASE_SECONDS, MAX_ATTEMPTS, Claim
 from backend.app.db import get_db
 from backend.app.overlay import CASES_PATH
 from backend.eval import contention
@@ -63,12 +64,124 @@ def test_an_expired_claim_goes_back_to_the_queue_and_its_token_can_no_longer_com
     assert not co.renew(graph, "alert-1", slow["token"], now=1017)
     fast = co.claim(graph, "fast", now=1020)
     assert fast["attempt"] == 2
-    assert not co.complete(graph, "alert-1", slow["token"], {"verdict": "SUSPICIOUS"})
-    assert co.complete(graph, "alert-1", fast["token"], {"verdict": "CLEAR"})
+    assert not co.complete(graph, "alert-1", slow["token"], {"verdict": "SUSPICIOUS"}, now=1021)
+    assert co.complete(graph, "alert-1", fast["token"], {"verdict": "CLEAR"}, now=1021)
     history = attempts(graph, "alert-1")
     assert [(a["worker_id"], a["status"]) for a in history] == [("slow", "EXPIRED"), ("fast", "COMPLETED")]
     assert history[0]["refused"].startswith("completion refused")
     assert graph.ro_query("MATCH (al:Alert) RETURN al.verdict, al.completed_by").result_set == [["CLEAR", "fast"]]
+
+
+def test_a_lapsed_lease_cannot_renew_complete_or_fail_even_before_the_sweep(queue_key):
+    graph = plant_alerts(queue_key, 2)
+    held = co.claim(graph, "w1", now=1000, lease_seconds=10)
+    assert co.renew(graph, held["id"], held["token"], now=1010, lease_seconds=10), "a lease holds through lease_until"
+    assert co.complete(graph, held["id"], held["token"], {"verdict": "CLEAR"}, now=1020)
+    late = co.claim(graph, "w2", now=1000, lease_seconds=10)
+    assert not co.renew(graph, late["id"], late["token"], now=1011, lease_seconds=10)
+    assert not co.complete(graph, late["id"], late["token"], {"verdict": "CLEAR"}, now=1011)
+    assert not co.fail(graph, late["id"], late["token"], "boom", now=1011)
+    assert attempts(graph, late["id"])[0]["refused"].startswith("failure refused: this attempt no longer holds")
+    assert co.sweep(graph, now=1010)["expired"] == [], "swept at lease_until"
+    assert co.sweep(graph, now=1011)["expired"] == [late["id"]]
+    assert not co.complete(graph, late["id"], late["token"], {"verdict": "CLEAR"}, now=1012)
+
+
+def test_writes_under_a_claim_that_passed_to_another_hunter_change_nothing(fresh_key):
+    graph = get_db().select_graph(fresh_key)
+    old = co.claim(graph, "old")
+    co.sweep(graph, now=time.time() + LEASE_SECONDS + 1)
+    new = co.claim(graph, "new")
+    assert new["id"] == old["id"]
+    lost, held = Claim(old["id"], old["token"]), Claim(new["id"], new["token"])
+    assert not memory.open_case(graph, "case-lost", s.NOVAPAY, "old", claim=lost)
+    assert memory.open_case(graph, "case-held", s.NOVAPAY, "new", claim=held)
+    with pytest.raises(ValueError, match="old no longer holds the claim"):
+        q.request_action(graph, "case-lost", [s.NOVA_OPS], [], "FREEZE", s.POLICY, s.PRIYA, "late", requested_by="old",
+                         claim=lost)
+    assert memory.link_case(graph, "case-held", [s.VORTEX], "old", claim=lost) is None
+    filed = q.request_action(graph, "case-held", [s.NOVA_OPS], [], "FREEZE", s.POLICY, s.PRIYA, "held",
+                             requested_by="new", claim=held)
+    assert not memory.attach_request_evidence(graph, filed["request_id"], 0, [s.VORTEX], claim=lost)
+    assert graph.ro_query("""
+        OPTIONAL MATCH (c:Case {id: 'case-lost'})
+        OPTIONAL MATCH (:Case {id: 'case-held'})-[e:EVIDENCE]->()
+        OPTIONAL MATCH (r:ApprovalRequest)
+        RETURN count(DISTINCT c), count(DISTINCT e), collect(DISTINCT [r.requested_by, r.depends_on])
+    """).result_set == [[0, 0, [["new", [s.NOVA_OPS]]]]]
+
+
+def test_a_hunter_whose_claim_passed_on_mid_run_publishes_nothing_and_the_new_owner_finishes(fresh_key, monkeypatch):
+    graph = get_db().select_graph(fresh_key)
+    plan, gate = agent.fallback_plan, {}
+
+    async def paused(inv):
+        if inv.worker_id == "old":
+            gate["paused"].set()
+            await gate["resume"].wait()
+        await plan(inv)
+
+    monkeypatch.setattr(agent, "fallback_plan", paused)
+
+    async def scenario():
+        gate.update(paused=asyncio.Event(), resume=asyncio.Event())
+        alert = await asyncio.to_thread(co.claim, graph, "old")
+        old = asyncio.create_task(co.work(fresh_key, "old", alert))
+        await gate["paused"].wait()
+        await asyncio.to_thread(co.sweep, graph, time.time() + LEASE_SECONDS + 1)
+        taken = await asyncio.to_thread(co.claim, graph, "new")
+        gate["resume"].set()
+        first = await old
+        evidence = graph.ro_query("MATCH (:Case {id: $c})-[e:EVIDENCE]->() RETURN count(e)",
+                                  {"c": alert["case_id"]}).result_set[0][0]
+        return alert, taken, first, evidence, await co.work(fresh_key, "new", taken)
+
+    alert, taken, first, evidence, second = asyncio.run(scenario())
+    assert (taken["id"], taken["attempt"]) == (alert["id"], 2)
+    assert first["verdict"] == "SUSPICIOUS" and not first["committed"] and first["request_id"] is None
+    assert evidence == 0, "the old hunter attached evidence to the case"
+    [(lost, cached, note)] = graph.ro_query(
+        "MATCH (ep:Episode {worker_id: 'old'}) RETURN ep.claim_lost, ep.facts_cached, ep.cache_note").result_set
+    assert lost and cached is False and "old no longer held its claim" in note
+    assert graph.ro_query("""
+        OPTIONAL MATCH (f:SemanticFact)-[:FROM_EPISODE]->(:Episode {worker_id: 'old'})
+        OPTIONAL MATCH (r:ApprovalRequest {requested_by: 'old'})
+        RETURN count(f), count(r)
+    """).result_set == [[0, 0]]
+
+    assert second["committed"] and second["verdict"] == "SUSPICIOUS" and second["request_id"]
+    [state] = [a for a in co.queue_state(graph) if a["id"] == alert["id"]]
+    assert (state["status"], state["completed_by"], state["episode_id"]) == ("COMPLETED", "new", second["episode_id"])
+    assert [(a["worker_id"], a["status"]) for a in state["attempts"]] == [("old", "EXPIRED"), ("new", "COMPLETED")]
+    current = graph.ro_query("MATCH (f:SemanticFact {status: 'CURRENT'})-[:ABOUT]->(:Entity {id: $x}) "
+                             "RETURN collect(DISTINCT f.episode_id)", {"x": alert["subject_id"]}).result_set[0][0]
+    assert current == [second["episode_id"]]
+    assert [e["id"] for e in memory.recall(graph, alert["subject_id"])["episodes"]] == [second["episode_id"]]
+
+
+def test_a_hunter_stops_once_it_notices_its_lease_is_gone(fresh_key, monkeypatch):
+    graph = get_db().select_graph(fresh_key)
+    plan, gate = agent.fallback_plan, {}
+
+    async def stuck(inv):
+        gate["started"].set()
+        await asyncio.sleep(30)
+        await plan(inv)
+
+    monkeypatch.setattr(agent, "fallback_plan", stuck)
+
+    async def scenario():
+        gate["started"] = asyncio.Event()
+        alert = await asyncio.to_thread(co.claim, graph, "slow", lease_seconds=0.6)
+        slow = asyncio.create_task(co.work(fresh_key, "slow", alert, lease_seconds=0.6))
+        await gate["started"].wait()
+        await asyncio.to_thread(co.sweep, graph, time.time() + 1)
+        await asyncio.to_thread(co.claim, graph, "fast")
+        return await asyncio.wait_for(slow, 5)
+
+    outcome = asyncio.run(scenario())
+    assert outcome["lost_lease"] and outcome["verdict"] is None and not outcome["committed"]
+    assert outcome["error"].startswith("the claim was lost")
 
 
 def test_failed_alerts_are_retried_until_the_last_attempt_then_stay_failed_and_visible(queue_key):

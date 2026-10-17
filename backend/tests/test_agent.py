@@ -195,6 +195,45 @@ def test_a_sanctioned_account_beyond_six_hops_gets_a_qualified_clear(fresh_key):
     assert [(r["entity"]["id"], r["hops"]) for r in beyond["routes"]] == [(s.VORTEX, 7)]
 
 
+def test_a_route_the_model_found_from_another_account_does_not_decide_the_subject(scratch_key, fake_llm):
+    fake_llm(calls(("explore_neighborhood", {"entity_id": s.VOLKOV, "depth": 6})),
+             answer(verdict="SUSPICIOUS", statements=[], rationale="Volkov reaches Vortex."))
+    _, final = run(s.VIP, scratch_key)
+    assert final["verdict"] == "INSUFFICIENT" and final["coverage"] is None and cited(final)
+    assert not final["model_answer"]["agrees"]
+    assert f"That route starts at {s.VOLKOV}, not {s.VIP}, so it does not decide this verdict." in final["summary"]
+
+    fake_llm(answer(verdict="SUSPICIOUS", statements=[], rationale="Memory shows a route."))
+    _, again = run(s.VIP, scratch_key)
+    remembered = [f for f in again["facts"] if f["scope"].get("memory") and f["predicate"] == "eligible_route_hops"]
+    assert remembered and {f["subject"] for f in remembered} == {s.VOLKOV}
+    assert again["verdict"] == "INSUFFICIENT"
+
+    events, own = run(s.VIP, scratch_key, mode="fallback")
+    assert [e["args"]["entity_id"] for e in events if e.get("tool") == "explore_neighborhood"
+            and e["type"] == "tool_call"] == [s.VIP, s.VIP]
+    assert own["verdict"] == "CLEAR" and own["coverage"]["eligible"]["complete"]
+
+
+def test_a_complete_search_the_model_ran_from_another_account_does_not_clear_the_subject(scratch_key, fake_llm):
+    fake_llm(calls(("explore_neighborhood", {"entity_id": s.ISOLATED, "depth": 1})),
+             answer(verdict="CLEAR", statements=[], rationale="Nothing is reachable."))
+    _, final = run(s.NOVAPAY, scratch_key)
+    assert final["verdict"] == "INSUFFICIENT" and final["coverage"] is None and cited(final)
+    assert (f"found no eligible route to a sanctioned entity. That is about {s.ISOLATED}, not {s.NOVAPAY}, so it "
+            f"does not clear it.") in final["summary"]
+
+
+def test_a_sanctioned_subject_is_suspicious_without_a_route_and_is_not_put_up_for_freezing(scratch_key):
+    _, final = run(s.VORTEX, scratch_key, mode="fallback")
+    assert (final["verdict"], final["answer_state"]) == ("SUSPICIOUS", "subject_sanctioned")
+    basis = fact(final, final["verdict_basis"][0])
+    assert (basis["predicate"], basis["subject"], basis["value"]) == ("subject_sanctioned", s.VORTEX, "OFAC-SDN")
+    assert final["summary"].startswith(f"Vortex Holdings Ltd ({s.VORTEX}) is itself sanctioned (OFAC-SDN): that is "
+                                       f"direct exposure")
+    assert final["approval_request"] is None and s.VORTEX not in final["freeze_targets"] and cited(final)
+
+
 def test_model_statements_are_bound_to_facts_or_rejected(scratch_key, fake_llm):
     statements = [
         {"subject": s.NOVAPAY, "predicate": "eligible_route_hops", "object": s.VORTEX, "value": 5},

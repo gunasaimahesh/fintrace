@@ -1,8 +1,10 @@
 """Contracts shared by the agent, memory, alert workers and loaders.
 
 Alert lifecycle: PENDING -> CLAIMED -> COMPLETED | FAILED. A claim sets a fresh claim_token and a lease;
-completing or failing is conditional on that token, so a worker whose lease expired cannot commit. A
-sweeper returns expired claims, and failed alerts with attempt < MAX_ATTEMPTS, to PENDING.
+renewing, completing or failing is conditional on that token and an unexpired lease, so a worker whose lease
+ran out cannot commit, swept or not. What a hunter publishes on the way (memory, case merges, a freeze
+request) carries the same condition (`claim_fence`). A sweeper returns expired claims, and failed alerts with
+attempt < MAX_ATTEMPTS, to PENDING.
 
 Facts: every consequential statement on the analyst's card is rendered from a Fact bound to the tool
 result it came from (tool, step, result_key).
@@ -15,6 +17,7 @@ state, approvals, freezes and broker-scope labels are not evidence and leave it 
 
 from __future__ import annotations
 
+import time
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -23,7 +26,7 @@ PRESCRIBED_DEPTH = 6
 MAX_ATTEMPTS = 3
 LEASE_SECONDS = 120
 MAX_CAPACITY = 2**31 - 1
-VERDICT_PREDICATES = ("eligible_route_hops", "no_eligible_route")
+VERDICT_PREDICATES = ("subject_sanctioned", "eligible_route_hops", "no_eligible_route")
 
 
 class AlertStatus(StrEnum):
@@ -31,6 +34,29 @@ class AlertStatus(StrEnum):
     CLAIMED = "CLAIMED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+
+
+@dataclass(frozen=True)
+class Claim:
+    """A hunter's hold on one alert, as `coordination.claim` stamped it."""
+
+    alert_id: str
+    token: str
+
+
+def claim_fence(claim: Claim | None) -> tuple[str, dict]:
+    """A MATCH that yields no row unless `claim` still holds (same token, lease not run out), to put in front of a
+    write so the check and the write are one query, with its parameters. Without a claim there is nothing to check."""
+    if claim is None:
+        return "", {}
+    return (f"MATCH (own:Entity:Alert {{id: $claim_alert}}) WHERE own.status = '{AlertStatus.CLAIMED}' "
+            "AND own.claim_token = $claim_token AND own.lease_until >= $claim_now",
+            {"claim_alert": claim.alert_id, "claim_token": claim.token, "claim_now": time.time()})
+
+
+def claim_holds(graph: Any, claim: Claim) -> bool:
+    fence, params = claim_fence(claim)
+    return bool(graph.ro_query(fence + " RETURN own.id", params).result_set)
 
 
 ALERT_RULES = ("large_outbound_wire", "new_counterparty_burst", "velocity_spike", "dormant_reactivation",

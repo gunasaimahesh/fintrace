@@ -1,7 +1,8 @@
 """Guard rails for running FinTrace as a public demo.
 
 Visitors share each tenant's graph (demo data isolation, not access control): their changes are applied one at a
-time and everyone sees them. A reset waits until no investigation is using the graph. With PUBLIC_DEMO set, model
+time and everyone sees them. A reset waits until no investigation is using the graph, and from the moment it is
+accepted until it finishes, nothing new starts on that graph. With PUBLIC_DEMO set, model
 use is capped per hour, overall and per visitor, and past the cap an investigation runs on the deterministic
 planner instead of being refused; concurrent investigations are bounded, and resets are spaced out.
 """
@@ -38,9 +39,17 @@ class Window:
         self.hits.append(time.monotonic())
 
 
+class Resetting(RuntimeError):
+    """The tenant's graph is being reset, so nothing new may start on it."""
+
+
 class Guard:
+    """Per-tenant bookkeeping for the event loop. Each check and the state change it allows happen with no await in
+    between, so a reset and an investigation can't both be admitted."""
+
     def __init__(self) -> None:
         self.running: Counter[str] = Counter()
+        self.resetting: set[str] = set()
         self.last_reset: dict[str, float] = {}
         self.llm: Window | None = None
         self.visitors: dict[str, Window] = {}
@@ -72,8 +81,16 @@ class Guard:
         settings = get_settings()
         return settings.public_demo and sum(self.running.values()) >= settings.demo_max_investigations
 
+    def refuse_admission(self, key: str) -> tuple[int, str] | None:
+        """Why work can't start on the graph right now, as an HTTP status and message; None when it can."""
+        if key in self.resetting:
+            return 409, "this tenant's graph is being reset; try again in a moment"
+        return None
+
     @contextmanager
     def investigation(self, key: str):
+        if refusal := self.refuse_admission(key):
+            raise Resetting(refusal[1])
         self.running[key] += 1
         try:
             yield
@@ -82,8 +99,19 @@ class Guard:
             if not self.running[key]:
                 del self.running[key]
 
+    @contextmanager
+    def reset(self, key: str):
+        """Hold off new work on the graph until the reset ends, whether it succeeds or not."""
+        self.resetting.add(key)
+        try:
+            yield
+        finally:
+            self.resetting.discard(key)
+
     def refuse_reset(self, key: str) -> tuple[int, str] | None:
         """Why the graph can't be reset right now, as an HTTP status and message; None when it can."""
+        if key in self.resetting:
+            return 409, "this tenant's graph is already being reset"
         if self.running[key]:
             return 409, "an investigation is using this tenant's graph; reset when it finishes"
         settings = get_settings()

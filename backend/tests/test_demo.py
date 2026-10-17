@@ -3,9 +3,11 @@ for running investigations and is spaced out, and hunters stay deterministic."""
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import json
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -41,6 +43,70 @@ def test_without_public_demo_nothing_is_capped():
     assert not get_settings().public_demo and guard.status() is None
     assert all(guard.planner("visitor-a", "auto") == ("auto", None) for _ in range(50))
     assert not guard.busy()
+
+
+def test_an_investigation_and_a_reset_cannot_both_be_admitted():
+    guard = demo.Guard()
+    with guard.investigation("g"):
+        assert guard.refuse_reset("g")[0] == 409
+    with guard.reset("g"):
+        with pytest.raises(demo.Resetting):
+            with guard.investigation("g"):
+                pass
+        assert guard.refuse_reset("g") == (409, "this tenant's graph is already being reset")
+    assert guard.refuse_admission("g") is None and guard.refuse_reset("g") is None and not guard.running
+
+
+def investigate_unknown(client: TestClient, tenant: str) -> list[dict]:
+    with client.stream("GET", "/api/investigate", params={"tenant": tenant, "entity_id": "acct-ghost-999"}) as response:
+        return [json.loads(line[5:]) for line in response.iter_lines() if line.startswith("data:")]
+
+
+@pytest.mark.graph
+def test_a_reset_behind_a_mutation_holds_off_new_work_until_it_ends(small_tenant, monkeypatch):
+    guard, key, params = demo.Guard(), f"fintrace:{small_tenant}", {"tenant": small_tenant}
+    monkeypatch.setattr(main, "guard", guard)
+    monkeypatch.setattr(main, "_locks", {})
+
+    async def scenario():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://fintrace") as client:
+            mutation = main._lock(key, "mutation")
+            await mutation.acquire()
+            reset = asyncio.create_task(client.post("/api/reset", params=params))
+            while key not in guard.resetting:
+                await asyncio.sleep(0.01)
+            refused = [await client.get("/api/investigate", params={**params, "entity_id": "acct-ghost-999"}),
+                       await client.get("/api/queue/drain", params=params),
+                       await client.post("/api/queue/reset", params=params),
+                       await client.post("/api/mutations", params=params,
+                                         json={"kind": "set_sanctioned", "account": "acct-ind-20118", "sanctioned": True}),
+                       await client.post("/api/approvals/apr-00000000/approve", params=params,
+                                         json={"approver_id": "emp-priya-nair"}),
+                       await client.post("/api/reset", params=params)]
+            assert not reset.done(), "the reset did not wait for the mutation"
+            mutation.release()
+            return refused, await reset
+
+    refused, done = asyncio.run(scenario())
+    assert [r.status_code for r in refused] == [409] * 6
+    assert all("being reset" in r.json()["detail"] for r in refused)
+    assert done.status_code == 200 and not guard.resetting
+    assert investigate_unknown(TestClient(main.app), small_tenant)[-1]["answer_state"] == "unknown_entity"
+
+
+@pytest.mark.graph
+def test_a_failed_reset_lifts_its_hold(small_tenant, monkeypatch):
+    guard = demo.Guard()
+    monkeypatch.setattr(main, "guard", guard)
+
+    def broken(_):
+        raise RuntimeError("the copy failed")
+
+    monkeypatch.setattr(main.tenants, "reset", broken)
+    client = TestClient(main.app, raise_server_exceptions=False)
+    assert client.post("/api/reset", params={"tenant": small_tenant}).status_code == 500
+    assert not guard.resetting
+    assert investigate_unknown(client, small_tenant)[-1]["answer_state"] == "unknown_entity"
 
 
 @pytest.mark.graph

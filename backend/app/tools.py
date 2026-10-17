@@ -23,6 +23,7 @@ from falkordb import Graph
 
 from backend.app import memory
 from backend.app import queries as q
+from backend.app.contracts import Claim
 
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 DAY = 86400
@@ -42,6 +43,7 @@ class ToolError(ValueError):
 class ToolContext:
     graph: Graph
     worker_id: str = "analyst"
+    claim: Claim | None = None
 
 
 class RecordingGraph:
@@ -545,7 +547,7 @@ def request_action(ctx: ToolContext, g: RecordingGraph, ev: Evidence, target_ids
         raise ToolError("reason is required")
     try:
         result = q.request_action(g, case_id, targets, excluded, action_type, policy_id, approver_id, reason,
-                                  requested_by=ctx.worker_id)
+                                  requested_by=ctx.worker_id, claim=ctx.claim)
     except ValueError as exc:
         raise ToolError(str(exc)) from None
     rid = result["request_id"]

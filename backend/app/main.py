@@ -27,7 +27,7 @@ from backend.app import tools as t
 from backend.app.config import FRONTEND_DIST, ROOT, get_settings
 from backend.app.contracts import ALERT_RULES, MAX_CAPACITY
 from backend.app.db import get_db, graph_exists, tenant_key
-from backend.app.demo import guard
+from backend.app.demo import Resetting, guard
 
 app = FastAPI(title="FinTrace", version="0.3.0")
 
@@ -153,17 +153,22 @@ async def investigate(request: Request, entity_id: str, tenant: Tenant = None,
                       max_steps: int = Query(agent.MAX_STEPS, ge=1, le=agent.MAX_STEPS),
                       memory: Literal["on", "procedures", "off"] = "on") -> EventSourceResponse:
     eid, key = _entity_id(entity_id), _key(tenant)
+    if refusal := guard.refuse_admission(key):
+        raise HTTPException(*refusal)
     if guard.busy():
         raise HTTPException(429, "the demo is running as many investigations as it allows; try again shortly")
     mode, notice = guard.planner(_visitor(request), mode)
 
     async def events():
-        with guard.investigation(key):
-            if notice:
-                yield _sse({"type": "notice", "message": notice})
-            async for event in agent.investigate(eid, graph_key=key, worker_id="ui-investigator", mode=mode,
-                                                 max_steps=max_steps, memory_mode=memory):
-                yield _sse(event)
+        try:
+            with guard.investigation(key):
+                if notice:
+                    yield _sse({"type": "notice", "message": notice})
+                async for event in agent.investigate(eid, graph_key=key, worker_id="ui-investigator", mode=mode,
+                                                     max_steps=max_steps, memory_mode=memory):
+                    yield _sse(event)
+        except Resetting as exc:
+            yield _sse({"type": "error", "message": str(exc)})
 
     return EventSourceResponse(events())
 
@@ -194,7 +199,10 @@ def approvals(tenant: Tenant = None, status: Literal["PENDING_L3", "APPROVED", "
 
 @app.post("/api/approvals/{request_id}/approve")
 def approve(request_id: str, body: Approval, tenant: Tenant = None) -> dict:
-    graph, rid = _graph(tenant), _entity_id(request_id)
+    key = _key(tenant)
+    if refusal := guard.refuse_admission(key):
+        raise HTTPException(*refusal)
+    graph, rid = get_db().select_graph(key), _entity_id(request_id)
     try:
         approved = q.approve_action(graph, rid, _entity_id(body.approver_id))
     except ValueError as exc:
@@ -240,6 +248,8 @@ async def reset_queue(tenant: Tenant = None) -> dict:
     key = _key(tenant)
     if _lock(key, "drain").locked():
         raise HTTPException(409, "hunters are draining this tenant's queue")
+    if refusal := guard.refuse_admission(key):
+        raise HTTPException(*refusal)
     return {"reset": await asyncio.to_thread(co.reset_queue, get_db().select_graph(key))}
 
 
@@ -253,8 +263,13 @@ async def drain(tenant: Tenant = None, workers: int = Query(3, ge=1, le=6),
     lock = _lock(key, "drain")
     if lock.locked():
         raise HTTPException(409, "hunters are already draining this tenant's queue")
+    if refusal := guard.refuse_admission(key):
+        raise HTTPException(*refusal)
 
     async def events():
+        if refusal := guard.refuse_admission(key):
+            yield _sse({"type": "error", "message": refusal[1]})
+            return
         async with lock:
             stream: asyncio.Queue[dict] = asyncio.Queue()
 
@@ -287,6 +302,8 @@ async def mutate(body: Mutation, tenant: Tenant = None) -> dict:
         raise HTTPException(422, f"{body.kind} needs {', '.join(missing)}")
     args = [_entity_id(v) if f in ID_FIELDS else round(v * 100) if f == "amount_usd" else v
             for f in fields for v in [getattr(body, f)]]
+    if refusal := guard.refuse_admission(key):
+        raise HTTPException(*refusal)
     async with _lock(key, "mutation"):
         try:
             return {"kind": body.kind, **await asyncio.to_thread(write, get_db().select_graph(key), *args)}
@@ -296,17 +313,20 @@ async def mutate(body: Mutation, tenant: Tenant = None) -> dict:
 
 @app.post("/api/reset")
 async def reset(tenant: Tenant = None) -> dict:
-    """Restore the tenant's graph from its pristine copy, once nothing is using it."""
+    """Restore the tenant's graph from its pristine copy, once nothing is using it. From the moment it is accepted
+    until it ends, no investigation, drain, mutation or approval starts on that graph; a mutation already under way
+    finishes first."""
     key = _key(tenant)
     if _lock(key, "drain").locked():
         raise HTTPException(409, "hunters are draining this tenant's queue")
     if refusal := guard.refuse_reset(key):
         raise HTTPException(*refusal)
-    async with _lock(key, "mutation"):
-        try:
-            restored = await asyncio.to_thread(tenants.reset, key.split(":", 1)[1])
-        except LookupError as exc:
-            raise HTTPException(409, str(exc)) from None
+    with guard.reset(key):
+        async with _lock(key, "mutation"):
+            try:
+                restored = await asyncio.to_thread(tenants.reset, key.split(":", 1)[1])
+            except LookupError as exc:
+                raise HTTPException(409, str(exc)) from None
     guard.reset_done(key)
     return restored
 

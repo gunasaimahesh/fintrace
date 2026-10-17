@@ -107,7 +107,7 @@ def delete_identity_link(graph: Graph, account: str, target: str, rel: str) -> d
 
 
 def set_sanctioned(graph: Graph, account: str, sanctioned: bool, list_name: str | None = None) -> dict:
-    label = "SET a:Sanctioned, a.sanctions_list = $list" if sanctioned else "REMOVE a:Sanctioned"
+    label = "SET a:Sanctioned, a.list = $list" if sanctioned else "REMOVE a:Sanctioned SET a.list = NULL"
     [rev] = _one(graph.query(f"""
         MATCH (a:Account {{id: $account}})
         {_BUMP}

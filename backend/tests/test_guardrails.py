@@ -59,8 +59,24 @@ def explore(depth: int, routes: tuple = (), search: dict | None = None, flagged:
         "scope": search, "eligible_routes": {"rule": "", "scope": search, "routes": list(routes)}})
 
 
+def explore_from(entity: str, depth: int, routes: tuple = (), search: dict | None = None) -> dict:
+    result = explore(depth, routes, search)
+    return {**result, "data": {**result["data"], "entity_id": entity}}
+
+
+def resolve(entity: str, labels: list[str], **profile) -> dict:
+    return envelope("resolve_entity", {"found": True, "id": entity, "labels": labels, "status": "ACTIVE",
+                                       "profile": profile})
+
+
+PAYROLL, ISOLATED = "acct-tier1-payroll", "acct-ind-20118"
+VOLKOV_ROUTE = {"entity": ROUTE["entity"], "hops": 2, "identity_hops": [],
+                "path": {"nodes": [VOLKOV, BALTIC, VORTEX],
+                         "steps": [step(VOLKOV, BALTIC, "FLOWS_TO"), step(BALTIC, VORTEX, "FLOWS_TO")]}}
+
+
 def verdict_of(*results: dict) -> Verdict:
-    return gr.derive(gr.extract_facts(list(results)), unknown=False)[1]
+    return gr.derive(gr.extract_facts(list(results)), unknown=False, subject=NOVA)[1]
 
 
 def run_facts() -> list:
@@ -87,6 +103,44 @@ def test_clear_needs_the_prescribed_depth_or_an_exhausted_frontier():
     assert verdict_of(explore(6, search=scope(6, completed=3, truncated=True))) == Verdict.INSUFFICIENT
     assert verdict_of(explore(6, search=scope(6, completed=2, timed_out=True))) == Verdict.INSUFFICIENT
     assert verdict_of() == Verdict.INSUFFICIENT
+
+
+def test_a_route_found_from_another_account_does_not_make_the_subject_suspicious():
+    facts = gr.extract_facts([resolve(PAYROLL, ["Account"]), explore_from(VOLKOV, 6, (VOLKOV_ROUTE,))])
+    state, verdict, basis = gr.derive(facts, unknown=False, subject=PAYROLL)
+    assert (state, verdict, basis) == (AnswerState.NOT_IN_GRAPH, Verdict.INSUFFICIENT, [])
+    assert gr.derive(facts, unknown=False, subject=VOLKOV)[1] == Verdict.SUSPICIOUS
+    texts = [s.text for s in gr.render(PAYROLL, state, verdict, facts, ledger())]
+    assert texts == [
+        f"No eligible-route search was run from {PAYROLL}, so nothing can be concluded about its exposure.",
+        f"A search from {VOLKOV} found an eligible route to sanctioned Vortex Holdings Ltd ({VORTEX}) in 2 hops. "
+        f"That route starts at {VOLKOV}, not {PAYROLL}, so it does not decide this verdict."]
+
+
+def test_a_complete_search_from_another_account_does_not_clear_the_subject():
+    facts = gr.extract_facts([explore_from(ISOLATED, 1, search=scope(1, exhausted=True, reached=0)), explore(4)])
+    state, verdict, basis = gr.derive(facts, unknown=False, subject=NOVA)
+    assert verdict == Verdict.INSUFFICIENT and [f.subject for f in facts if f.id in basis] == [NOVA]
+    texts = [s.text for s in gr.render(NOVA, state, verdict, facts, ledger())]
+    assert "covered 4 of the 6 hops required to clear an account" in texts[0]
+    assert texts[1] == (f"A complete search from {ISOLATED} found no eligible route to a sanctioned entity. That is "
+                        f"about {ISOLATED}, not {NOVA}, so it does not clear it.")
+
+
+def test_a_sanctioned_subject_is_direct_exposure_and_another_sanctioned_entity_is_not():
+    facts = gr.extract_facts([resolve(VORTEX, ["Account", "Sanctioned"], list="OFAC-SDN"),
+                              explore_from(VORTEX, 6, search=scope(6, exhausted=True, reached=0))])
+    state, verdict, basis = gr.derive(facts, unknown=False, subject=VORTEX)
+    assert (state, verdict) == (AnswerState.SUBJECT_SANCTIONED, Verdict.SUSPICIOUS)
+    assert [(f.predicate, f.value, f.depends_on) for f in facts if f.id in basis] == [
+        ("subject_sanctioned", "OFAC-SDN", [VORTEX])]
+    assert [s.text for s in gr.render(VORTEX, state, verdict, facts, ledger())] == [
+        f"Vortex Holdings Ltd ({VORTEX}) is itself sanctioned (OFAC-SDN): that is direct exposure, so no route is "
+        f"needed. A sanctioned account is already blocked, so it is not put up for a new freeze.",
+        f"Beyond its own designation, no eligible route from Vortex Holdings Ltd ({VORTEX}) reaches another "
+        f"sanctioned entity (0 entities checked within 6 hops)."]
+    looked_up = gr.extract_facts([resolve(VORTEX, ["Account", "Sanctioned"]), explore(4)])
+    assert gr.derive(looked_up, unknown=False, subject=NOVA)[1] == Verdict.INSUFFICIENT
 
 
 def test_facts_cite_their_tool_result_and_route_dependencies():
@@ -180,7 +234,7 @@ def test_a_shared_ip_or_money_flowing_back_is_only_association():
 
 def render(*results: dict) -> list[str]:
     facts = gr.extract_facts(list(results))
-    state, verdict, _ = gr.derive(facts, unknown=False)
+    state, verdict, _ = gr.derive(facts, unknown=False, subject=NOVA)
     return [s.text for s in gr.render(NOVA, state, verdict, facts, ledger())]
 
 
@@ -196,12 +250,12 @@ def test_the_card_states_the_scope_behind_clear_and_insufficient():
 
 def test_every_statement_cites_facts_and_unknown_entities_say_nothing_else():
     facts = run_facts()
-    state, verdict, basis = gr.derive(facts, unknown=False)
+    state, verdict, basis = gr.derive(facts, unknown=False, subject=NOVA)
     statements = gr.render(NOVA, state, verdict, facts, ledger())
     assert (state, verdict, basis) == (AnswerState.ANSWERED_WITH_PATH, Verdict.SUSPICIOUS, ["F3"])
     assert all(s.facts and set(s.facts) <= {f.id for f in facts} for s in statements)
     unknown = gr.extract_facts([envelope("resolve_entity", {"entity_id": "acct-ghost-999", "found": False})])
-    state, verdict, _ = gr.derive(unknown, unknown=True)
+    state, verdict, _ = gr.derive(unknown, unknown=True, subject="acct-ghost-999")
     assert [s.text for s in gr.render("acct-ghost-999", state, verdict, unknown, EvidenceLedger())] == [
         "acct-ghost-999 is not in the graph, so nothing else was queried."]
 
@@ -222,7 +276,7 @@ def recalled(*facts: dict) -> dict:
 
 def test_a_remembered_route_answers_from_memory_and_renders_like_a_fresh_one():
     facts = gr.extract_facts([recalled(remembered("eligible_route_hops"))], rev=4)
-    state, verdict, basis = gr.derive(facts, unknown=False)
+    state, verdict, basis = gr.derive(facts, unknown=False, subject=NOVA)
     texts = [s.text for s in gr.render(NOVA, state, verdict, facts, ledger())]
     assert (state, verdict, basis) == (AnswerState.ANSWERED_FROM_MEMORY, Verdict.SUSPICIOUS, ["F1"])
     assert facts[0].evidence_rev == 3 and facts[0].source.tool == "recall_memory"
@@ -235,7 +289,7 @@ def test_stale_memory_says_what_changed_and_fresh_facts_decide():
     why = "acct-volkov-clearing changed after graph revision 3"
     facts = gr.extract_facts([recalled(remembered("eligible_route_hops", "STALE", why_stale=why)),
                               explore(6, (ROUTE,))])
-    state, verdict, basis = gr.derive(facts, unknown=False)
+    state, verdict, basis = gr.derive(facts, unknown=False, subject=NOVA)
     texts = [s.text for s in gr.render(NOVA, state, verdict, facts, ledger())]
     assert (state, verdict, basis) == (AnswerState.MEMORY_STALE_REINVESTIGATED, Verdict.SUSPICIOUS, ["F2"])
     assert texts[0] == f"The remembered route went stale ({why}), so it could not be reused."

@@ -5,6 +5,7 @@ import { VERDICT_STYLE } from "./ui";
 
 const STATE_LABEL: Record<string, string> = {
   answered_with_path: "Eligible route to a sanctioned account",
+  subject_sanctioned: "The account itself is sanctioned",
   answered_from_memory: "Answered from memory",
   memory_stale_reinvestigated: "Memory was stale, so it re-investigated",
   unknown_entity: "Entity is not in the graph",

@@ -172,6 +172,9 @@ def derive(lookups: Lookups, depth: int = PRESCRIBED_DEPTH) -> dict:
         return {"verdict": "INSUFFICIENT", "answer_state": "unknown_entity", "route": None, "reached": 0,
                 "unread": 0}
     subject = lookups.subject
+    if "Sanctioned" in lookups.labels.get(subject, []):
+        return {"verdict": "SUSPICIOUS", "answer_state": "subject_sanctioned", "route": [subject], "target": subject,
+                "hops": 0, "reached": 1, "unread": 0}
     hops, parent, unread = {subject: 0}, {}, []
     queue = deque([subject])
     while queue:

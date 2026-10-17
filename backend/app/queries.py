@@ -17,7 +17,7 @@ from typing import Iterator
 
 from falkordb import Graph
 
-from backend.app.contracts import PRESCRIBED_DEPTH, current_rev
+from backend.app.contracts import PRESCRIBED_DEPTH, Claim, claim_fence, current_rev
 
 RISK_REL_TYPES = ["FLOWS_TO", "USED_DEVICE", "LOGGED_FROM"]
 RISK_RELS = "|".join(RISK_REL_TYPES)
@@ -33,6 +33,7 @@ HIDDEN_LABELS = {"Entity", "RiskNode", *BROKER_SCOPE_LABELS}
 FAR_FUTURE = 2**62
 LEGIT_TIERS = ("vip", "enterprise", "standard")
 FREEZE_ACTIONS = ("FREEZE",)
+APPROVAL_TRIES = 5
 PROFILE_KEYS = ("kind", "tier", "bank", "list", "risk_flags", "os", "address", "title", "clearance",
                 "on_call", "mcc", "source", "frozen_at", "frozen_by")
 DISPLAY_NAME = "coalesce(n.name, n.title, n.summary, n.address, n.os)"
@@ -795,8 +796,9 @@ def pending_requests(graph: Graph, target_ids: list[str]) -> list[dict]:
 
 def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_ids: list[str], action_type: str,
                    policy_id: str, approver_id: str, reason: str, requested_by: str,
-                   now: int | None = None) -> dict:
-    """Create a pending approval request. Raises ValueError with an explanation if it can't be routed."""
+                   now: int | None = None, claim: Claim | None = None) -> dict:
+    """Create a pending approval request. Raises ValueError with an explanation if it can't be routed, or if
+    `claim` (the hunter's hold on its alert) no longer holds."""
     now = now or int(time.time())
     action_type = action_type.upper()
     if action_type not in FREEZE_ACTIONS:
@@ -836,9 +838,10 @@ def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_i
                     "approver": {"id": approver_id, "name": name, "clearance": clearance}, "entities": entities}
 
     rid = f"apr-{uuid.uuid4().hex[:8]}"
-    # Check and CREATE stay in one write query: FalkorDB runs writes one at a time, so two investigations
-    # racing to freeze the same account cannot both file.
-    clashes = graph.query("""
+    fence, owned = claim_fence(claim)
+    # Checks and CREATE stay in one write query: FalkorDB runs writes one at a time, so two investigations
+    # racing to freeze the same account cannot both file, and a hunter whose claim lapsed files nothing.
+    rows = graph.query(fence + """
         MATCH (p:Entity {id: $policy}), (e:Entity {id: $approver})
         OPTIONAL MATCH (other:ApprovalRequest)
         WHERE other.status = 'PENDING_L3' AND any(t IN other.target_ids WHERE t IN $targets)
@@ -856,7 +859,12 @@ def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_i
         RETURN clashes
     """, {"case": case_id, "now": now, "subject": target_ids[0], "policy": policy_id, "approver": approver_id,
           "rid": rid, "action": action_type, "reason": reason, "by": requested_by, "targets": target_ids,
-          "excluded": excluded_ids, "required": required, "rev": current_rev(graph)}).result_set[0][0]
+          "excluded": excluded_ids, "required": required, "rev": current_rev(graph), **owned}).result_set
+    if not rows:
+        raise ValueError(f"{requested_by} no longer holds the claim on {claim.alert_id} (its lease ran out or another "
+                         f"hunter took the alert over), so no request was filed" if claim
+                         else f"{policy_id} or {approver_id} is no longer in the graph")
+    clashes = rows[0][0]
     if clashes:
         listed = "; ".join(f"{', '.join(overlap)} in {other} ({case})" for other, case, overlap in clashes)
         raise ValueError(f"already awaiting sign-off: {listed}. An account can be in only one pending request: "
@@ -877,43 +885,62 @@ def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_i
 def approve_action(graph: Graph, request_id: str, approver_id: str, now: int | None = None) -> dict:
     """An approver signs off a pending request; its target accounts are frozen.
 
-    A request whose evidence changed after it was raised becomes STALE instead. Freezing changes status
-    only, so it is not evidence and doesn't bump the revision.
+    A request whose evidence changed after it was raised becomes STALE instead. The evidence is checked at the
+    current revision, and the sign-off commits in one write only if the graph is still at that revision, the request
+    is still pending and the approver still has the clearance the policy requires; otherwise everything is read and
+    checked again. Freezing changes status only, so it is not evidence and doesn't bump the revision.
     """
     now = now or int(time.time())
-    rows = graph.ro_query("""
-        MATCH (r:Entity {id: $rid})-[:UNDER_POLICY]->(p:Entity)
-        MATCH (e:Entity {id: $approver}) WHERE e:Employee
-        RETURN r:ApprovalRequest, r.status, p.required_clearance_level_for_freeze, p.required_clearance_for_freeze,
-               e.clearance_level, e.clearance, r.depends_on, r.evidence_rev
-    """, {"rid": request_id, "approver": approver_id}).result_set
-    if not rows or not rows[0][0]:
-        raise ValueError(f"no approval request {request_id} (or {approver_id} is not an employee)")
-    _, status, required_level, required, level, clearance, depends_on, evidence_rev = rows[0]
-    if status != "PENDING_L3":
-        raise ValueError(f"{request_id} is already {status}")
-    if (level or 0) < (required_level or 0):
-        raise ValueError(f"{approver_id} has {clearance}; this action requires {required}")
-    if depends_on and evidence_rev is not None:
-        missing, touched = changed_dependencies(graph, depends_on, evidence_rev)
-        if missing or touched:
-            reason = describe_change(missing, touched, evidence_rev)
-            graph.query("MATCH (r:Entity {id: $rid}) SET r.status = 'STALE', r.stale_reason = $reason, "
-                        "r.stale_at = $now", {"rid": request_id, "reason": reason, "now": now})
-            raise ValueError(f"{request_id} is now STALE: {reason}. Re-investigate before freezing.")
-    frozen = graph.query("""
-        MATCH (r:Entity {id: $rid}), (e:Entity {id: $approver})
-        SET r.status = 'APPROVED', r.approved_by = $approver, r.approved_at = $now
-        CREATE (e)-[:SIGNED_OFF {at: $now}]->(r)
-        WITH r
-        MATCH (r)-[:TARGETS]->(t:Account)
-        SET t.status = 'FROZEN', t.frozen_at = $now, t.frozen_by = $rid
-        RETURN collect(t.id)
-    """, {"rid": request_id, "approver": approver_id, "now": now}).result_set[0][0]
-    spared = graph.ro_query("MATCH (r:Entity {id: $rid})-[:EXCLUDES]->(x) RETURN collect(x.id)",
-                            {"rid": request_id}).result_set[0][0]
-    return {"request_id": request_id, "status": "APPROVED", "approved_by": approver_id, "approved_at": now,
-            "frozen": sorted(frozen), "spared": sorted(spared)}
+    for _ in range(APPROVAL_TRIES):
+        rows = graph.ro_query("""
+            MATCH (r:Entity {id: $rid})-[:UNDER_POLICY]->(p:Entity)
+            MATCH (e:Entity {id: $approver}) WHERE e:Employee
+            OPTIONAL MATCH (meta:Meta {key: 'dataset'})
+            RETURN r:ApprovalRequest, r.status, p.required_clearance_level_for_freeze, p.required_clearance_for_freeze,
+                   e.clearance_level, e.clearance, r.depends_on, r.evidence_rev, coalesce(meta.rev, 0)
+        """, {"rid": request_id, "approver": approver_id}).result_set
+        if not rows or not rows[0][0]:
+            raise ValueError(f"no approval request {request_id} (or {approver_id} is not an employee)")
+        _, status, required_level, required, level, clearance, depends_on, evidence_rev, rev = rows[0]
+        if status != "PENDING_L3":
+            raise ValueError(f"{request_id} is already {status}")
+        if (level or 0) < (required_level or 0):
+            raise ValueError(f"{approver_id} has {clearance}; this action requires {required}")
+        if depends_on and evidence_rev is not None:
+            missing, touched = changed_dependencies(graph, depends_on, evidence_rev)
+            if missing or touched:
+                reason = describe_change(missing, touched, evidence_rev)
+                if graph.query("""
+                    MATCH (r:Entity {id: $rid}) WHERE r.status = 'PENDING_L3'
+                    SET r.status = 'STALE', r.stale_reason = $reason, r.stale_at = $now
+                    RETURN r.id
+                """, {"rid": request_id, "reason": reason, "now": now}).result_set:
+                    raise ValueError(f"{request_id} is now STALE: {reason}. Re-investigate before freezing.")
+                continue
+        # The revision is filtered as a projected value: FalkorDB 4.22 moves `WITH meta WHERE <test on meta>`
+        # inside the OPTIONAL MATCH, which then keeps the row with meta = NULL instead of dropping it.
+        signed = graph.query("""
+            OPTIONAL MATCH (meta:Meta {key: 'dataset'})
+            WITH coalesce(meta.rev, 0) AS at WHERE at = $rev
+            MATCH (r:Entity {id: $rid})-[:UNDER_POLICY]->(p:Entity)
+            MATCH (e:Entity {id: $approver})
+            WHERE r:ApprovalRequest AND r.status = 'PENDING_L3' AND e:Employee
+              AND coalesce(e.clearance_level, 0) >= coalesce(p.required_clearance_level_for_freeze, 0)
+            SET r.status = 'APPROVED', r.approved_by = $approver, r.approved_at = $now, r.approved_rev = $rev
+            CREATE (e)-[:SIGNED_OFF {at: $now}]->(r)
+            WITH r
+            OPTIONAL MATCH (r)-[:TARGETS]->(t:Account)
+            FOREACH (_ IN CASE WHEN t IS NULL THEN [] ELSE [1] END |
+                SET t.status = 'FROZEN', t.frozen_at = $now, t.frozen_by = $rid)
+            RETURN r.id, collect(t.id)
+        """, {"rid": request_id, "approver": approver_id, "now": now, "rev": rev}).result_set
+        if signed:
+            spared = graph.ro_query("MATCH (r:Entity {id: $rid})-[:EXCLUDES]->(x) RETURN collect(x.id)",
+                                    {"rid": request_id}).result_set[0][0]
+            return {"request_id": request_id, "status": "APPROVED", "approved_by": approver_id, "approved_at": now,
+                    "frozen": sorted(signed[0][1]), "spared": sorted(spared)}
+    raise ValueError(f"{request_id} was not signed off: the graph kept changing while its evidence was checked. "
+                     f"Try again.")
 
 
 def approval_statuses(graph: Graph, request_ids: list[str]) -> dict[str, str]:

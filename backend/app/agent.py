@@ -29,7 +29,7 @@ from backend.app import memory
 from backend.app import playbook as pb
 from backend.app import queries as q
 from backend.app.config import Settings, get_settings
-from backend.app.contracts import PRESCRIBED_DEPTH, VERDICT_PREDICATES, current_rev
+from backend.app.contracts import PRESCRIBED_DEPTH, VERDICT_PREDICATES, Claim, current_rev
 from backend.app.db import get_db
 from backend.app.db import graph_key as tenant_graph_key
 from backend.app.guardrails import EvidenceLedger, Verdict
@@ -88,6 +88,10 @@ Statement predicates:
 {predicates}
 Amounts are US dollars. The analyst's card is written from the tool results, not from your answer: each statement \
 is matched to the tool result it restates or rejected, and the rationale is shown as unverified."""
+
+
+class ClaimLost(RuntimeError):
+    """The hunter's claim on its alert ran out or passed to another hunter."""
 
 
 def system_prompt(case_id: str, max_steps: int) -> str:
@@ -346,7 +350,7 @@ def choose_playbook(inv: Investigation) -> dict | None:
     remembered = inv.latest("recall_memory")
     if not remembered or not remembered["playbooks"] or remembered.get("shared"):
         return None
-    verdicts = [f for f in remembered["facts"] if f["predicate"] in VERDICT_PREDICATES]
+    verdicts = [f for f in remembered["facts"] if f["predicate"] in VERDICT_PREDICATES and f["subject"] == inv.entity_id]
     if verdicts and all(f["status"] == "CURRENT" for f in verdicts):
         return None
     return remembered["playbooks"][0]
@@ -389,7 +393,7 @@ async def fallback_plan(inv: Investigation) -> None:
     """A fixed investigative order: widen, then follow money, ring, governance and collateral to a freeze request.
     A route another investigation already found through the alert entity stands in for the search."""
     remembered = inv.latest("recall_memory") or {"facts": [], "shared": []}
-    verdicts = [f for f in remembered["facts"] if f["predicate"] in VERDICT_PREDICATES]
+    verdicts = [f for f in remembered["facts"] if f["predicate"] in VERDICT_PREDICATES and f["subject"] == inv.entity_id]
     if verdicts and all(f["status"] == "CURRENT" for f in verdicts):
         await refresh_stale(inv, remembered)
         return
@@ -529,7 +533,7 @@ def finalize(inv: Investigation, answer: dict | None, model: str | None, started
              statuses: dict[str, str] | None = None) -> dict:
     facts = gr.extract_facts(inv.results, inv.rev)
     facts += gr.status_read_facts(facts, statuses or {}, inv.rev)
-    state, verdict, basis = gr.derive(facts, inv.unknown)
+    state, verdict, basis = gr.derive(facts, inv.unknown, inv.entity_id)
     statements = gr.render(inv.entity_id, state, verdict, facts, inv.ledger)
 
     request = inv.latest("request_action")
@@ -540,7 +544,8 @@ def finalize(inv: Investigation, answer: dict | None, model: str | None, started
         known = lambda ids: [i for i in ids if isinstance(i, str) and i in inv.ledger.nodes]  # noqa: E731
         targets = known((answer or {}).get("freeze_targets") or [])
         excluded = known((answer or {}).get("excluded") or [])
-    explores = [r["data"] for r in inv.results if r["ok"] and r["tool"] == "explore_neighborhood"]
+    explores = [r["data"] for r in inv.results if r["ok"] and r["tool"] == "explore_neighborhood"
+                and r["data"]["entity_id"] == inv.entity_id]
     deepest = max(explores, key=lambda d: d["depth"]) if explores else None
     return {
         "type": "final",
@@ -575,7 +580,7 @@ def finalize(inv: Investigation, answer: dict | None, model: str | None, started
 
 
 async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: int, mode: Mode,
-               case_id: str | None, memory_mode: MemoryMode) -> None:
+               case_id: str | None, memory_mode: MemoryMode, claim: Claim | None) -> None:
     settings = get_settings()
     use_llm = mode == "llm" or (mode == "auto" and settings.llm_enabled)
     remember = memory_mode != "off"
@@ -583,9 +588,9 @@ async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: 
     graph = get_db().select_graph(key)
     case_id = case_id or f"case-{uuid.uuid4().hex[:8]}"
     start_rev = await asyncio.to_thread(current_rev, graph)
-    if remember:
-        await asyncio.to_thread(memory.open_case, graph, case_id, entity_id, worker_id)
-    async with Client(build_server(key, worker_id)) as client:
+    if remember and not await asyncio.to_thread(memory.open_case, graph, case_id, entity_id, worker_id, claim=claim):
+        raise ClaimLost(f"{worker_id} no longer holds the claim on {claim.alert_id}, so it did not start")
+    async with Client(build_server(key, worker_id, claim)) as client:
         inv = Investigation(entity_id=entity_id, case_id=case_id, max_steps=max_steps, worker_id=worker_id,
                             planner="llm" if use_llm else "fallback", client=client, emit=emit, rev=start_rev)
         model = settings.llm_model if use_llm else None
@@ -626,28 +631,30 @@ async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: 
             if request:
                 basis = [f for f in final["facts"] if f["id"] in final["verdict_basis"]]
                 await asyncio.to_thread(memory.attach_request_evidence, graph, request["request_id"], start_rev,
-                                        request["target_ids"] + [d for f in basis for d in f["depends_on"]])
+                                        request["target_ids"] + [d for f in basis for d in f["depends_on"]],
+                                        claim=claim)
             final["memory"] = await asyncio.to_thread(
                 memory.persist_run, graph, case_id=case_id, entity_id=entity_id, worker_id=worker_id,
                 planner=inv.planner, model=model, start_rev=start_rev, results=inv.results, final=final,
-                playbook_id=inv.playbook["id"] if inv.playbook else None)
+                playbook_id=inv.playbook["id"] if inv.playbook else None, claim=claim)
         await emit(final)
 
 
 async def investigate(entity_id: str, *, graph_key: str | None = None, worker_id: str = "investigator",
                       max_steps: int = MAX_STEPS, mode: Mode = "auto", case_id: str | None = None,
-                      memory_mode: MemoryMode = "on") -> AsyncIterator[dict]:
+                      memory_mode: MemoryMode = "on", claim: Claim | None = None) -> AsyncIterator[dict]:
     """Stream investigation events: run_started, tool_call, tool_result, notice, then final (or error).
 
     memory_mode "on" reuses remembered findings and learned playbooks; "procedures" uses only playbooks, never
-    findings about the subject; "off" neither reads nor writes memory."""
+    findings about the subject; "off" neither reads nor writes memory. A hunter passes its `claim`: then the case,
+    memory, case merges and any freeze request are written only while that claim still holds."""
     key = graph_key or tenant_graph_key(get_settings().default_tenant)
     queue: asyncio.Queue[dict | None] = asyncio.Queue()
 
     async def produce() -> None:
         try:
             await _run(queue.put, entity_id.strip(), key, worker_id, max(1, min(max_steps, MAX_STEPS)), mode, case_id,
-                       memory_mode)
+                       memory_mode, claim)
         except Exception as exc:
             await queue.put({"type": "error", "message": f"{type(exc).__name__}: {exc}"})
         finally:

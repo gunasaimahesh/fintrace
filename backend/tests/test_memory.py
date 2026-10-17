@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -180,6 +182,110 @@ def test_sign_off_still_works_after_an_unrelated_change(fresh_key):
     _, final = run(s.NOVAPAY, fresh_key)
     m.add_transfer(graph, s.ISOLATED, s.VIP, 100)
     assert q.approve_action(graph, final["approval_request"]["request_id"], s.PRIYA)["status"] == "APPROVED"
+
+
+def test_a_sanctions_designation_decides_while_it_holds_and_goes_stale_when_lifted(fresh_key):
+    graph = get_db().select_graph(fresh_key)
+    assert run(s.ISOLATED, fresh_key)[1]["verdict"] == "CLEAR"
+    m.set_sanctioned(graph, s.ISOLATED, True, "EU-CONSOLIDATED")
+    _, listed = run(s.ISOLATED, fresh_key)
+    assert listed["verdict"] == "SUSPICIOUS" and listed["approval_request"] is None
+    basis = next(f for f in listed["facts"] if f["id"] == listed["verdict_basis"][0])
+    assert (basis["predicate"], basis["value"]) == ("subject_sanctioned", "EU-CONSOLIDATED")
+    assert recalled(graph, s.ISOLATED, "subject_sanctioned")["status"] == "CURRENT"
+
+    m.set_sanctioned(graph, s.ISOLATED, False)
+    designation = recalled(graph, s.ISOLATED, "subject_sanctioned")
+    assert designation["status"] == "STALE" and designation["changed"] == [s.ISOLATED]
+    _, lifted = run(s.ISOLATED, fresh_key)
+    assert (lifted["verdict"], lifted["answer_state"]) == ("CLEAR", "memory_stale_reinvestigated")
+    assert not [f for f in lifted["facts"] if f["predicate"] == "subject_sanctioned"]
+    assert any(st["text"].startswith("The remembered sanctions designation went stale") for st in lifted["statements"])
+    left = graph.ro_query("MATCH (f:SemanticFact {predicate: 'subject_sanctioned'}) RETURN collect(f.status)")
+    assert left.result_set[0][0] == ["SUPERSEDED"]
+
+
+def pending_request(key: str) -> str:
+    _, final = run(s.NOVAPAY, key)
+    return final["approval_request"]["request_id"]
+
+
+def signed_off(graph, request: str) -> tuple[str, int, list[str]]:
+    status = q.approval_statuses(graph, [request])[request]
+    signatures = graph.ro_query("MATCH (:Employee)-[s:SIGNED_OFF]->(:ApprovalRequest {id: $r}) RETURN count(s)",
+                                {"r": request}).result_set[0][0]
+    frozen = graph.ro_query("MATCH (a:Account) WHERE a.frozen_by = $r RETURN collect(a.id)",
+                            {"r": request}).result_set[0][0]
+    return status, signatures, sorted(frozen)
+
+
+def during_check(monkeypatch, change) -> None:
+    """Run `change` once, after sign-off has checked the evidence and before it writes."""
+    check, pending = q.changed_dependencies, [change]
+
+    def checked(graph, depends_on, rev):
+        result = check(graph, depends_on, rev)
+        while pending:
+            pending.pop()(graph)
+        return result
+
+    monkeypatch.setattr(q, "changed_dependencies", checked)
+
+
+def test_evidence_removed_while_sign_off_checks_it_freezes_nothing(fresh_key, monkeypatch):
+    graph = get_db().select_graph(fresh_key)
+    request = pending_request(fresh_key)
+    during_check(monkeypatch, lambda g: m.delete_transfer(g, route_transfer(g)))
+    with pytest.raises(ValueError, match="is now STALE"):
+        q.approve_action(graph, request, s.PRIYA)
+    assert signed_off(graph, request) == ("STALE", 0, [])
+
+
+def test_an_unrelated_change_while_sign_off_checks_still_lets_it_through(fresh_key, monkeypatch):
+    graph = get_db().select_graph(fresh_key)
+    request = pending_request(fresh_key)
+    targets = q.list_approvals(graph, "PENDING_L3")[0]["target_ids"]
+    during_check(monkeypatch, lambda g: m.add_transfer(g, s.ISOLATED, s.VIP, 100))
+    approved = q.approve_action(graph, request, s.PRIYA)
+    assert approved["status"] == "APPROVED" and signed_off(graph, request) == ("APPROVED", 1, sorted(targets))
+
+
+def test_a_policy_raising_its_clearance_while_sign_off_checks_is_honoured(fresh_key, monkeypatch):
+    graph = get_db().select_graph(fresh_key)
+    request = pending_request(fresh_key)
+    during_check(monkeypatch, lambda g: g.query("MATCH (p:Entity {id: $p}) SET p.required_clearance_level_for_freeze "
+                                                "= 4, p.required_clearance_for_freeze = 'L4'", {"p": s.POLICY}))
+    with pytest.raises(ValueError, match="this action requires L4"):
+        q.approve_action(graph, request, s.PRIYA)
+    assert signed_off(graph, request) == ("PENDING_L3", 0, [])
+
+
+def test_racing_sign_offs_approve_once(fresh_key, monkeypatch):
+    graph = get_db().select_graph(fresh_key)
+    request = pending_request(fresh_key)
+    both_checked, check = threading.Barrier(2, timeout=10), q.changed_dependencies
+
+    def checked(graph_, depends_on, rev):
+        result = check(graph_, depends_on, rev)
+        if not both_checked.broken:
+            try:
+                both_checked.wait()
+            except threading.BrokenBarrierError:
+                pass
+        return result
+
+    monkeypatch.setattr(q, "changed_dependencies", checked)
+
+    def sign(_) -> str:
+        try:
+            return q.approve_action(get_db().select_graph(fresh_key), request, s.PRIYA)["status"]
+        except ValueError as exc:
+            return str(exc)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = sorted(pool.map(sign, range(2)))
+    assert outcomes == ["APPROVED", f"{request} is already APPROVED"]
+    assert signed_off(graph, request)[:2] == ("APPROVED", 1)
 
 
 def test_transfer_writes_keep_raw_and_summary_edges_consistent(fresh_key):

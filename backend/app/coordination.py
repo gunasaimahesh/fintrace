@@ -1,10 +1,12 @@
 """The alert queue and the hunters that drain it, coordinating only through graph state.
 
 Lifecycle (contracts.AlertStatus): PENDING -> CLAIMED -> COMPLETED | FAILED. A claim is one write that stamps a
-fresh token and a lease and records an Attempt; the hunter renews the lease while it works, and completing or
-failing commits only if the alert still carries its token. The sweeper returns expired claims to PENDING (their
-token can no longer commit) and retries FAILED alerts until MAX_ATTEMPTS, after which they stay FAILED and
-visible. Queue state is not evidence, so none of this touches the graph revision.
+fresh token and a lease and records an Attempt; the hunter renews the lease while it works, and renewing,
+completing or failing commits only if the alert still carries its token and the lease has not run out (a lease
+is good up to and including lease_until; the sweeper expires it after). While it works, the hunter's case,
+memory, case merges and freeze request are written under the same condition, and it stops once the lease is
+lost. The sweeper returns expired claims to PENDING and retries FAILED alerts until MAX_ATTEMPTS, after which
+they stay FAILED and visible. Queue state is not evidence, so none of this touches the graph revision.
 
     python -m backend.app.coordination --workers 3          # drain the default tenant's queue
 """
@@ -19,7 +21,7 @@ from collections.abc import Awaitable, Callable
 from falkordb import Graph
 
 from backend.app import agent
-from backend.app.contracts import ALERT_RULES, LEASE_SECONDS, MAX_ATTEMPTS, AlertStatus
+from backend.app.contracts import ALERT_RULES, LEASE_SECONDS, MAX_ATTEMPTS, AlertStatus, Claim
 from backend.app.db import get_db, tenant_key
 
 Emit = Callable[[dict], Awaitable[None]]
@@ -27,6 +29,7 @@ Emit = Callable[[dict], Awaitable[None]]
 ALERT = ("al {.id, .subject_id, .rule, .priority, .created_at, .status, .attempt, .claimed_by, .claimed_at, "
          ".lease_until, .case_id, .verdict, .answer_state, .episode_id, .request_id, .error, .completed_at, "
          ".completed_by}")
+HELD = f"al.status = '{AlertStatus.CLAIMED}' AND al.claim_token = $token AND al.lease_until >= $now"
 
 
 def claim(graph: Graph, worker_id: str, now: float | None = None, lease_seconds: float = LEASE_SECONDS) -> dict | None:
@@ -58,14 +61,14 @@ def claim(graph: Graph, worker_id: str, now: float | None = None, lease_seconds:
 
 def renew(graph: Graph, alert_id: str, token: str, now: float | None = None,
           lease_seconds: float = LEASE_SECONDS) -> bool:
-    """Extend the lease; False once the alert no longer carries this token (the claim was lost)."""
+    """Extend the lease; False once the claim is lost (the alert no longer carries this token, or the lease ran out)."""
     now = time.time() if now is None else now
     return bool(graph.query(f"""
         MATCH (al:Entity:Alert {{id: $id}})
-        WHERE al.status = '{AlertStatus.CLAIMED}' AND al.claim_token = $token
+        WHERE {HELD}
         SET al.lease_until = $until
         RETURN al.id
-    """, {"id": alert_id, "token": token, "until": now + lease_seconds}).result_set)
+    """, {"id": alert_id, "token": token, "now": now, "until": now + lease_seconds}).result_set)
 
 
 def _refuse(graph: Graph, alert_id: str, token: str, what: str, now: float) -> None:
@@ -73,7 +76,8 @@ def _refuse(graph: Graph, alert_id: str, token: str, what: str, now: float) -> N
         MATCH (:Entity:Alert {id: $id})<-[:FOR_ALERT]-(a:Attempt {token: $token})
         SET a.commit_refused_at = $now, a.refused = $what
     """, {"id": alert_id, "token": token, "now": now,
-          "what": f"{what} refused: the alert no longer carries this attempt's token"})
+          "what": f"{what} refused: this attempt no longer holds the claim (its lease ran out or the alert "
+                  f"carries another token)"})
 
 
 def complete(graph: Graph, alert_id: str, token: str, outcome: dict, now: float | None = None) -> bool:
@@ -81,7 +85,7 @@ def complete(graph: Graph, alert_id: str, token: str, outcome: dict, now: float 
     now = time.time() if now is None else now
     done = graph.query(f"""
         MATCH (al:Entity:Alert {{id: $id}})<-[:FOR_ALERT]-(a:Attempt {{token: $token}})
-        WHERE al.status = '{AlertStatus.CLAIMED}' AND al.claim_token = $token
+        WHERE {HELD}
         SET al.status = '{AlertStatus.COMPLETED}', al.completed_at = $now, al.completed_by = al.claimed_by,
             al.lease_until = NULL, al.case_id = $case, al.verdict = $verdict, al.answer_state = $state,
             al.episode_id = $episode, al.request_id = $request, al.error = NULL,
@@ -100,7 +104,7 @@ def fail(graph: Graph, alert_id: str, token: str, error: str, now: float | None 
     now = time.time() if now is None else now
     done = graph.query(f"""
         MATCH (al:Entity:Alert {{id: $id}})<-[:FOR_ALERT]-(a:Attempt {{token: $token}})
-        WHERE al.status = '{AlertStatus.CLAIMED}' AND al.claim_token = $token
+        WHERE {HELD}
         SET al.status = '{AlertStatus.FAILED}', al.failed_at = $now, al.error = $error, al.lease_until = NULL,
             a.status = '{AlertStatus.FAILED}', a.finished_at = $now, a.error = $error
         RETURN al.id
@@ -204,18 +208,33 @@ async def work(key: str, worker_id: str, alert: dict, *, mode: agent.Mode = "fal
     lost = asyncio.Event()
     keeper = asyncio.create_task(_keep_lease(graph, alert, lease_seconds, lost))
     final, error = None, None
-    try:
+
+    async def follow() -> None:
+        nonlocal final, error
         async for event in agent.investigate(alert["subject_id"], graph_key=key, worker_id=worker_id, mode=mode,
-                                             max_steps=max_steps, case_id=alert["case_id"], memory_mode=memory_mode):
+                                             max_steps=max_steps, case_id=alert["case_id"], memory_mode=memory_mode,
+                                             claim=Claim(alert["id"], alert["token"])):
             await say(event)
             if event["type"] == "final":
                 final = event
             elif event["type"] == "error":
                 error = event["message"]
+
+    # Writes made under the claim check it themselves; stopping here only saves the work a lost claim can't commit.
+    run, gone = asyncio.create_task(follow()), asyncio.create_task(lost.wait())
+    try:
+        await asyncio.wait({run, gone}, return_when=asyncio.FIRST_COMPLETED)
+        if run.done():
+            run.result()
+        else:
+            final, error = None, ("the claim was lost (its lease ran out or another hunter took the alert), so the "
+                                  "investigation stopped")
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
     finally:
-        keeper.cancel()
+        for task in (run, gone, keeper):
+            task.cancel()
+        await asyncio.gather(run, gone, keeper, return_exceptions=True)
     memo = (final or {}).get("memory") or {}
     outcome = {"alert_id": alert["id"], "subject_id": alert["subject_id"], "worker_id": worker_id,
                "attempt": alert["attempt"], "case_id": alert["case_id"],

@@ -1,10 +1,11 @@
 """Answer states, verdicts, typed facts and the analyst's card.
 
 Every statement on the card is rendered from Facts, and every Fact comes from one tool result (tool,
-step, result_key). The verdict follows the eligible-route rule, not the model:
+step, result_key). The verdict follows the eligible-route rule, not the model, and only facts about the
+alert entity decide it (a route or a clearing search from another account is about that account):
 
-- SUSPICIOUS: an eligible route to a sanctioned account was found (a positive witness stands even if
-  other searches were incomplete).
+- SUSPICIOUS: the entity is itself sanctioned (direct exposure), or an eligible route to a sanctioned
+  account was found (a positive witness stands even if other searches were incomplete).
 - CLEAR: an eligible-route search completed to PRESCRIBED_DEPTH hops, or exhausted everything reachable,
   and found none. Worded as "no eligible route within the stated scope", never "safe".
 - INSUFFICIENT: no such search completed (capped, timed out, too shallow, or never run).
@@ -26,6 +27,7 @@ from backend.app.contracts import PRESCRIBED_DEPTH, Fact, FactKind, Source, edge
 
 class AnswerState(StrEnum):
     ANSWERED_WITH_PATH = "answered_with_path"
+    SUBJECT_SANCTIONED = "subject_sanctioned"
     ANSWERED_FROM_MEMORY = "answered_from_memory"
     MEMORY_STALE_REINVESTIGATED = "memory_stale_reinvestigated"
     NOT_IN_GRAPH = "not_in_graph"
@@ -58,7 +60,8 @@ MODEL_PREDICATES = {
     "waiver_compliance": "subject: decision, object: policy, value: BREACH or COMPLIANT",
     "action_status": "subject: approval request, value: status",
 }
-FINDING_NAMES = {"eligible_route_hops": "route", "no_eligible_route": "finding of no route",
+FINDING_NAMES = {"subject_sanctioned": "sanctions designation", "eligible_route_hops": "route",
+                 "no_eligible_route": "finding of no route",
                  "sanctioned_within_reach": "association", "money_trail": "money trail",
                  "max_flow_capacity": "max-flow bound", "ring_size": "ring", "top_broker": "broker ranking",
                  "waiver_compliance": "waiver check"}
@@ -222,6 +225,9 @@ def extract_facts(results: list[dict], rev: int | None = None) -> list[Fact]:
                 add(FactKind.PROFILE, d["entity_id"], "not_in_graph", None, True, None, src("data.found"))
                 continue
             add(FactKind.PROFILE, d["id"], "status", None, d.get("status"), None, src("data.status"))
+            if "Sanctioned" in d.get("labels", []):
+                add(FactKind.SANCTIONS_EXPOSURE, d["id"], "subject_sanctioned", None, d["profile"].get("list"), None,
+                    src("data.labels"))
             if (volume := d["profile"].get("monthly_volume_usd")) is not None:
                 add(FactKind.PROFILE, d["id"], "monthly_volume", None, volume, "USD/month",
                     src("data.profile.monthly_volume_usd"))
@@ -413,24 +419,32 @@ def _remembered(fact: Fact) -> bool:
     return bool(fact.scope.get("memory"))
 
 
-def derive(facts: list[Fact], unknown: bool) -> tuple[AnswerState, Verdict, list[str]]:
-    """Answer state, verdict and the facts the verdict rests on. Remembered CURRENT facts count like fresh ones;
-    a fresh fact is preferred when both support the verdict."""
+def derive(facts: list[Fact], unknown: bool, subject: str) -> tuple[AnswerState, Verdict, list[str]]:
+    """Answer state, verdict and the facts the verdict rests on. Only facts whose subject is `subject` count: a
+    route or a clearing search from another account is a finding about that account. The subject's own sanctions
+    designation comes first. Remembered CURRENT facts count like fresh ones; a fresh fact is preferred when both
+    support the verdict."""
+    own = [f for f in facts if f.subject == subject]
     if unknown:
-        return AnswerState.UNKNOWN_ENTITY, Verdict.INSUFFICIENT, [f.id for f in _by(facts, "not_in_graph")]
-    routes = _by(facts, "eligible_route_hops")
-    cleared = [f for f in facts if clears(f)]
-    if routes:
+        return AnswerState.UNKNOWN_ENTITY, Verdict.INSUFFICIENT, [f.id for f in _by(own, "not_in_graph")]
+    direct = _by(own, "subject_sanctioned")
+    routes = _by(own, "eligible_route_hops")
+    cleared = [f for f in own if clears(f)]
+    if direct:
+        verdict, basis = Verdict.SUSPICIOUS, [min(direct, key=_remembered)]
+    elif routes:
         verdict, basis = Verdict.SUSPICIOUS, [min(routes, key=lambda f: (f.value, _remembered(f)))]
     elif cleared:
         verdict, basis = Verdict.CLEAR, [max(cleared, key=lambda f: (f.scope["requested_depth"], not _remembered(f)))]
     else:
-        verdict, basis = Verdict.INSUFFICIENT, _by(facts, "no_eligible_route") + _by(facts, "eligible_search_incomplete")
+        verdict, basis = Verdict.INSUFFICIENT, _by(own, "no_eligible_route") + _by(own, "eligible_search_incomplete")
     ids = [f.id for f in basis]
     if verdict != Verdict.INSUFFICIENT and all(_remembered(f) for f in basis):
         return AnswerState.ANSWERED_FROM_MEMORY, verdict, ids
     if _by(facts, "memory_stale"):
         return AnswerState.MEMORY_STALE_REINVESTIGATED, verdict, ids
+    if direct:
+        return AnswerState.SUBJECT_SANCTIONED, verdict, ids
     return (AnswerState.ANSWERED_WITH_PATH if verdict == Verdict.SUSPICIOUS else AnswerState.NOT_IN_GRAPH), verdict, ids
 
 
@@ -475,7 +489,14 @@ def render(entity_id: str, state: AnswerState, verdict: Verdict, facts: list[Fac
         say(f"The remembered {names} went stale ({why}), so {'it' if len(group) == 1 else 'they'} could not "
             f"be reused.", *group)
 
-    routes = _first_per(sorted(_by(facts, "eligible_route_hops"), key=lambda f: f.value), key=lambda f: f.object)
+    own = [f for f in facts if f.subject == entity_id]
+    direct = next(iter(_by(own, "subject_sanctioned")), None)
+    if direct:
+        say(f"{label(entity_id)} is itself sanctioned" + (f" ({direct.value})" if direct.value else "") + ": that is "
+            f"direct exposure, so no route is needed. A sanctioned account is already blocked, so it is not put up "
+            f"for a new freeze.", direct)
+
+    routes = _first_per(sorted(_by(own, "eligible_route_hops"), key=lambda f: f.value), key=lambda f: f.object)
     for n, f in enumerate(routes):
         if origin := f.scope.get("shared"):
             say(f"From shared memory: {origin['worker_id']} found a route from {label(origin['found_from'])} through "
@@ -491,8 +512,14 @@ def render(entity_id: str, state: AnswerState, verdict: Verdict, facts: list[Fac
             say(f"It also has an eligible route to sanctioned {label(f.object)} in {f.value} hops.", f)
 
     if not routes:
-        cleared = [f for f in facts if clears(f)]
-        if verdict == Verdict.CLEAR and cleared:
+        cleared = [f for f in own if clears(f)]
+        if direct:
+            if cleared:
+                f = max(cleared, key=lambda f: f.scope["requested_depth"])
+                say(f"Beyond its own designation, no eligible route from {label(entity_id)} reaches another "
+                    f"sanctioned entity ({f.scope['reached']:,} entities checked within "
+                    f"{f.scope['requested_depth']} hops).", f)
+        elif verdict == Verdict.CLEAR and cleared:
             f = max(cleared, key=lambda f: f.scope["requested_depth"])
             if f.scope["exhausted"] and f.scope["reached"] == 0:
                 text = (f"No transfer leaves {label(f.subject)} and it shares no device, so no eligible route to a "
@@ -505,7 +532,7 @@ def render(entity_id: str, state: AnswerState, verdict: Verdict, facts: list[Fac
                         f"{f.scope['requested_depth']} hops ({f.scope['reached']:,} entities reached).")
             say(text + " That is not proof the account is safe.", f)
         else:
-            searches = _by(facts, "no_eligible_route") + _by(facts, "eligible_search_incomplete")
+            searches = _by(own, "no_eligible_route") + _by(own, "eligible_search_incomplete")
             if searches:
                 f = max(searches, key=lambda f: (f.scope["completed_depth"], f.scope["requested_depth"]))
                 scope = f.scope
@@ -516,7 +543,15 @@ def render(entity_id: str, state: AnswerState, verdict: Verdict, facts: list[Fac
                     f"there does not clear it.", f)
             else:
                 say(f"No eligible-route search was run from {label(entity_id)}, so nothing can be concluded about "
-                    f"its exposure.", *_by(facts, "status")[:1])
+                    f"its exposure.", *_by(own, "status")[:1])
+
+    elsewhere = [f for f in facts if f.subject != entity_id]
+    for f in _first_per(sorted(_by(elsewhere, "eligible_route_hops"), key=lambda f: f.value), key=lambda f: f.subject):
+        say(f"A search from {label(f.subject)} found an eligible route to sanctioned {label(f.object)} in {f.value} "
+            f"hops. That route starts at {f.subject}, not {entity_id}, so it does not decide this verdict.", f)
+    for f in _first_per([f for f in elsewhere if clears(f)], key=lambda f: f.subject):
+        say(f"A complete search from {label(f.subject)} found no eligible route to a sanctioned entity. That is "
+            f"about {f.subject}, not {entity_id}, so it does not clear it.", f)
 
     route_targets = {f.object for f in routes}
     for f in _first_per(_by(facts, "sanctioned_within_reach"), key=lambda f: f.object):

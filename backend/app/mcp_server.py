@@ -16,6 +16,7 @@ from pydantic import Field
 
 from backend.app import tools as t
 from backend.app.config import get_settings
+from backend.app.contracts import Claim
 from backend.app.db import get_db, graph_key
 
 INSTRUCTIONS = """\
@@ -34,9 +35,9 @@ SCOPED = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempoten
 WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
 
 
-def build_server(key: str | None = None, worker_id: str = "mcp-client") -> MCPServer:
+def build_server(key: str | None = None, worker_id: str = "mcp-client", claim: Claim | None = None) -> MCPServer:
     ctx = t.ToolContext(graph=get_db().select_graph(key or graph_key(get_settings().default_tenant)),
-                        worker_id=worker_id)
+                        worker_id=worker_id, claim=claim)
     server = MCPServer("FinTrace", instructions=INSTRUCTIONS)
 
     @server.tool(annotations=READ)

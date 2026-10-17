@@ -38,7 +38,7 @@ OUT = EVAL_DIR / "acceptance.json"
 README = ROOT / "README.md"
 CHECKPOINT_REPORT = ROOT / "backend" / "tests" / "checkpoint_report.json"
 PLANNING_DOCS = {"MASTER_PLAN.md", "BUILD_PLAN.md", "FINAL_PLAN.md", "PRIZE_EXECUTION_PLAN.md",
-                 "PRIZE_EXECUTION_PLAN_REVIEW.md"}
+                 "PRIZE_EXECUTION_PLAN_REVIEW.md", "CODEX_IMPLEMENTATION_REVIEW.md"}
 NEVER_TRACKED = (".env", "data/raw/", ".venv/", "frontend/node_modules/", "frontend/dist/")
 BANNED_WORDS = ("100%", "undeniable")
 TRACKS = ("Track 1: Connected Data", "Track 2: Memory & Coordination", "Track 3: Company Brain")
