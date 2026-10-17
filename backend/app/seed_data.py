@@ -16,6 +16,7 @@ from collections import defaultdict
 
 import pandas as pd
 from falkordb import Graph
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from .company import load_company
 from .config import DATA_DIR, get_settings
@@ -238,6 +239,20 @@ def seed(tenant: str, reset: bool, profile: str = "full", snapshot: bool = True)
     print(f"Seeded {key}: {nodes:,} nodes, {edges:,} edges")
 
 
+def wait_for_graphs(timeout_s: float = 120) -> list[str]:
+    """The graph names, once FalkorDB answers. Compose starts the app after FalkorDB is healthy; hosts that start
+    both at once (Railway) may run this before the database or its DNS name is up."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        try:
+            return get_db().list_graphs()
+        except RedisConnectionError as exc:
+            if time.monotonic() > deadline:
+                raise
+            print(f"Waiting for FalkorDB: {exc}")
+            time.sleep(2)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Load the FinTrace demo graph into FalkorDB.")
     parser.add_argument("--tenant", default=get_settings().default_tenant)
@@ -251,7 +266,7 @@ def main() -> None:
     if args.if_missing:
         from .tenants import pristine_key
 
-        graphs = get_db().list_graphs()
+        graphs = wait_for_graphs()
         if graph_key(args.tenant) in graphs and (args.no_snapshot or pristine_key(args.tenant) in graphs):
             print(f"{graph_key(args.tenant)} is already loaded")
             return
