@@ -1,0 +1,62 @@
+# Org chart export. Synthetic demo data: these people and teams do not exist.
+# clearance is always "L" + clearance_level.
+
+[[teams]]
+id = "team-merchant-onboarding"
+name = "Merchant Onboarding"
+
+[[teams]]
+id = "team-aml-compliance"
+name = "AML Compliance"
+
+[[teams]]
+id = "team-fraud-ops"
+name = "Fraud Operations"
+
+[[employees]]
+id = "emp-rohan-mehta"
+name = "Rohan Mehta"
+title = "Merchant Onboarding Manager"
+clearance = "L2"
+clearance_level = 2
+on_call = false
+team = "team-merchant-onboarding"
+reports_to = "emp-meera-iyer"
+
+[[employees]]
+id = "emp-meera-iyer"
+name = "Meera Iyer"
+title = "Head of Merchant Growth"
+clearance = "L3"
+clearance_level = 3
+on_call = false
+team = "team-merchant-onboarding"
+
+[[employees]]
+id = "emp-priya-nair"
+name = "Priya Nair"
+title = "AML Compliance Lead"
+clearance = "L3"
+clearance_level = 3
+on_call = true
+team = "team-aml-compliance"
+reports_to = "emp-daniel-okafor"
+
+[[employees]]
+id = "emp-daniel-okafor"
+name = "Daniel Okafor"
+title = "Head of Financial Crime"
+clearance = "L3"
+clearance_level = 3
+on_call = false
+team = "team-aml-compliance"
+
+[[employees]]
+id = "emp-aisha-khan"
+name = "Aisha Khan"
+title = "Fraud Analyst"
+clearance = "L1"
+clearance_level = 1
+on_call = false
+team = "team-fraud-ops"
+reports_to = "emp-priya-nair"

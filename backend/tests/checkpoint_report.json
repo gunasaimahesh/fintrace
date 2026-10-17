@@ -1,16 +1,16 @@
 {
   "budget_ms": 1000,
   "latency_ms": {
-    "path_between(novapay, vortex)": 19.1,
-    "explore(novapay, depth=1)": 2.8,
-    "explore(novapay, depth=5)": 254.0,
-    "explore(biggest hub, depth=5)": 496.7,
-    "trace_money_flow(volkov, out, 6)": 2.3,
-    "trace_money_flow(novapay, out, 6)": 6.2,
-    "exposure_flow(nova-ops + volkov)": 24.9,
-    "detect_ring(volkov)": 128.8,
-    "find_brokers(ring)": 8.0,
-    "GRAPH.COPY": 526.7
+    "path_between(novapay, vortex)": 20.2,
+    "explore(novapay, depth=1)": 2.6,
+    "explore(novapay, depth=5)": 291.7,
+    "explore(biggest hub, depth=5)": 518.5,
+    "trace_money_flow(volkov, out, 6)": 1.8,
+    "trace_money_flow(novapay, out, 6)": 4.8,
+    "exposure_flow(nova-ops + volkov)": 24.6,
+    "detect_ring(volkov)": 124.1,
+    "find_brokers(ring)": 7.0,
+    "GRAPH.COPY": 639.5
   },
   "novapay_depth5": {
     "reached": 30110,
@@ -70,6 +70,8 @@
       "Account": 0.0,
       "Alert": 0.0,
       "Case": 0.0,
+      "Episode": 0.0,
+      "SemanticFact": 0.0,
       "RiskNode": 0.0,
       "IP": 0.0,
       "Device": 0.0,
@@ -99,7 +101,8 @@
       "APPLIES_TO": 0.0,
       "SOURCED_FROM": 0.0,
       "GOVERNED_BY": 0.0,
-      "FLOWS_TO": 4.0
+      "FLOWS_TO": 4.0,
+      "ALERT_ON": 0.0
     },
     "indices_sz_mb": 13.0
   }

@@ -1,0 +1,20 @@
+[
+  {
+    "id": "tick-risk-408",
+    "system": "Jira",
+    "status": "CLOSED",
+    "opened_at": "2026-09-15T08:00:00Z",
+    "opened_by": "emp-aisha-khan",
+    "title": "NovaPay onboarding: device attestation failing",
+    "text": "Attestation fails for most NovaPay admin sessions: headless Chromium fingerprints (fp-8821). Recommend holding go-live until resolved."
+  },
+  {
+    "id": "tick-risk-415",
+    "system": "Jira",
+    "status": "CLOSED",
+    "opened_at": "2026-09-02T08:00:00Z",
+    "opened_by": "emp-rohan-mehta",
+    "title": "Lumen Games onboarding: KYB document refresh pending",
+    "text": "Lumen's incorporation certificate is 13 months old; refresh requested after go-live."
+  }
+]

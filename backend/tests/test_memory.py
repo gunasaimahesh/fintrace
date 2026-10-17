@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
+from pathlib import Path
 
 import pytest
 
 from backend.app import agent, memory
+from backend.app import company as c
 from backend.app import mutations as m
 from backend.app import queries as q
 from backend.app import scenario as s
@@ -129,6 +132,24 @@ def test_a_change_during_the_investigation_is_not_cached(fresh_key, monkeypatch)
     assert "during the investigation" in final["memory"]["note"]
     recall = memory.recall(graph, s.NOVAPAY)
     assert recall["facts"] == [] and recall["episodes"][0]["facts_cached"] is False
+
+
+def test_a_policy_edit_refreshes_the_waiver_check_and_keeps_the_route(fresh_key, tmp_path):
+    graph = get_db().select_graph(fresh_key)
+    run(s.NOVAPAY, fresh_key)
+    sources = Path(shutil.copytree(c.COMPANY_DIR, tmp_path / "company"))
+    policy = sources / "policies" / f"{s.POLICY}.md"
+    policy.write_text(policy.read_text().replace('version = "2026.2"', 'version = "2026.3"')
+                      .replace("waiver_threshold_monthly = 25_000_000", "waiver_threshold_monthly = 50_000_000"))
+    assert c.sync_company(graph, sources)["changed"] == [s.POLICY]
+    assert recalled(graph, s.NOVAPAY, "eligible_route_hops")["status"] == "CURRENT"
+    waiver = recalled(graph, s.NOVAPAY, "waiver_compliance", s.WAIVER)
+    assert waiver["status"] == "STALE" and waiver["why_stale"] == f"{s.POLICY} changed after graph revision 0"
+
+    events, again = run(s.NOVAPAY, fresh_key)
+    assert "trace_governance" in tools_called(events) and "explore_neighborhood" not in tools_called(events)
+    assert (again["verdict"], again["answer_state"]) == ("SUSPICIOUS", "answered_from_memory")
+    assert f"That waiver is within {s.POLICY} (version 2026.3)." in [st["text"] for st in again["statements"]]
 
 
 def test_a_clear_finding_goes_stale_on_any_change(fresh_key):

@@ -329,7 +329,8 @@ def extract_facts(results: list[dict], rev: int | None = None) -> list[Fact]:
                 add(FactKind.WAIVER_COMPLIANCE, other["decision_id"], "waiver_compliance", other["policy_id"],
                     "BREACH" if other["violations"] else "COMPLIANT", None, src(f"data.approver_other_decisions[{i}]"),
                     scope={"approved_by": other["approved_by"], "applies_to": other["applies_to"]["id"], "other": True},
-                    depends_on=[other["decision_id"], other["approved_by"], other["applies_to"]["id"]])
+                    depends_on=[other["decision_id"], other["approved_by"], other["applies_to"]["id"]]
+                    + ([other["policy_id"]] if other["policy_id"] else []))
             if policy := d["freeze_policy"]:
                 for i, person in enumerate(d["on_call_approvers"]):
                     add(FactKind.ACTION, policy["id"], "on_call_approver", person["id"], person["clearance"], None,

@@ -1,0 +1,28 @@
+# Approval decisions. Synthetic demo data. merchant_monthly_volume is in cents.
+# sourced_from lists the ticket and message ids the decision rests on.
+
+[[decisions]]
+id = "dec-waiver-77"
+kind = "onboarding_waiver"
+control = "device_attestation"
+status = "ACTIVE"
+summary = "Device attestation waived for NovaPay onboarding"
+approved_at = 2026-09-18T08:00:00Z
+approved_by = "emp-rohan-mehta"
+applies_to = "merch-nova-pay"
+merchant_monthly_volume = 41_000_000
+governed_by = "pol-aml-sec-4"
+sourced_from = ["tick-risk-408", "msg-slack-9921"]
+
+[[decisions]]
+id = "dec-waiver-81"
+kind = "onboarding_waiver"
+control = "kyb_document_refresh"
+status = "ACTIVE"
+summary = "KYB document refresh deferred for Lumen Games onboarding"
+approved_at = 2026-09-04T08:00:00Z
+approved_by = "emp-rohan-mehta"
+applies_to = "merch-lumen-games"
+merchant_monthly_volume = 18_000_000
+governed_by = "pol-aml-sec-4"
+sourced_from = ["tick-risk-415"]

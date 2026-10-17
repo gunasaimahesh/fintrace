@@ -16,6 +16,7 @@ from collections import defaultdict
 import pandas as pd
 from falkordb import Graph
 
+from .company import load_company
 from .config import DATA_DIR, get_settings
 from .contracts import MAX_CAPACITY
 from .db import get_db, graph_key
@@ -23,7 +24,7 @@ from .scenario import DAY, HOUR, GraphSpec, build_scenario
 
 INDEXES = [("Entity", "id"), ("Account", "id"), ("Alert", "status"), ("Case", "status"), ("Episode", "id"),
            ("SemanticFact", "id")]
-FIXTURE_VERSION = "base-2"
+FIXTURE_VERSION = "base-3"
 BATCH = 5_000
 WRITE_TIMEOUT_MS = 120_000
 DEVICE_SHARE = 0.25
@@ -157,6 +158,8 @@ def load_spec(graph: Graph, spec: GraphSpec) -> None:
 
 
 def seed(tenant: str, reset: bool) -> None:
+    from .overlay import apply_overlay, write_cases  # the overlay builds on this module
+
     db = get_db()
     key = graph_key(tenant)
     if key in db.list_graphs():
@@ -178,19 +181,21 @@ def seed(tenant: str, reset: bool) -> None:
         ("IBM accounts", lambda: load_ibm_accounts(graph, accounts, loaded_at)),
         ("IBM transfers", lambda: load_ibm_transfers(graph, transfers)),
         ("identity layer", lambda: load_spec(graph, build_identity_layer(accounts, window, loaded_at))),
-        ("planted scenario + org", lambda: load_spec(graph, build_scenario(anchors, window, base_ts, loaded_at))),
+        ("planted scenario", lambda: load_spec(graph, build_scenario(anchors, window, base_ts, loaded_at))),
+        ("company sources", lambda: load_company(graph)),
         ("FLOWS_TO summaries", lambda: build_flow_summary(graph)),
+        ("meta", lambda: graph.query("""
+            CREATE (:Meta {key: 'dataset', source: $source, as_of_ts: $as_of, window_start: $start,
+                           scenario_base_ts: $base, loaded_at: $loaded_at, rev: 0, fixture_version: $fixture})
+        """, {"source": manifest["source"], "as_of": window[1], "start": window[0], "base": base_ts,
+              "loaded_at": loaded_at, "fixture": FIXTURE_VERSION})),
+        # After the summaries and Meta: it reads the data window from Meta and summarizes its own transfers.
+        ("challenge overlay", lambda: write_cases(apply_overlay(graph), FIXTURE_VERSION)),
     ]
     for name, step in steps:
         started = time.perf_counter()
         step()
         print(f"  {name:<24} {time.perf_counter() - started:6.1f}s")
-
-    graph.query("""
-        CREATE (:Meta {key: 'dataset', source: $source, as_of_ts: $as_of, window_start: $start,
-                       scenario_base_ts: $base, loaded_at: $loaded_at, rev: 0, fixture_version: $fixture})
-    """, {"source": manifest["source"], "as_of": window[1], "start": window[0], "base": base_ts,
-          "loaded_at": loaded_at, "fixture": FIXTURE_VERSION})
 
     nodes = graph.ro_query("MATCH (n) RETURN count(n)").result_set[0][0]
     edges = graph.ro_query("MATCH ()-[e]->() RETURN count(e)").result_set[0][0]

@@ -1,0 +1,623 @@
+{
+  "overlay_version": "challenge-1",
+  "base_fixture_version": "base-3",
+  "seed": 2026,
+  "prescribed_depth": 6,
+  "definitions": {
+    "eligible_route": "FLOWS_TO edges in their own direction, plus Account -USED_DEVICE-> Device <-USED_DEVICE- Account (two hops). LOGGED_FROM never counts.",
+    "verdict": "SUSPICIOUS iff an eligible route reaches a :Sanctioned account within prescribed_depth hops.",
+    "eligible_hops": "Length of the shortest eligible route to sanctioned_target at any depth; null if there is none.",
+    "shortest_undirected_hops_to_sanctioned": "Hops over FLOWS_TO (either direction), USED_DEVICE and LOGGED_FROM from the subject to sanctioned_target, or to associated_sanctioned for an association; null when the case plants no sanctioned account. No other sanctioned account is within prescribed_depth undirected hops of any subject.",
+    "associated_sanctioned": "A sanctioned account reachable only over an undirected path; the case is CLEAR.",
+    "route": "One shortest eligible route, subject first."
+  },
+  "cases": [
+    {
+      "case_id": "c01",
+      "alert_id": "alert-1008",
+      "subject_id": "merch-calloway-ticketing",
+      "split": "heldout",
+      "category": "positive",
+      "pattern": "device_bridge_layering",
+      "rule": "merchant_volume_jump",
+      "priority": 5,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "SUSPICIOUS",
+        "sanctioned_target": "acct-5131326",
+        "eligible_hops": 5,
+        "shortest_undirected_hops_to_sanctioned": 5,
+        "associated_sanctioned": null,
+        "route": [
+          "merch-calloway-ticketing",
+          "acct-calloway-ticketing-payouts",
+          "dev-732577c324",
+          "acct-thorne-freight",
+          "acct-9330192",
+          "acct-5131326"
+        ],
+        "notes": "Card revenue is swept to the merchant's treasury account. The treasury's flagged device is also used by an account that wires the funds, directly and through a second account, to the account that pays the sanctioned target."
+      },
+      "planted_ids": [
+        "merch-calloway-ticketing",
+        "acct-calloway-ticketing-payouts",
+        "dev-732577c324",
+        "acct-thorne-freight",
+        "acct-brantham-print",
+        "acct-9330192",
+        "acct-5131326"
+      ],
+      "anchor_ids": [
+        "acct-803D6C5C0",
+        "acct-809151610",
+        "acct-80DBB6D40",
+        "acct-80E116240",
+        "acct-8122DCE00",
+        "acct-8039AC560",
+        "acct-805F443D0"
+      ]
+    },
+    {
+      "case_id": "c02",
+      "alert_id": "alert-1014",
+      "subject_id": "acct-7848838",
+      "split": "heldout",
+      "category": "positive",
+      "pattern": "device_bridge_layering",
+      "rule": "new_counterparty_burst",
+      "priority": 3,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "SUSPICIOUS",
+        "sanctioned_target": "acct-elstree-wholesale",
+        "eligible_hops": 6,
+        "shortest_undirected_hops_to_sanctioned": 6,
+        "associated_sanctioned": null,
+        "route": [
+          "acct-7848838",
+          "acct-kerrigan-seafood",
+          "acct-sheldon-interiors",
+          "dev-23f4e2ea68",
+          "acct-penrose-capital",
+          "acct-marlow-tools",
+          "acct-elstree-wholesale"
+        ],
+        "notes": "Two payments from the subject to new counterparties are pooled by one account, whose unflagged device is shared with the account that pays the sanctioned target's payer. The device bridge is three hops in."
+      },
+      "planted_ids": [
+        "acct-7848838",
+        "acct-rowan-grain",
+        "acct-kerrigan-seafood",
+        "acct-sheldon-interiors",
+        "dev-23f4e2ea68",
+        "acct-penrose-capital",
+        "acct-marlow-tools",
+        "acct-elstree-wholesale"
+      ],
+      "anchor_ids": [
+        "acct-811B8D4E0",
+        "acct-811E19710",
+        "acct-8106220A0",
+        "acct-80BD13C20"
+      ]
+    },
+    {
+      "case_id": "c03",
+      "alert_id": "alert-1007",
+      "subject_id": "acct-merrick-commodities",
+      "split": "dev",
+      "category": "positive",
+      "pattern": "direct_chain",
+      "rule": "large_outbound_wire",
+      "priority": 4,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "SUSPICIOUS",
+        "sanctioned_target": "acct-wexford-commodities",
+        "eligible_hops": 3,
+        "shortest_undirected_hops_to_sanctioned": 3,
+        "associated_sanctioned": null,
+        "route": [
+          "acct-merrick-commodities",
+          "acct-delmar-shipping",
+          "acct-lindell-energy",
+          "acct-wexford-commodities"
+        ],
+        "notes": "A large wire from the subject passes through two accounts within a day and reaches the sanctioned target."
+      },
+      "planted_ids": [
+        "acct-thursby-grain",
+        "acct-merrick-commodities",
+        "acct-5556046",
+        "acct-delmar-shipping",
+        "acct-lindell-energy",
+        "acct-wexford-commodities"
+      ],
+      "anchor_ids": [
+        "acct-810DCE690",
+        "acct-810186000",
+        "acct-80D51FBD0",
+        "acct-811710FE0"
+      ]
+    },
+    {
+      "case_id": "c04",
+      "alert_id": "alert-1001",
+      "subject_id": "acct-medway-seafood",
+      "split": "heldout",
+      "category": "positive",
+      "pattern": "double_device_bridge",
+      "rule": "dormant_reactivation",
+      "priority": 2,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "SUSPICIOUS",
+        "sanctioned_target": "acct-5050321",
+        "eligible_hops": 5,
+        "shortest_undirected_hops_to_sanctioned": 5,
+        "associated_sanctioned": null,
+        "route": [
+          "acct-medway-seafood",
+          "dev-1f9e74d650",
+          "acct-ind-339131",
+          "dev-a7f92af541",
+          "acct-solent-logistics",
+          "acct-5050321"
+        ],
+        "notes": "A dormant account that suddenly receives wires shares a flagged device with an individual, whose second device is used by the account that pays the sanctioned target. Two device bridges and no money between them."
+      },
+      "planted_ids": [
+        "acct-medway-seafood",
+        "dev-1f9e74d650",
+        "acct-ind-339131",
+        "dev-a7f92af541",
+        "acct-solent-logistics",
+        "acct-5050321"
+      ],
+      "anchor_ids": [
+        "acct-80C37ABC0",
+        "acct-806CFDDA0",
+        "acct-800093F30"
+      ]
+    },
+    {
+      "case_id": "c05",
+      "alert_id": "alert-1006",
+      "subject_id": "acct-6858107",
+      "split": "heldout",
+      "category": "positive",
+      "pattern": "ip_shortcut_with_device_route",
+      "rule": "cross_border_wire",
+      "priority": 3,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "SUSPICIOUS",
+        "sanctioned_target": "acct-7192552",
+        "eligible_hops": 6,
+        "shortest_undirected_hops_to_sanctioned": 3,
+        "associated_sanctioned": null,
+        "route": [
+          "acct-6858107",
+          "acct-8603630",
+          "dev-304febec70",
+          "acct-northgate-ventures",
+          "acct-4706382",
+          "acct-4153951",
+          "acct-7192552"
+        ],
+        "notes": "The subject logs in through the same corporate proxy as an account that pays the sanctioned target (3 undirected hops, not eligible). The eligible route is 6 hops: a wire to the subject's agent, whose device is shared with the account that starts a three-wire chain to the target."
+      },
+      "planted_ids": [
+        "acct-8979901",
+        "acct-6858107",
+        "acct-6036808",
+        "ip-67-77-204-182",
+        "acct-ormond-consulting",
+        "acct-8603630",
+        "dev-304febec70",
+        "acct-northgate-ventures",
+        "acct-4706382",
+        "acct-4153951",
+        "acct-7192552"
+      ],
+      "anchor_ids": [
+        "acct-811D7B180",
+        "acct-802BE7350",
+        "acct-803B544C0"
+      ]
+    },
+    {
+      "case_id": "c06",
+      "alert_id": "alert-1012",
+      "subject_id": "acct-jardine-optics",
+      "split": "dev",
+      "category": "positive",
+      "pattern": "fan_out_aggregator",
+      "rule": "velocity_spike",
+      "priority": 1,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "SUSPICIOUS",
+        "sanctioned_target": "acct-6225531",
+        "eligible_hops": 3,
+        "shortest_undirected_hops_to_sanctioned": 3,
+        "associated_sanctioned": null,
+        "route": [
+          "acct-jardine-optics",
+          "acct-ind-575325",
+          "acct-6895067",
+          "acct-6225531"
+        ],
+        "notes": "Four payouts just under $10,000 to individuals within an hour. Each forwards to one collector account, which wires the total to the sanctioned target."
+      },
+      "planted_ids": [
+        "acct-8507811",
+        "acct-jardine-optics",
+        "acct-4533518",
+        "acct-ind-939650",
+        "acct-ind-808103",
+        "acct-ind-575325",
+        "acct-ind-822976",
+        "acct-6895067",
+        "acct-6225531"
+      ],
+      "anchor_ids": [
+        "acct-80852DFF0",
+        "acct-8037C0D60",
+        "acct-80C51C340"
+      ]
+    },
+    {
+      "case_id": "c07",
+      "alert_id": "alert-1009",
+      "subject_id": "acct-thorne-freight",
+      "split": "dev",
+      "category": "coordination",
+      "pattern": "shared_route_second_alert",
+      "rule": "large_outbound_wire",
+      "priority": 5,
+      "related_case_id": "c01",
+      "expected": {
+        "verdict": "SUSPICIOUS",
+        "sanctioned_target": "acct-5131326",
+        "eligible_hops": 2,
+        "shortest_undirected_hops_to_sanctioned": 2,
+        "associated_sanctioned": null,
+        "route": [
+          "acct-thorne-freight",
+          "acct-9330192",
+          "acct-5131326"
+        ],
+        "notes": "A second alert on the account just past c01's device. It reaches the same sanctioned target, so a coordinator can merge it into c01's investigation. It plants nothing of its own."
+      },
+      "planted_ids": [],
+      "anchor_ids": []
+    },
+    {
+      "case_id": "c08",
+      "alert_id": "alert-1003",
+      "subject_id": "acct-stanmore-ventures",
+      "split": "dev",
+      "category": "negative_control",
+      "pattern": "ip_only_association",
+      "rule": "cross_border_wire",
+      "priority": 4,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "CLEAR",
+        "sanctioned_target": null,
+        "eligible_hops": null,
+        "shortest_undirected_hops_to_sanctioned": 3,
+        "associated_sanctioned": "acct-4503579",
+        "route": null,
+        "notes": "The subject shares an office IP with an account that pays a sanctioned account (3 undirected hops). IP links never make a route eligible, and the subject's own money goes elsewhere."
+      },
+      "planted_ids": [
+        "acct-7728309",
+        "acct-stanmore-ventures",
+        "acct-7350832",
+        "ip-115-172-48-174",
+        "acct-9309874",
+        "acct-4503579"
+      ],
+      "anchor_ids": [
+        "acct-80034F230",
+        "acct-813885390",
+        "acct-80D51DFB0"
+      ]
+    },
+    {
+      "case_id": "c09",
+      "alert_id": "alert-1002",
+      "subject_id": "acct-kemble-grain",
+      "split": "dev",
+      "category": "negative_control",
+      "pattern": "reverse_direction_association",
+      "rule": "velocity_spike",
+      "priority": 2,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "CLEAR",
+        "sanctioned_target": null,
+        "eligible_hops": null,
+        "shortest_undirected_hops_to_sanctioned": 3,
+        "associated_sanctioned": "acct-fairley-optics",
+        "route": null,
+        "notes": "A sanctioned account pays a relay that pays two of the subject's counterparties, who then pay the subject (3 undirected hops). Every transfer on that path points toward the subject, so no route from the subject is eligible."
+      },
+      "planted_ids": [
+        "acct-8319642",
+        "acct-kemble-grain",
+        "acct-grantham-timber",
+        "acct-emery-tools",
+        "acct-waverly-commodities",
+        "acct-7949103",
+        "acct-fairley-optics"
+      ],
+      "anchor_ids": [
+        "acct-8131A87D0",
+        "acct-808EC1730",
+        "acct-80587BB00"
+      ]
+    },
+    {
+      "case_id": "c10",
+      "alert_id": "alert-1016",
+      "subject_id": "merch-juniper-home-goods",
+      "split": "dev",
+      "category": "negative_control",
+      "pattern": "busy_legit_merchant",
+      "rule": "merchant_volume_jump",
+      "priority": 3,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "CLEAR",
+        "sanctioned_target": null,
+        "eligible_hops": null,
+        "shortest_undirected_hops_to_sanctioned": null,
+        "associated_sanctioned": null,
+        "route": null,
+        "notes": "An established merchant with ten card customers and four suppliers from the IBM data. It sweeps to its own treasury account, which shares its device and office IP and pays two more IBM accounts."
+      },
+      "planted_ids": [
+        "merch-juniper-home-goods",
+        "acct-juniper-home-goods-payouts",
+        "dev-517d3e7a21",
+        "ip-97-184-92-20"
+      ],
+      "anchor_ids": [
+        "acct-80AD2D4B0",
+        "acct-8076E1730",
+        "acct-8099BA730",
+        "acct-809D5DE20",
+        "acct-80A3CA860",
+        "acct-80E2671A0",
+        "acct-81205A220",
+        "acct-8029585D0",
+        "acct-809719210",
+        "acct-8032E27C0",
+        "acct-81062D450",
+        "acct-80FE31B20",
+        "acct-8086BE2C0",
+        "acct-80856A1A0",
+        "acct-80C796ED0",
+        "acct-804501660"
+      ]
+    },
+    {
+      "case_id": "c11",
+      "alert_id": "alert-1004",
+      "subject_id": "acct-4337834",
+      "split": "dev",
+      "category": "negative_control",
+      "pattern": "benign_shared_device",
+      "rule": "new_counterparty_burst",
+      "priority": 1,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "CLEAR",
+        "sanctioned_target": null,
+        "eligible_hops": null,
+        "shortest_undirected_hops_to_sanctioned": null,
+        "associated_sanctioned": null,
+        "route": null,
+        "notes": "The subject shares a flagged device with an established IBM account, and pays three new counterparties within five hours. Neither side of the device reaches a sanctioned account."
+      },
+      "planted_ids": [
+        "acct-4337834",
+        "dev-5a183b60e5"
+      ],
+      "anchor_ids": [
+        "acct-812287040",
+        "acct-8112121F0",
+        "acct-808D6A600",
+        "acct-800BFA330",
+        "acct-80A148970",
+        "acct-809F92490"
+      ]
+    },
+    {
+      "case_id": "c12",
+      "alert_id": "alert-1011",
+      "subject_id": "acct-ind-743733",
+      "split": "heldout",
+      "category": "negative_control",
+      "pattern": "ip_then_device_association",
+      "rule": "dormant_reactivation",
+      "priority": 4,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "CLEAR",
+        "sanctioned_target": null,
+        "eligible_hops": null,
+        "shortest_undirected_hops_to_sanctioned": 5,
+        "associated_sanctioned": "acct-islay-distribution",
+        "route": null,
+        "notes": "The subject shares a home IP with an individual whose flagged device is also used by an account that pays a sanctioned account (5 undirected hops). The device bridge is real but the subject can only reach it through the IP."
+      },
+      "planted_ids": [
+        "acct-ind-743733",
+        "ip-90-225-246-24",
+        "acct-ind-504940",
+        "dev-9fadd46507",
+        "acct-ilford-properties",
+        "acct-islay-distribution"
+      ],
+      "anchor_ids": [
+        "acct-80C9134A0",
+        "acct-80BD6B060",
+        "acct-8033A0750",
+        "acct-80AEBB260"
+      ]
+    },
+    {
+      "case_id": "c13",
+      "alert_id": "alert-1015",
+      "subject_id": "acct-ind-533404",
+      "split": "dev",
+      "category": "negative_control",
+      "pattern": "isolated_new_account",
+      "rule": "large_outbound_wire",
+      "priority": 2,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "CLEAR",
+        "sanctioned_target": null,
+        "eligible_hops": null,
+        "shortest_undirected_hops_to_sanctioned": null,
+        "associated_sanctioned": null,
+        "route": null,
+        "notes": "Opened shortly before the end of the data window: no transfers, devices or IPs, so the search frontier is exhausted at depth 1."
+      },
+      "planted_ids": [
+        "acct-ind-533404"
+      ],
+      "anchor_ids": []
+    },
+    {
+      "case_id": "c14",
+      "alert_id": "alert-1013",
+      "subject_id": "merch-nesbit-mobile-top-up",
+      "split": "heldout",
+      "category": "negative_control",
+      "pattern": "device_bridge_lookalike",
+      "rule": "velocity_spike",
+      "priority": 5,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "CLEAR",
+        "sanctioned_target": null,
+        "eligible_hops": null,
+        "shortest_undirected_hops_to_sanctioned": null,
+        "associated_sanctioned": null,
+        "route": null,
+        "notes": "The same shape as c01: merchant, treasury, flagged shared device, a two-account wire split. But the funds end at an ordinary IBM account, and nothing sanctioned is within reach."
+      },
+      "planted_ids": [
+        "merch-nesbit-mobile-top-up",
+        "acct-nesbit-mobile-top-up-treasury",
+        "dev-8fab8683d9",
+        "acct-4661255",
+        "acct-4824695",
+        "acct-denholm-trading"
+      ],
+      "anchor_ids": [
+        "acct-811684E20",
+        "acct-81055E8B0",
+        "acct-80DA69EE0",
+        "acct-803CC4EE0",
+        "acct-80BE9D000",
+        "acct-80DEA1270"
+      ]
+    },
+    {
+      "case_id": "c15",
+      "alert_id": "alert-1005",
+      "subject_id": "merch-yardley-gift-cards",
+      "split": "heldout",
+      "category": "out_of_scope_positive",
+      "pattern": "device_bridge_beyond_depth",
+      "rule": "merchant_volume_jump",
+      "priority": 3,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "CLEAR",
+        "sanctioned_target": "acct-hendry-coffee",
+        "eligible_hops": 7,
+        "shortest_undirected_hops_to_sanctioned": 7,
+        "associated_sanctioned": null,
+        "route": [
+          "merch-yardley-gift-cards",
+          "acct-yardley-gift-cards-payouts",
+          "dev-0a6b3ae0ee",
+          "acct-arnholt-minerals",
+          "acct-lysander-ceramics",
+          "acct-falkner-furniture",
+          "acct-keswick-hardware",
+          "acct-hendry-coffee"
+        ],
+        "notes": "c01's pattern stretched: after the device bridge, four wires reach the sanctioned target. The route is 7 hops, so nothing sanctioned is within 6."
+      },
+      "planted_ids": [
+        "merch-yardley-gift-cards",
+        "acct-yardley-gift-cards-payouts",
+        "dev-0a6b3ae0ee",
+        "acct-arnholt-minerals",
+        "acct-lysander-ceramics",
+        "acct-falkner-furniture",
+        "acct-keswick-hardware",
+        "acct-hendry-coffee"
+      ],
+      "anchor_ids": [
+        "acct-811B83280",
+        "acct-80D521140",
+        "acct-80ADF0F80"
+      ]
+    },
+    {
+      "case_id": "c16",
+      "alert_id": "alert-1010",
+      "subject_id": "acct-9292238",
+      "split": "dev",
+      "category": "out_of_scope_positive",
+      "pattern": "peel_chain_beyond_depth",
+      "rule": "dormant_reactivation",
+      "priority": 1,
+      "related_case_id": null,
+      "expected": {
+        "verdict": "CLEAR",
+        "sanctioned_target": "acct-oakley-foods",
+        "eligible_hops": 8,
+        "shortest_undirected_hops_to_sanctioned": 8,
+        "associated_sanctioned": null,
+        "route": [
+          "acct-9292238",
+          "acct-6983567",
+          "acct-8038783",
+          "acct-kinross-textiles",
+          "acct-8584612",
+          "acct-ashby-seafood",
+          "acct-brenner-systems",
+          "acct-kestrel-services",
+          "acct-oakley-foods"
+        ],
+        "notes": "Eight wires in a chain, each passing on most of the amount, end at a sanctioned account. The route is 8 hops."
+      },
+      "planted_ids": [
+        "acct-9292238",
+        "acct-6983567",
+        "acct-8038783",
+        "acct-kinross-textiles",
+        "acct-8584612",
+        "acct-ashby-seafood",
+        "acct-brenner-systems",
+        "acct-kestrel-services",
+        "acct-oakley-foods"
+      ],
+      "anchor_ids": [
+        "acct-80F29DBD0",
+        "acct-807B0EFA0"
+      ]
+    }
+  ]
+}
