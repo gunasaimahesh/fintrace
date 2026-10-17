@@ -24906,14 +24906,15 @@
     "model": "gemini-3.1-flash-lite",
     "llm_host": "generativelanguage.googleapis.com",
     "temperature": 0,
-    "llm_requests_per_minute": null,
+    "llm_requests_per_minute": 12,
     "repeats": [
      1,
-     1
+     2
     ],
     "conditions": [
      "cold",
-     "warm"
+     "warm",
+     "revisit"
     ],
     "max_steps": 14,
     "depth": 6,
@@ -24944,7 +24945,7 @@
     },
     "nodes": 59149,
     "edges": 513116,
-    "commit": "cf21e42",
+    "commit": "d1384dd",
     "uncommitted_backend_changes": true
    },
    "stages": [
@@ -24964,6 +24965,24 @@
      ],
      "runs": 38,
      "stopped_early": null
+    },
+    {
+     "started_at": "2026-10-17T13:56:59Z",
+     "finished_at": "2026-10-17T14:16:16Z",
+     "seconds": 1157.5,
+     "log": "backend/eval/runs/eval-llm-20261017T135659Z.jsonl",
+     "conditions": [
+      "cold",
+      "warm",
+      "revisit"
+     ],
+     "cases": "all",
+     "repeats": [
+      2,
+      2
+     ],
+     "runs": 55,
+     "stopped_early": "after 55 runs: The LLM failed (daily quota reached: GenerateRequestsPerDayPerProjectPerModel-FreeTier). The deterministic planner continues from the 2 tool results so far."
     }
    ],
    "playbook": {
@@ -24984,12 +25003,12 @@
      "request_action"
     ],
     "learned_from": {
-     "episode_id": "ep-bf581ec1de",
-     "case_id": "case-6ce9108f",
+     "episode_id": "ep-d53647964f",
+     "case_id": "case-42befbc4",
      "subject_id": "merch-nova-pay",
-     "request_id": "apr-121184fa",
+     "request_id": "apr-6f8f19f4",
      "approved_by": "emp-priya-nair",
-     "at": 1792244039.38302
+     "at": 1792245420.98788
     }
    },
    "summary": {
@@ -24997,110 +25016,200 @@
      "cold": {
       "groups": {
        "positive": {
-        "correct": 7,
-        "runs": 7,
+        "correct": 14,
+        "runs": 14,
         "verdicts": {
-         "SUSPICIOUS": 7
+         "SUSPICIOUS": 14
         }
        },
        "negative": {
-        "correct": 9,
-        "runs": 9,
+        "correct": 18,
+        "runs": 18,
         "verdicts": {
-         "CLEAR": 9
+         "CLEAR": 18
         }
        },
        "unknown": {
-        "correct": 2,
-        "runs": 2,
+        "correct": 4,
+        "runs": 4,
         "verdicts": {
-         "INSUFFICIENT": 2
+         "INSUFFICIENT": 4
         }
        },
        "incomplete": {
-        "correct": 2,
-        "runs": 2,
+        "correct": 4,
+        "runs": 4,
         "verdicts": {
-         "SUSPICIOUS": 1,
-         "INSUFFICIENT": 1
+         "SUSPICIOUS": 2,
+         "INSUFFICIENT": 2
         }
        },
        "demo": {
-        "correct": 2,
-        "runs": 2,
+        "correct": 4,
+        "runs": 4,
         "verdicts": {
-         "SUSPICIOUS": 1,
-         "CLEAR": 1
+         "SUSPICIOUS": 2,
+         "CLEAR": 2
         }
        }
       },
       "detection": {
-       "correct": 16,
-       "runs": 16
+       "correct": 32,
+       "runs": 32
       },
-      "failures": [],
+      "failures": [
+       {
+        "case_id": "d02",
+        "repeat": 2,
+        "failure": "The LLM failed (daily quota reached: GenerateRequestsPerDayPerProjectPerModel-FreeTier). The deterministic planner continues from the 2 tool results so far."
+       }
+      ],
       "planner_used": {
-       "llm": 22
+       "llm": 43,
+       "llm+fallback": 1
       },
-      "model_agreed": 20,
-      "model_answered": 20,
-      "provider_retries": 1,
+      "model_agreed": 39,
+      "model_answered": 39,
+      "provider_retries": 5,
       "tool_calls": {
        "median": 3.0,
        "min": 3,
        "max": 11,
-       "n": 16
+       "n": 32
       },
       "verdict_step": {
        "median": 3.0,
        "min": 3,
        "max": 3,
-       "n": 16
+       "n": 32
       },
       "elapsed_ms": {
-       "median": 38700.4,
-       "min": 8655.0,
+       "median": 28342.1,
+       "min": 7378.1,
        "max": 69713.2,
-       "n": 16
+       "n": 32
       },
       "llm_requests": {
        "median": 2.0,
        "min": 2,
        "max": 10,
-       "n": 16
+       "n": 32
       },
       "llm_ms": {
-       "median": 9659.5,
+       "median": 9265.8,
        "min": 2050.4,
        "max": 62871.4,
-       "n": 16
+       "n": 32
       },
       "llm_tokens": {
-       "median": 9074.0,
-       "min": 8209,
-       "max": 67160,
-       "n": 16
+       "median": 9075.0,
+       "min": 8207,
+       "max": 69178,
+       "n": 32
       },
       "db_queries": {
        "median": 26.5,
        "min": 10,
-       "max": 79,
-       "n": 16
+       "max": 81,
+       "n": 32
       },
       "db_ms": {
-       "median": 171.2,
-       "min": 16.9,
+       "median": 132.9,
+       "min": 15.6,
        "max": 650.9,
-       "n": 16
+       "n": 32
       },
       "bytes_to_planner": {
        "median": 3602.0,
        "min": 1630,
        "max": 13797,
-       "n": 16
+       "n": 32
       }
      },
      "warm": {
+      "groups": {
+       "positive": {
+        "correct": 14,
+        "runs": 14,
+        "verdicts": {
+         "SUSPICIOUS": 14
+        }
+       },
+       "negative": {
+        "correct": 18,
+        "runs": 18,
+        "verdicts": {
+         "CLEAR": 18
+        }
+       }
+      },
+      "detection": {
+       "correct": 32,
+       "runs": 32
+      },
+      "failures": [],
+      "planner_used": {
+       "llm": 32
+      },
+      "model_agreed": 31,
+      "model_answered": 32,
+      "provider_retries": 1,
+      "tool_calls": {
+       "median": 4.0,
+       "min": 3,
+       "max": 12,
+       "n": 32
+      },
+      "verdict_step": {
+       "median": 3.0,
+       "min": 3,
+       "max": 4,
+       "n": 32
+      },
+      "elapsed_ms": {
+       "median": 10067.9,
+       "min": 1405.7,
+       "max": 138260.9,
+       "n": 32
+      },
+      "llm_requests": {
+       "median": 2.0,
+       "min": 1,
+       "max": 10,
+       "n": 32
+      },
+      "llm_ms": {
+       "median": 6975.6,
+       "min": 1318.9,
+       "max": 126997.2,
+       "n": 32
+      },
+      "llm_tokens": {
+       "median": 11532.5,
+       "min": 5543,
+       "max": 66404,
+       "n": 32
+      },
+      "db_queries": {
+       "median": 37.5,
+       "min": 10,
+       "max": 80,
+       "n": 32
+      },
+      "db_ms": {
+       "median": 186.6,
+       "min": 16.2,
+       "max": 708.6,
+       "n": 32
+      },
+      "bytes_to_planner": {
+       "median": 6191.0,
+       "min": 1630,
+       "max": 13994,
+       "n": 32
+      }
+     },
+     "revisit": {
       "groups": {
        "positive": {
         "correct": 7,
@@ -25115,6 +25224,13 @@
         "verdicts": {
          "CLEAR": 9
         }
+       },
+       "demo": {
+        "correct": 1,
+        "runs": 1,
+        "verdicts": {
+         "SUSPICIOUS": 1
+        }
        }
       },
       "detection": {
@@ -25123,63 +25239,63 @@
       },
       "failures": [],
       "planner_used": {
-       "llm": 16
+       "llm": 17
       },
-      "model_agreed": 15,
-      "model_answered": 16,
-      "provider_retries": 0,
+      "model_agreed": 17,
+      "model_answered": 17,
+      "provider_retries": 1,
       "tool_calls": {
-       "median": 6.5,
-       "min": 3,
-       "max": 12,
+       "median": 2.0,
+       "min": 2,
+       "max": 7,
        "n": 16
       },
       "verdict_step": {
-       "median": 3.0,
-       "min": 3,
-       "max": 4,
+       "median": 2.0,
+       "min": 2,
+       "max": 2,
        "n": 16
       },
       "elapsed_ms": {
-       "median": 11448.2,
-       "min": 1405.7,
-       "max": 138260.9,
+       "median": 13631.1,
+       "min": 1559.5,
+       "max": 49480.1,
        "n": 16
       },
       "llm_requests": {
-       "median": 2.0,
+       "median": 1.0,
        "min": 1,
-       "max": 10,
+       "max": 6,
        "n": 16
       },
       "llm_ms": {
-       "median": 6789.0,
-       "min": 1318.9,
-       "max": 126997.2,
+       "median": 4054.8,
+       "min": 1429.2,
+       "max": 45765.1,
        "n": 16
       },
       "llm_tokens": {
-       "median": 13929.5,
-       "min": 5543,
-       "max": 66404,
+       "median": 5160.5,
+       "min": 4303,
+       "max": 45376,
        "n": 16
       },
       "db_queries": {
-       "median": 43.0,
-       "min": 10,
-       "max": 80,
+       "median": 11.0,
+       "min": 9,
+       "max": 43,
        "n": 16
       },
       "db_ms": {
-       "median": 211.7,
-       "min": 20.7,
-       "max": 668.0,
+       "median": 19.6,
+       "min": 10.4,
+       "max": 242.6,
        "n": 16
       },
       "bytes_to_planner": {
-       "median": 7698.5,
-       "min": 1630,
-       "max": 13994,
+       "median": 3697.0,
+       "min": 1690,
+       "max": 12055,
        "n": 16
       }
      }
@@ -25192,38 +25308,56 @@
       "split": "heldout",
       "expected": "SUSPICIOUS",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "SUSPICIOUS": 1
+        "SUSPICIOUS": 2
        },
        "tool_calls": {
-        "median": 10,
-        "min": 10,
+        "median": 9.5,
+        "min": 9,
         "max": 10,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 41884.0,
+        "median": 44321.9,
         "min": 41884.0,
-        "max": 41884.0,
-        "n": 1
+        "max": 46759.9,
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "SUSPICIOUS": 2
+       },
+       "tool_calls": {
+        "median": 11.0,
+        "min": 11,
+        "max": 11,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 9495.5,
+        "min": 9490.0,
+        "max": 9500.9,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "SUSPICIOUS": 1
        },
        "tool_calls": {
-        "median": 11,
-        "min": 11,
-        "max": 11,
+        "median": 7,
+        "min": 7,
+        "max": 7,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 9500.9,
-        "min": 9500.9,
-        "max": 9500.9,
+        "median": 30161.6,
+        "min": 30161.6,
+        "max": 30161.6,
         "n": 1
        }
       }
@@ -25235,38 +25369,56 @@
       "split": "heldout",
       "expected": "SUSPICIOUS",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "SUSPICIOUS": 1
+        "SUSPICIOUS": 2
        },
        "tool_calls": {
-        "median": 9,
+        "median": 9.0,
         "min": 9,
         "max": 9,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 38883.5,
+        "median": 41913.8,
         "min": 38883.5,
-        "max": 38883.5,
-        "n": 1
+        "max": 44944.2,
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "SUSPICIOUS": 2
+       },
+       "tool_calls": {
+        "median": 9.0,
+        "min": 9,
+        "max": 9,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 41012.3,
+        "min": 39688.2,
+        "max": 42336.4,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "SUSPICIOUS": 1
        },
        "tool_calls": {
-        "median": 9,
-        "min": 9,
-        "max": 9,
+        "median": 4,
+        "min": 4,
+        "max": 4,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 39688.2,
-        "min": 39688.2,
-        "max": 39688.2,
+        "median": 13767.5,
+        "min": 13767.5,
+        "max": 13767.5,
         "n": 1
        }
       }
@@ -25278,38 +25430,56 @@
       "split": "dev",
       "expected": "SUSPICIOUS",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "SUSPICIOUS": 1
+        "SUSPICIOUS": 2
        },
        "tool_calls": {
-        "median": 10,
+        "median": 10.0,
         "min": 10,
         "max": 10,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 44372.2,
-        "min": 44372.2,
+        "median": 43159.8,
+        "min": 41947.5,
         "max": 44372.2,
-        "n": 1
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "SUSPICIOUS": 2
+       },
+       "tool_calls": {
+        "median": 10.0,
+        "min": 10,
+        "max": 10,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 91041.6,
+        "min": 43822.3,
+        "max": 138260.9,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "SUSPICIOUS": 1
        },
        "tool_calls": {
-        "median": 10,
-        "min": 10,
-        "max": 10,
+        "median": 4,
+        "min": 4,
+        "max": 4,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 138260.9,
-        "min": 138260.9,
-        "max": 138260.9,
+        "median": 14764.2,
+        "min": 14764.2,
+        "max": 14764.2,
         "n": 1
        }
       }
@@ -25321,38 +25491,56 @@
       "split": "heldout",
       "expected": "SUSPICIOUS",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "SUSPICIOUS": 1
+        "SUSPICIOUS": 2
        },
        "tool_calls": {
-        "median": 11,
+        "median": 11.0,
         "min": 11,
         "max": 11,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 52611.9,
+        "median": 55672.0,
         "min": 52611.9,
-        "max": 52611.9,
-        "n": 1
+        "max": 58732.1,
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "SUSPICIOUS": 2
+       },
+       "tool_calls": {
+        "median": 11.0,
+        "min": 11,
+        "max": 11,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 48813.9,
+        "min": 46778.8,
+        "max": 50849.0,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "SUSPICIOUS": 1
        },
        "tool_calls": {
-        "median": 11,
-        "min": 11,
-        "max": 11,
+        "median": 4,
+        "min": 4,
+        "max": 4,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 46778.8,
-        "min": 46778.8,
-        "max": 46778.8,
+        "median": 15139.0,
+        "min": 15139.0,
+        "max": 15139.0,
         "n": 1
        }
       }
@@ -25364,38 +25552,56 @@
       "split": "heldout",
       "expected": "SUSPICIOUS",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "SUSPICIOUS": 1
+        "SUSPICIOUS": 2
        },
        "tool_calls": {
-        "median": 10,
+        "median": 10.0,
         "min": 10,
         "max": 10,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 43918.2,
-        "min": 43918.2,
+        "median": 43411.7,
+        "min": 42905.2,
         "max": 43918.2,
-        "n": 1
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "SUSPICIOUS": 2
+       },
+       "tool_calls": {
+        "median": 11.5,
+        "min": 11,
+        "max": 12,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 38702.7,
+        "min": 12543.9,
+        "max": 64861.4,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "SUSPICIOUS": 1
        },
        "tool_calls": {
-        "median": 12,
-        "min": 12,
-        "max": 12,
+        "median": 4,
+        "min": 4,
+        "max": 4,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 64861.4,
-        "min": 64861.4,
-        "max": 64861.4,
+        "median": 18205.5,
+        "min": 18205.5,
+        "max": 18205.5,
         "n": 1
        }
       }
@@ -25407,38 +25613,56 @@
       "split": "dev",
       "expected": "SUSPICIOUS",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "SUSPICIOUS": 1
+        "SUSPICIOUS": 2
        },
        "tool_calls": {
-        "median": 10,
+        "median": 10.0,
         "min": 10,
         "max": 10,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 49386.6,
-        "min": 49386.6,
+        "median": 46122.8,
+        "min": 42858.9,
         "max": 49386.6,
-        "n": 1
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "SUSPICIOUS": 2
+       },
+       "tool_calls": {
+        "median": 10.0,
+        "min": 10,
+        "max": 10,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 44248.4,
+        "min": 44212.3,
+        "max": 44284.5,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "SUSPICIOUS": 1
        },
        "tool_calls": {
-        "median": 10,
-        "min": 10,
-        "max": 10,
+        "median": 4,
+        "min": 4,
+        "max": 4,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 44212.3,
-        "min": 44212.3,
-        "max": 44212.3,
+        "median": 13494.8,
+        "min": 13494.8,
+        "max": 13494.8,
         "n": 1
        }
       }
@@ -25450,38 +25674,56 @@
       "split": "dev",
       "expected": "SUSPICIOUS",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "SUSPICIOUS": 1
+        "SUSPICIOUS": 2
        },
        "tool_calls": {
-        "median": 10,
+        "median": 10.0,
         "min": 10,
         "max": 10,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 66189.2,
-        "min": 66189.2,
+        "median": 55104.4,
+        "min": 44019.6,
         "max": 66189.2,
-        "n": 1
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "SUSPICIOUS": 2
+       },
+       "tool_calls": {
+        "median": 10.0,
+        "min": 10,
+        "max": 10,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 60744.6,
+        "min": 51470.2,
+        "max": 70019.0,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "SUSPICIOUS": 1
        },
        "tool_calls": {
-        "median": 10,
-        "min": 10,
-        "max": 10,
+        "median": 4,
+        "min": 4,
+        "max": 4,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 51470.2,
-        "min": 51470.2,
-        "max": 51470.2,
+        "median": 14968.5,
+        "min": 14968.5,
+        "max": 14968.5,
         "n": 1
        }
       }
@@ -25493,38 +25735,56 @@
       "split": "dev",
       "expected": "CLEAR",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "CLEAR": 1
+        "CLEAR": 2
        },
        "tool_calls": {
-        "median": 3,
+        "median": 3.0,
         "min": 3,
         "max": 3,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 8865.7,
-        "min": 8865.7,
+        "median": 8121.9,
+        "min": 7378.1,
         "max": 8865.7,
-        "n": 1
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "CLEAR": 2
+       },
+       "tool_calls": {
+        "median": 3.0,
+        "min": 3,
+        "max": 3,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 7781.2,
+        "min": 6294.5,
+        "max": 9267.9,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "CLEAR": 1
        },
        "tool_calls": {
-        "median": 3,
-        "min": 3,
-        "max": 3,
+        "median": 2,
+        "min": 2,
+        "max": 2,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 9267.9,
-        "min": 9267.9,
-        "max": 9267.9,
+        "median": 15284.8,
+        "min": 15284.8,
+        "max": 15284.8,
         "n": 1
        }
       }
@@ -25536,38 +25796,56 @@
       "split": "dev",
       "expected": "CLEAR",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "CLEAR": 1
+        "CLEAR": 2
        },
        "tool_calls": {
-        "median": 3,
+        "median": 3.0,
         "min": 3,
         "max": 3,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 8777.9,
+        "median": 13472.3,
         "min": 8777.9,
-        "max": 8777.9,
-        "n": 1
+        "max": 18166.8,
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "CLEAR": 2
+       },
+       "tool_calls": {
+        "median": 3.5,
+        "min": 3,
+        "max": 4,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 12546.2,
+        "min": 9713.2,
+        "max": 15379.3,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "CLEAR": 1
        },
        "tool_calls": {
-        "median": 3,
-        "min": 3,
-        "max": 3,
+        "median": 2,
+        "min": 2,
+        "max": 2,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 9713.2,
-        "min": 9713.2,
-        "max": 9713.2,
+        "median": 1559.5,
+        "min": 1559.5,
+        "max": 1559.5,
         "n": 1
        }
       }
@@ -25579,38 +25857,56 @@
       "split": "dev",
       "expected": "CLEAR",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "CLEAR": 1
+        "CLEAR": 2
        },
        "tool_calls": {
-        "median": 3,
+        "median": 3.0,
         "min": 3,
         "max": 3,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 8655.0,
-        "min": 8655.0,
+        "median": 8324.8,
+        "min": 7994.6,
         "max": 8655.0,
-        "n": 1
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "CLEAR": 2
+       },
+       "tool_calls": {
+        "median": 3.0,
+        "min": 3,
+        "max": 3,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 9977.7,
+        "min": 9564.6,
+        "max": 10390.7,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "CLEAR": 1
        },
        "tool_calls": {
-        "median": 3,
-        "min": 3,
-        "max": 3,
+        "median": 2,
+        "min": 2,
+        "max": 2,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 9564.6,
-        "min": 9564.6,
-        "max": 9564.6,
+        "median": 6223.9,
+        "min": 6223.9,
+        "max": 6223.9,
         "n": 1
        }
       }
@@ -25622,38 +25918,56 @@
       "split": "dev",
       "expected": "CLEAR",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "CLEAR": 1
+        "CLEAR": 2
        },
        "tool_calls": {
-        "median": 3,
+        "median": 3.0,
         "min": 3,
         "max": 3,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 9051.2,
+        "median": 9323.2,
         "min": 9051.2,
-        "max": 9051.2,
-        "n": 1
+        "max": 9595.1,
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "CLEAR": 2
+       },
+       "tool_calls": {
+        "median": 3.0,
+        "min": 3,
+        "max": 3,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 9114.9,
+        "min": 8925.2,
+        "max": 9304.6,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "CLEAR": 1
        },
        "tool_calls": {
-        "median": 3,
-        "min": 3,
-        "max": 3,
+        "median": 2,
+        "min": 2,
+        "max": 2,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 8925.2,
-        "min": 8925.2,
-        "max": 8925.2,
+        "median": 5011.1,
+        "min": 5011.1,
+        "max": 5011.1,
         "n": 1
        }
       }
@@ -25665,38 +25979,56 @@
       "split": "heldout",
       "expected": "CLEAR",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "CLEAR": 1
+        "CLEAR": 2
        },
        "tool_calls": {
-        "median": 3,
+        "median": 3.0,
         "min": 3,
         "max": 3,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 9418.6,
-        "min": 9418.6,
+        "median": 9220.8,
+        "min": 9023.0,
         "max": 9418.6,
-        "n": 1
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "CLEAR": 2
+       },
+       "tool_calls": {
+        "median": 3.0,
+        "min": 3,
+        "max": 3,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 11068.5,
+        "min": 8953.6,
+        "max": 13183.3,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "CLEAR": 1
        },
        "tool_calls": {
-        "median": 3,
-        "min": 3,
-        "max": 3,
+        "median": 2,
+        "min": 2,
+        "max": 2,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 13183.3,
-        "min": 13183.3,
-        "max": 13183.3,
+        "median": 5277.7,
+        "min": 5277.7,
+        "max": 5277.7,
         "n": 1
        }
       }
@@ -25708,38 +26040,56 @@
       "split": "dev",
       "expected": "CLEAR",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "CLEAR": 1
+        "CLEAR": 2
        },
        "tool_calls": {
-        "median": 3,
+        "median": 3.0,
         "min": 3,
         "max": 3,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 9854.3,
-        "min": 9854.3,
+        "median": 9791.2,
+        "min": 9728.2,
         "max": 9854.3,
-        "n": 1
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "CLEAR": 2
+       },
+       "tool_calls": {
+        "median": 3.0,
+        "min": 3,
+        "max": 3,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 9043.0,
+        "min": 8341.0,
+        "max": 9745.0,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "CLEAR": 1
        },
        "tool_calls": {
-        "median": 3,
-        "min": 3,
-        "max": 3,
+        "median": 2,
+        "min": 2,
+        "max": 2,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 8341.0,
-        "min": 8341.0,
-        "max": 8341.0,
+        "median": 4714.9,
+        "min": 4714.9,
+        "max": 4714.9,
         "n": 1
        }
       }
@@ -25751,38 +26101,56 @@
       "split": "heldout",
       "expected": "CLEAR",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "CLEAR": 1
+        "CLEAR": 2
        },
        "tool_calls": {
-        "median": 3,
+        "median": 3.0,
         "min": 3,
         "max": 3,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 38517.4,
-        "min": 38517.4,
+        "median": 23297.9,
+        "min": 8078.4,
         "max": 38517.4,
-        "n": 1
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "CLEAR": 2
+       },
+       "tool_calls": {
+        "median": 4.0,
+        "min": 4,
+        "max": 4,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 1886.3,
+        "min": 1591.2,
+        "max": 2181.4,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "CLEAR": 1
        },
        "tool_calls": {
-        "median": 4,
-        "min": 4,
-        "max": 4,
+        "median": 2,
+        "min": 2,
+        "max": 2,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 1591.2,
-        "min": 1591.2,
-        "max": 1591.2,
+        "median": 10360.5,
+        "min": 10360.5,
+        "max": 10360.5,
         "n": 1
        }
       }
@@ -25794,38 +26162,56 @@
       "split": "heldout",
       "expected": "CLEAR",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "CLEAR": 1
+        "CLEAR": 2
        },
        "tool_calls": {
-        "median": 3,
+        "median": 3.0,
         "min": 3,
         "max": 3,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 69713.2,
-        "min": 69713.2,
+        "median": 39120.9,
+        "min": 8528.6,
         "max": 69713.2,
-        "n": 1
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "CLEAR": 2
+       },
+       "tool_calls": {
+        "median": 4.0,
+        "min": 4,
+        "max": 4,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 1602.1,
+        "min": 1405.7,
+        "max": 1798.4,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "CLEAR": 1
        },
        "tool_calls": {
-        "median": 4,
-        "min": 4,
-        "max": 4,
+        "median": 2,
+        "min": 2,
+        "max": 2,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 1405.7,
-        "min": 1405.7,
-        "max": 1405.7,
+        "median": 49480.1,
+        "min": 49480.1,
+        "max": 49480.1,
         "n": 1
        }
       }
@@ -25837,38 +26223,56 @@
       "split": "dev",
       "expected": "CLEAR",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "CLEAR": 1
+        "CLEAR": 2
        },
        "tool_calls": {
-        "median": 3,
+        "median": 3.0,
         "min": 3,
         "max": 3,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 9548.4,
-        "min": 9548.4,
+        "median": 9410.1,
+        "min": 9271.9,
         "max": 9548.4,
-        "n": 1
+        "n": 2
        }
       },
       "warm": {
+       "correct": "2/2",
+       "verdicts": {
+        "CLEAR": 2
+       },
+       "tool_calls": {
+        "median": 6.5,
+        "min": 3,
+        "max": 10,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 27317.8,
+        "min": 8764.1,
+        "max": 45871.6,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "CLEAR": 1
        },
        "tool_calls": {
-        "median": 10,
-        "min": 10,
-        "max": 10,
+        "median": 2,
+        "min": 2,
+        "max": 2,
         "n": 1
        },
        "elapsed_ms": {
-        "median": 45871.6,
-        "min": 45871.6,
-        "max": 45871.6,
+        "median": 5101.8,
+        "min": 5101.8,
+        "max": 5101.8,
         "n": 1
        }
       }
@@ -25880,21 +26284,21 @@
       "split": null,
       "expected": "INSUFFICIENT",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "INSUFFICIENT": 1
+        "INSUFFICIENT": 2
        },
        "tool_calls": {
-        "median": 1,
+        "median": 1.0,
         "min": 1,
         "max": 1,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 36.1,
-        "min": 36.1,
+        "median": 30.8,
+        "min": 25.4,
         "max": 36.1,
-        "n": 1
+        "n": 2
        }
       }
      },
@@ -25905,21 +26309,21 @@
       "split": null,
       "expected": "INSUFFICIENT",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "INSUFFICIENT": 1
+        "INSUFFICIENT": 2
        },
        "tool_calls": {
-        "median": 1,
+        "median": 1.0,
         "min": 1,
         "max": 1,
-        "n": 1
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 25.4,
+        "median": 26.2,
         "min": 25.4,
-        "max": 25.4,
-        "n": 1
+        "max": 27.1,
+        "n": 2
        }
       }
      },
@@ -25930,6 +26334,74 @@
       "split": null,
       "expected": "INSUFFICIENT",
       "cold": {
+       "correct": "2/2",
+       "verdicts": {
+        "SUSPICIOUS": 2
+       },
+       "tool_calls": {
+        "median": 3.0,
+        "min": 3,
+        "max": 3,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 12358.1,
+        "min": 7622.5,
+        "max": 17093.7,
+        "n": 2
+       }
+      }
+     },
+     "i02": {
+      "subject_id": "acct-100428660",
+      "group": "incomplete",
+      "pattern": "search_node_budget",
+      "split": null,
+      "expected": "INSUFFICIENT",
+      "cold": {
+       "correct": "2/2",
+       "verdicts": {
+        "INSUFFICIENT": 2
+       },
+       "tool_calls": {
+        "median": 14.0,
+        "min": 14,
+        "max": 14,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 63447.1,
+        "min": 62833.4,
+        "max": 64060.8,
+        "n": 2
+       }
+      }
+     },
+     "d01": {
+      "subject_id": "merch-nova-pay",
+      "group": "demo",
+      "pattern": "demo_subject",
+      "split": "dev",
+      "expected": "SUSPICIOUS",
+      "cold": {
+       "correct": "2/2",
+       "verdicts": {
+        "SUSPICIOUS": 2
+       },
+       "tool_calls": {
+        "median": 9.5,
+        "min": 9,
+        "max": 10,
+        "n": 2
+       },
+       "elapsed_ms": {
+        "median": 41080.1,
+        "min": 39083.5,
+        "max": 43076.7,
+        "n": 2
+       }
+      },
+      "revisit": {
        "correct": "1/1",
        "verdicts": {
         "SUSPICIOUS": 1
@@ -25941,59 +26413,9 @@
         "n": 1
        },
        "elapsed_ms": {
-        "median": 7622.5,
-        "min": 7622.5,
-        "max": 7622.5,
-        "n": 1
-       }
-      }
-     },
-     "i02": {
-      "subject_id": "acct-100428660",
-      "group": "incomplete",
-      "pattern": "search_node_budget",
-      "split": null,
-      "expected": "INSUFFICIENT",
-      "cold": {
-       "correct": "1/1",
-       "verdicts": {
-        "INSUFFICIENT": 1
-       },
-       "tool_calls": {
-        "median": 14,
-        "min": 14,
-        "max": 14,
-        "n": 1
-       },
-       "elapsed_ms": {
-        "median": 64060.8,
-        "min": 64060.8,
-        "max": 64060.8,
-        "n": 1
-       }
-      }
-     },
-     "d01": {
-      "subject_id": "merch-nova-pay",
-      "group": "demo",
-      "pattern": "demo_subject",
-      "split": "dev",
-      "expected": "SUSPICIOUS",
-      "cold": {
-       "correct": "1/1",
-       "verdicts": {
-        "SUSPICIOUS": 1
-       },
-       "tool_calls": {
-        "median": 9,
-        "min": 9,
-        "max": 9,
-        "n": 1
-       },
-       "elapsed_ms": {
-        "median": 39083.5,
-        "min": 39083.5,
-        "max": 39083.5,
+        "median": 10054.2,
+        "min": 10054.2,
+        "max": 10054.2,
         "n": 1
        }
       }
@@ -26005,21 +26427,21 @@
       "split": "dev",
       "expected": "CLEAR",
       "cold": {
-       "correct": "1/1",
+       "correct": "2/2",
        "verdicts": {
-        "CLEAR": 1
+        "CLEAR": 2
        },
        "tool_calls": {
-        "median": 3,
+        "median": 3.5,
         "min": 3,
-        "max": 3,
-        "n": 1
+        "max": 4,
+        "n": 2
        },
        "elapsed_ms": {
-        "median": 9540.0,
+        "median": 10477.4,
         "min": 9540.0,
-        "max": 9540.0,
-        "n": 1
+        "max": 11414.7,
+        "n": 2
        }
       }
      }
@@ -26033,104 +26455,513 @@
      ],
      "cases": {
       "c01": {
-       "runs": 1,
-       "correct": "1/1",
+       "runs": 2,
+       "correct": "2/2",
        "tool_calls": {
-        "warm": 11,
-        "cold": 10,
-        "change": 1
+        "warm": 11.0,
+        "cold": 9.5,
+        "change": 1.5
        },
        "elapsed_ms": {
-        "warm": 9500.9,
-        "cold": 41884.0,
-        "change": -32383.1
+        "warm": 9495.5,
+        "cold": 44321.9,
+        "change": -34826.4
        },
        "llm_requests": {
-        "warm": 2,
-        "cold": 9,
-        "change": -7
+        "warm": 2.0,
+        "cold": 8.5,
+        "change": -6.5
        },
        "llm_tokens": {
-        "warm": 18647,
-        "cold": 59121,
-        "change": -40474
+        "warm": 18665.0,
+        "cold": 54962.5,
+        "change": -36297.5
        }
       },
       "c05": {
-       "runs": 1,
-       "correct": "1/1",
+       "runs": 2,
+       "correct": "2/2",
        "tool_calls": {
-        "warm": 12,
-        "cold": 10,
-        "change": 2
+        "warm": 11.5,
+        "cold": 10.0,
+        "change": 1.5
        },
        "elapsed_ms": {
-        "warm": 64861.4,
-        "cold": 43918.2,
-        "change": 20943.2
+        "warm": 38702.7,
+        "cold": 43411.7,
+        "change": -4709.0
        },
        "llm_requests": {
-        "warm": 3,
-        "cold": 9,
-        "change": -6
+        "warm": 2.5,
+        "cold": 9.0,
+        "change": -6.5
        },
        "llm_tokens": {
-        "warm": 29291,
-        "cold": 59382,
-        "change": -30091
+        "warm": 24380.5,
+        "cold": 59400.0,
+        "change": -35019.5
        }
       },
       "c14": {
-       "runs": 1,
-       "correct": "1/1",
+       "runs": 2,
+       "correct": "2/2",
        "tool_calls": {
-        "warm": 4,
-        "cold": 3,
-        "change": 1
+        "warm": 4.0,
+        "cold": 3.0,
+        "change": 1.0
        },
        "elapsed_ms": {
-        "warm": 1591.2,
-        "cold": 38517.4,
-        "change": -36926.2
+        "warm": 1886.3,
+        "cold": 23297.9,
+        "change": -21411.6
        },
        "llm_requests": {
-        "warm": 1,
-        "cold": 2,
-        "change": -1
+        "warm": 1.0,
+        "cold": 2.0,
+        "change": -1.0
        },
        "llm_tokens": {
-        "warm": 5986,
-        "cold": 8660,
-        "change": -2674
+        "warm": 5981.5,
+        "cold": 8656.5,
+        "change": -2675.0
        }
       },
       "c15": {
-       "runs": 1,
-       "correct": "1/1",
+       "runs": 2,
+       "correct": "2/2",
        "tool_calls": {
-        "warm": 4,
-        "cold": 3,
-        "change": 1
+        "warm": 4.0,
+        "cold": 3.0,
+        "change": 1.0
        },
        "elapsed_ms": {
-        "warm": 1405.7,
-        "cold": 69713.2,
-        "change": -68307.5
+        "warm": 1602.1,
+        "cold": 39120.9,
+        "change": -37518.8
        },
        "llm_requests": {
-        "warm": 1,
-        "cold": 2,
-        "change": -1
+        "warm": 1.0,
+        "cold": 2.0,
+        "change": -1.0
        },
        "llm_tokens": {
-        "warm": 5543,
-        "cold": 8359,
-        "change": -2816
+        "warm": 5549.0,
+        "cold": 8358.5,
+        "change": -2809.5
        }
       }
      }
     },
-    "revisit_vs_cold": {}
+    "revisit_vs_cold": {
+     "c01": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 7,
+       "cold": 9.5,
+       "change": -2.5
+      },
+      "elapsed_ms": {
+       "revisit": 30161.6,
+       "cold": 44321.9,
+       "change": -14160.3
+      },
+      "llm_requests": {
+       "revisit": 6,
+       "cold": 8.5,
+       "change": -2.5
+      },
+      "llm_tokens": {
+       "revisit": 45376,
+       "cold": 54962.5,
+       "change": -9586.5
+      }
+     },
+     "c02": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 4,
+       "cold": 9.0,
+       "change": -5.0
+      },
+      "elapsed_ms": {
+       "revisit": 13767.5,
+       "cold": 41913.8,
+       "change": -28146.3
+      },
+      "llm_requests": {
+       "revisit": 3,
+       "cold": 8.0,
+       "change": -5.0
+      },
+      "llm_tokens": {
+       "revisit": 21750,
+       "cold": 56469.0,
+       "change": -34719.0
+      }
+     },
+     "c03": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 4,
+       "cold": 10.0,
+       "change": -6.0
+      },
+      "elapsed_ms": {
+       "revisit": 14764.2,
+       "cold": 43159.8,
+       "change": -28395.6
+      },
+      "llm_requests": {
+       "revisit": 3,
+       "cold": 9.0,
+       "change": -6.0
+      },
+      "llm_tokens": {
+       "revisit": 20504,
+       "cold": 55936.0,
+       "change": -35432.0
+      }
+     },
+     "c04": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 4,
+       "cold": 11.0,
+       "change": -7.0
+      },
+      "elapsed_ms": {
+       "revisit": 15139.0,
+       "cold": 55672.0,
+       "change": -40533.0
+      },
+      "llm_requests": {
+       "revisit": 3,
+       "cold": 10.0,
+       "change": -7.0
+      },
+      "llm_tokens": {
+       "revisit": 23909,
+       "cold": 68169.0,
+       "change": -44260.0
+      }
+     },
+     "c05": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 4,
+       "cold": 10.0,
+       "change": -6.0
+      },
+      "elapsed_ms": {
+       "revisit": 18205.5,
+       "cold": 43411.7,
+       "change": -25206.2
+      },
+      "llm_requests": {
+       "revisit": 3,
+       "cold": 9.0,
+       "change": -6.0
+      },
+      "llm_tokens": {
+       "revisit": 22654,
+       "cold": 59400.0,
+       "change": -36746.0
+      }
+     },
+     "c06": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 4,
+       "cold": 10.0,
+       "change": -6.0
+      },
+      "elapsed_ms": {
+       "revisit": 13494.8,
+       "cold": 46122.8,
+       "change": -32628.0
+      },
+      "llm_requests": {
+       "revisit": 3,
+       "cold": 9.0,
+       "change": -6.0
+      },
+      "llm_tokens": {
+       "revisit": 21139,
+       "cold": 60409.0,
+       "change": -39270.0
+      }
+     },
+     "c07": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 4,
+       "cold": 10.0,
+       "change": -6.0
+      },
+      "elapsed_ms": {
+       "revisit": 14968.5,
+       "cold": 55104.4,
+       "change": -40135.9
+      },
+      "llm_requests": {
+       "revisit": 3,
+       "cold": 9.0,
+       "change": -6.0
+      },
+      "llm_tokens": {
+       "revisit": 20000,
+       "cold": 54930.5,
+       "change": -34930.5
+      }
+     },
+     "c08": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 2,
+       "cold": 3.0,
+       "change": -1.0
+      },
+      "elapsed_ms": {
+       "revisit": 15284.8,
+       "cold": 8121.9,
+       "change": 7162.9
+      },
+      "llm_requests": {
+       "revisit": 1,
+       "cold": 2.0,
+       "change": -1.0
+      },
+      "llm_tokens": {
+       "revisit": 5005,
+       "cold": 8648.0,
+       "change": -3643.0
+      }
+     },
+     "c09": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 2,
+       "cold": 3.0,
+       "change": -1.0
+      },
+      "elapsed_ms": {
+       "revisit": 1559.5,
+       "cold": 13472.3,
+       "change": -11912.8
+      },
+      "llm_requests": {
+       "revisit": 1,
+       "cold": 2.0,
+       "change": -1.0
+      },
+      "llm_tokens": {
+       "revisit": 5040,
+       "cold": 8562.0,
+       "change": -3522.0
+      }
+     },
+     "c10": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 2,
+       "cold": 3.0,
+       "change": -1.0
+      },
+      "elapsed_ms": {
+       "revisit": 6223.9,
+       "cold": 8324.8,
+       "change": -2100.9
+      },
+      "llm_requests": {
+       "revisit": 1,
+       "cold": 2.0,
+       "change": -1.0
+      },
+      "llm_tokens": {
+       "revisit": 4321,
+       "cold": 8961.0,
+       "change": -4640.0
+      }
+     },
+     "c11": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 2,
+       "cold": 3.0,
+       "change": -1.0
+      },
+      "elapsed_ms": {
+       "revisit": 5011.1,
+       "cold": 9323.2,
+       "change": -4312.1
+      },
+      "llm_requests": {
+       "revisit": 1,
+       "cold": 2.0,
+       "change": -1.0
+      },
+      "llm_tokens": {
+       "revisit": 4325,
+       "cold": 8533.5,
+       "change": -4208.5
+      }
+     },
+     "c12": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 2,
+       "cold": 3.0,
+       "change": -1.0
+      },
+      "elapsed_ms": {
+       "revisit": 5277.7,
+       "cold": 9220.8,
+       "change": -3943.1
+      },
+      "llm_requests": {
+       "revisit": 1,
+       "cold": 2.0,
+       "change": -1.0
+      },
+      "llm_tokens": {
+       "revisit": 5281,
+       "cold": 9200.5,
+       "change": -3919.5
+      }
+     },
+     "c13": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 2,
+       "cold": 3.0,
+       "change": -1.0
+      },
+      "elapsed_ms": {
+       "revisit": 4714.9,
+       "cold": 9791.2,
+       "change": -5076.3
+      },
+      "llm_requests": {
+       "revisit": 1,
+       "cold": 2.0,
+       "change": -1.0
+      },
+      "llm_tokens": {
+       "revisit": 4315,
+       "cold": 8208.0,
+       "change": -3893.0
+      }
+     },
+     "c14": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 2,
+       "cold": 3.0,
+       "change": -1.0
+      },
+      "elapsed_ms": {
+       "revisit": 10360.5,
+       "cold": 23297.9,
+       "change": -12937.4
+      },
+      "llm_requests": {
+       "revisit": 1,
+       "cold": 2.0,
+       "change": -1.0
+      },
+      "llm_tokens": {
+       "revisit": 4333,
+       "cold": 8656.5,
+       "change": -4323.5
+      }
+     },
+     "c15": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 2,
+       "cold": 3.0,
+       "change": -1.0
+      },
+      "elapsed_ms": {
+       "revisit": 49480.1,
+       "cold": 39120.9,
+       "change": 10359.2
+      },
+      "llm_requests": {
+       "revisit": 1,
+       "cold": 2.0,
+       "change": -1.0
+      },
+      "llm_tokens": {
+       "revisit": 4322,
+       "cold": 8358.5,
+       "change": -4036.5
+      }
+     },
+     "c16": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 2,
+       "cold": 3.0,
+       "change": -1.0
+      },
+      "elapsed_ms": {
+       "revisit": 5101.8,
+       "cold": 9410.1,
+       "change": -4308.3
+      },
+      "llm_requests": {
+       "revisit": 1,
+       "cold": 2.0,
+       "change": -1.0
+      },
+      "llm_tokens": {
+       "revisit": 4303,
+       "cold": 8333.5,
+       "change": -4030.5
+      }
+     },
+     "d01": {
+      "runs": 1,
+      "correct": "1/1",
+      "tool_calls": {
+       "revisit": 3,
+       "cold": 9.5,
+       "change": -6.5
+      },
+      "elapsed_ms": {
+       "revisit": 10054.2,
+       "cold": 41080.1,
+       "change": -31025.9
+      },
+      "llm_requests": {
+       "revisit": 2,
+       "cold": 8.5,
+       "change": -6.5
+      },
+      "llm_tokens": {
+       "revisit": 15773,
+       "cold": 62377.0,
+       "change": -46604.0
+      }
+     }
+    }
    },
    "runs": [
     {
@@ -30266,11 +31097,5495 @@
      "provider_retries": 0,
      "at": "2026-10-17T13:53:23Z",
      "also_correct": null
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c01",
+     "subject_id": "merch-calloway-ticketing",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "device_bridge_layering",
+     "split": "heldout",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-5131326",
+      "hops": 5
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\"}",
+       "ok": true,
+       "ms": 1.2,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\",\"facts\":false}",
+       "ok": true,
+       "ms": 2.9,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\",\"depth\":6}",
+       "ok": true,
+       "ms": 80.1,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 27.7,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"merch-calloway-ticketing\",\"acct-calloway-ticketing-payouts\",\"acct-thorne-freight\",\"acct-9330192\"],\"target_id\":\"acct-5131326\",\"include_shared_dev...",
+       "ok": true,
+       "ms": 185.3,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\",\"runs\":1}",
+       "ok": true,
+       "ms": 168.5,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\"}",
+       "ok": true,
+       "ms": 14.3,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"merch-calloway-ticketing\",\"acct-calloway-ticketing-payouts\",\"acct-thorne-freight\",\"acct-9330192\"]}",
+       "ok": true,
+       "ms": 14.9,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"merch-calloway-ticketing\",\"acct-calloway-ticketing-payouts\",\"acct-thorne-freight\",\"acct-9330192\"],\"policy_id\":\"pol-aml-sec-4\",\"approver_id\":\"emp...",
+       "ok": true,
+       "ms": 21.4,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 57,
+      "ms": 512.5,
+      "entities": 38,
+      "edges": 22,
+      "bytes": 9456
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-5131326",
+     "hops": 5,
+     "route": [
+      "merch-calloway-ticketing",
+      "acct-calloway-ticketing-payouts",
+      "dev-732577c324",
+      "acct-thorne-freight",
+      "acct-9330192",
+      "acct-5131326"
+     ],
+     "qualified": false,
+     "tool_calls": 9,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 46759.9,
+     "llm": {
+      "requests": 8,
+      "ms": 27094.1,
+      "wait_ms": 18847.4,
+      "tokens": {
+       "prompt": 50104,
+       "completion": 700
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-02c5d200",
+      "status": "PENDING_L3",
+      "targets": [
+       "merch-calloway-ticketing",
+       "acct-calloway-ticketing-payouts",
+       "acct-thorne-freight",
+       "acct-9330192"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T13:57:48Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c01",
+     "subject_id": "merch-calloway-ticketing",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "device_bridge_layering",
+     "split": "heldout",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-5131326",
+      "hops": 5
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\"}",
+       "ok": true,
+       "ms": 1.8,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\",\"facts\":true}",
+       "ok": true,
+       "ms": 17.1,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 19.6,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\"}",
+       "ok": true,
+       "ms": 162.0,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\"}",
+       "ok": true,
+       "ms": 13.5,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"merch-calloway-ticketing\",\"acct-calloway-ticketing-payouts\",\"acct-thorne-freight\",\"acct-9330192\",\"acct-8038D3520\"]}",
+       "ok": true,
+       "ms": 4.7,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-8038D3520\"],\"policy_id\":\"pol-aml-sec-4\",\"approver_id\":\"emp-priya-nair\",\"reason\":\"Calloway Ticketing is part of a suspicious ring and has an...",
+       "ok": true,
+       "ms": 27.4,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 40,
+      "ms": 242.6,
+      "entities": 32,
+      "edges": 21,
+      "bytes": 11884
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_from_memory",
+     "target": "acct-5131326",
+     "hops": 5,
+     "route": [
+      "merch-calloway-ticketing",
+      "acct-calloway-ticketing-payouts",
+      "dev-732577c324",
+      "acct-thorne-freight",
+      "acct-9330192",
+      "acct-5131326"
+     ],
+     "qualified": false,
+     "tool_calls": 7,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 30161.6,
+     "llm": {
+      "requests": 6,
+      "ms": 9865.6,
+      "wait_ms": 19998.2,
+      "tokens": {
+       "prompt": 44762,
+       "completion": 614
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-f6e98c06",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-8038D3520"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T13:58:18Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c01",
+     "subject_id": "merch-calloway-ticketing",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "device_bridge_layering",
+     "split": "heldout",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-5131326",
+      "hops": 5
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\"}",
+       "ok": true,
+       "ms": 1.8,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.6,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\",\"depth\":1}",
+       "ok": true,
+       "ms": 3.7,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\",\"depth\":6}",
+       "ok": true,
+       "ms": 31.9,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 2.4,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-calloway-ticketing-payouts\",\"acct-thorne-freight\"],\"target_id\":\"acct-5131326\",\"include_shared_device_accounts\":true}",
+       "ok": true,
+       "ms": 80.2,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"runs\":1}",
+       "ok": true,
+       "ms": 122.8,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"community_ids\":[\"acct-5131326\",\"acct-9330192\",\"acct-brantham-print\",\"acct-thorne-freight\"]}",
+       "ok": true,
+       "ms": 7.9,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\"}",
+       "ok": true,
+       "ms": 2.8,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"merch-calloway-ticketing\",\"acct-calloway-ticketing-payouts\",\"acct-thorne-freight\",\"acct-9330192\",\"acct-brantham-print\"]}",
+       "ok": true,
+       "ms": 2.3,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"merch-calloway-ticketing\",\"acct-calloway-ticketing-payouts\",\"acct-thorne-freight\",\"acct-9330192\",\"acct-brantham-print\"],\"policy_id\":\"pol-aml-sec...",
+       "ok": true,
+       "ms": 15.4,
+       "error": null
+      }
+     ],
+     "notices": [
+      "Playbook pb-8a52dedaf8 (device-linked sanctions exposure) matches this alert's topology. It was learned from ep-d53647964f on merch-nova-pay, whose freeze emp-priya-nair approved. Its steps run on merch-calloway-ticketing's own evidence, and any freeze is decided afresh."
+     ],
+     "db": {
+      "queries": 68,
+      "ms": 273.1,
+      "entities": 52,
+      "edges": 30,
+      "bytes": 13984
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-5131326",
+     "hops": 5,
+     "route": [
+      "merch-calloway-ticketing",
+      "acct-calloway-ticketing-payouts",
+      "dev-732577c324",
+      "acct-thorne-freight",
+      "acct-9330192",
+      "acct-5131326"
+     ],
+     "qualified": false,
+     "tool_calls": 11,
+     "verdict_step": 4,
+     "budget_exhausted": false,
+     "elapsed_ms": 9490.0,
+     "llm": {
+      "requests": 2,
+      "ms": 3422.1,
+      "wait_ms": 5735.7,
+      "tokens": {
+       "prompt": 18144,
+       "completion": 539
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": {
+      "id": "pb-8a52dedaf8",
+      "ran": 8,
+      "stopped": "step 9 (request_action) is an action, so it is left to the planner"
+     },
+     "request": {
+      "id": "apr-2e7835c3",
+      "status": "PENDING_L3",
+      "targets": [
+       "merch-calloway-ticketing",
+       "acct-calloway-ticketing-payouts",
+       "acct-thorne-freight",
+       "acct-9330192",
+       "acct-brantham-print"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T13:58:29Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c02",
+     "subject_id": "acct-7848838",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "device_bridge_layering",
+     "split": "heldout",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-elstree-wholesale",
+      "hops": 6
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-7848838\"}",
+       "ok": true,
+       "ms": 1.3,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-7848838\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.2,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-7848838\",\"depth\":6}",
+       "ok": true,
+       "ms": 81.9,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-penrose-capital\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 29.3,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-7848838\",\"acct-rowan-grain\",\"acct-sheldon-interiors\",\"acct-penrose-capital\",\"acct-marlow-tools\"],\"target_id\":\"acct-elstree-wholesale\",\"incl...",
+       "ok": true,
+       "ms": 211.0,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-7848838\",\"runs\":1}",
+       "ok": true,
+       "ms": 165.6,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-7848838\"}",
+       "ok": true,
+       "ms": 3.9,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-7848838\",\"acct-rowan-grain\",\"acct-sheldon-interiors\",\"acct-penrose-capital\",\"acct-marlow-tools\"]}",
+       "ok": true,
+       "ms": 2.3,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-7848838\",\"acct-rowan-grain\",\"acct-sheldon-interiors\",\"acct-penrose-capital\",\"acct-marlow-tools\"],\"policy_id\":\"pol-aml-sec-4\",\"approver_id\":...",
+       "ok": true,
+       "ms": 20.8,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 54,
+      "ms": 515.6,
+      "entities": 97,
+      "edges": 21,
+      "bytes": 13250
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-elstree-wholesale",
+     "hops": 6,
+     "route": [
+      "acct-7848838",
+      "acct-rowan-grain",
+      "acct-sheldon-interiors",
+      "dev-23f4e2ea68",
+      "acct-penrose-capital",
+      "acct-marlow-tools",
+      "acct-elstree-wholesale"
+     ],
+     "qualified": false,
+     "tool_calls": 9,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 44944.2,
+     "llm": {
+      "requests": 8,
+      "ms": 24440.9,
+      "wait_ms": 19922.4,
+      "tokens": {
+       "prompt": 54610,
+       "completion": 713
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-eb73006a",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-7848838",
+       "acct-rowan-grain",
+       "acct-sheldon-interiors",
+       "acct-penrose-capital",
+       "acct-marlow-tools"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T13:59:14Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c02",
+     "subject_id": "acct-7848838",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "device_bridge_layering",
+     "split": "heldout",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-elstree-wholesale",
+      "hops": 6
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-7848838\"}",
+       "ok": true,
+       "ms": 1.1,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-7848838\",\"facts\":true}",
+       "ok": true,
+       "ms": 9.0,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-7848838\"}",
+       "ok": true,
+       "ms": 4.1,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-7848838\",\"acct-rowan-grain\",\"acct-sheldon-interiors\",\"acct-penrose-capital\",\"acct-marlow-tools\"]}",
+       "ok": true,
+       "ms": 3.2,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 24,
+      "ms": 16.9,
+      "entities": 20,
+      "edges": 14,
+      "bytes": 10407
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_from_memory",
+     "target": "acct-elstree-wholesale",
+     "hops": 6,
+     "route": [
+      "acct-7848838",
+      "acct-rowan-grain",
+      "acct-sheldon-interiors",
+      "dev-23f4e2ea68",
+      "acct-penrose-capital",
+      "acct-marlow-tools",
+      "acct-elstree-wholesale"
+     ],
+     "qualified": false,
+     "tool_calls": 4,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 13767.5,
+     "llm": {
+      "requests": 3,
+      "ms": 4438.0,
+      "wait_ms": 9270.7,
+      "tokens": {
+       "prompt": 21488,
+       "completion": 262
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T13:59:28Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c02",
+     "subject_id": "acct-7848838",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "device_bridge_layering",
+     "split": "heldout",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-elstree-wholesale",
+      "hops": 6
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-7848838\"}",
+       "ok": true,
+       "ms": 2.4,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-7848838\",\"facts\":false}",
+       "ok": true,
+       "ms": 9.7,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-7848838\",\"depth\":6}",
+       "ok": true,
+       "ms": 43.5,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-penrose-capital\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 14.0,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-7848838\",\"acct-rowan-grain\",\"acct-sheldon-interiors\",\"acct-penrose-capital\",\"acct-marlow-tools\"],\"target_id\":\"acct-elstree-wholesale\",\"incl...",
+       "ok": true,
+       "ms": 200.7,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-7848838\",\"runs\":1}",
+       "ok": true,
+       "ms": 147.7,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-7848838\"}",
+       "ok": true,
+       "ms": 2.9,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-7848838\",\"acct-rowan-grain\",\"acct-sheldon-interiors\",\"acct-penrose-capital\",\"acct-marlow-tools\"]}",
+       "ok": true,
+       "ms": 6.6,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-7848838\",\"acct-rowan-grain\",\"acct-sheldon-interiors\",\"acct-penrose-capital\",\"acct-marlow-tools\"],\"policy_id\":\"pol-aml-sec-4\",\"approver_id\":...",
+       "ok": true,
+       "ms": 10.8,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 54,
+      "ms": 434.3,
+      "entities": 97,
+      "edges": 21,
+      "bytes": 13250
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-elstree-wholesale",
+     "hops": 6,
+     "route": [
+      "acct-7848838",
+      "acct-rowan-grain",
+      "acct-sheldon-interiors",
+      "dev-23f4e2ea68",
+      "acct-penrose-capital",
+      "acct-marlow-tools",
+      "acct-elstree-wholesale"
+     ],
+     "qualified": false,
+     "tool_calls": 9,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 42336.4,
+     "llm": {
+      "requests": 8,
+      "ms": 19654.6,
+      "wait_ms": 22094.8,
+      "tokens": {
+       "prompt": 54656,
+       "completion": 753
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-d6da65e0",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-7848838",
+       "acct-rowan-grain",
+       "acct-sheldon-interiors",
+       "acct-penrose-capital",
+       "acct-marlow-tools"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T14:00:11Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c03",
+     "subject_id": "acct-merrick-commodities",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "direct_chain",
+     "split": "dev",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-wexford-commodities",
+      "hops": 3
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\"}",
+       "ok": true,
+       "ms": 3.6,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\",\"facts\":false}",
+       "ok": true,
+       "ms": 5.2,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\",\"depth\":6}",
+       "ok": true,
+       "ms": 41.0,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\",\"direction\":\"out\",\"max_hops\":6}",
+       "ok": true,
+       "ms": 27.5,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-merrick-commodities\",\"acct-delmar-shipping\",\"acct-lindell-energy\"],\"target_id\":\"acct-wexford-commodities\",\"include_shared_device_accounts\":...",
+       "ok": true,
+       "ms": 158.6,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\",\"runs\":1}",
+       "ok": true,
+       "ms": 156.9,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\",\"community_ids\":[\"acct-810186000\",\"acct-lindell-energy\",\"acct-merrick-commodities\"]}",
+       "ok": true,
+       "ms": 57.6,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\"}",
+       "ok": true,
+       "ms": 23.6,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-merrick-commodities\",\"acct-delmar-shipping\",\"acct-lindell-energy\",\"acct-810186000\"]}",
+       "ok": true,
+       "ms": 14.0,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-merrick-commodities\",\"acct-delmar-shipping\",\"acct-lindell-energy\",\"acct-810186000\"],\"policy_id\":\"pol-aml-sec-4\",\"approver_id\":\"emp-priya-na...",
+       "ok": true,
+       "ms": 19.3,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 60,
+      "ms": 501.2,
+      "entities": 39,
+      "edges": 20,
+      "bytes": 9401
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-wexford-commodities",
+     "hops": 3,
+     "route": [
+      "acct-merrick-commodities",
+      "acct-delmar-shipping",
+      "acct-lindell-energy",
+      "acct-wexford-commodities"
+     ],
+     "qualified": false,
+     "tool_calls": 10,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 41947.5,
+     "llm": {
+      "requests": 9,
+      "ms": 16964.4,
+      "wait_ms": 24380.3,
+      "tokens": {
+       "prompt": 55170,
+       "completion": 754
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-b6e1b5ef",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-merrick-commodities",
+       "acct-delmar-shipping",
+       "acct-lindell-energy",
+       "acct-810186000"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T14:00:54Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c03",
+     "subject_id": "acct-merrick-commodities",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "direct_chain",
+     "split": "dev",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-wexford-commodities",
+      "hops": 3
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\"}",
+       "ok": true,
+       "ms": 3.6,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\",\"facts\":true}",
+       "ok": true,
+       "ms": 22.3,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\"}",
+       "ok": true,
+       "ms": 12.8,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-merrick-commodities\",\"acct-delmar-shipping\",\"acct-lindell-energy\",\"acct-810186000\"]}",
+       "ok": true,
+       "ms": 18.0,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 24,
+      "ms": 56.1,
+      "entities": 16,
+      "edges": 8,
+      "bytes": 9674
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_from_memory",
+     "target": "acct-wexford-commodities",
+     "hops": 3,
+     "route": [
+      "acct-merrick-commodities",
+      "acct-delmar-shipping",
+      "acct-lindell-energy",
+      "acct-wexford-commodities"
+     ],
+     "qualified": false,
+     "tool_calls": 4,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 14764.2,
+     "llm": {
+      "requests": 3,
+      "ms": 4491.9,
+      "wait_ms": 10174.1,
+      "tokens": {
+       "prompt": 20208,
+       "completion": 296
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:01:09Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c03",
+     "subject_id": "acct-merrick-commodities",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "direct_chain",
+     "split": "dev",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-wexford-commodities",
+      "hops": 3
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\"}",
+       "ok": true,
+       "ms": 1.9,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\",\"facts\":false}",
+       "ok": true,
+       "ms": 4.0,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\",\"depth\":6}",
+       "ok": true,
+       "ms": 49.0,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\",\"direction\":\"out\",\"max_hops\":6}",
+       "ok": true,
+       "ms": 21.0,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-merrick-commodities\",\"acct-delmar-shipping\",\"acct-lindell-energy\"],\"target_id\":\"acct-wexford-commodities\",\"include_shared_device_accounts\":...",
+       "ok": true,
+       "ms": 157.9,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\",\"runs\":1}",
+       "ok": true,
+       "ms": 171.7,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\",\"community_ids\":[\"acct-810186000\",\"acct-lindell-energy\",\"acct-merrick-commodities\"]}",
+       "ok": true,
+       "ms": 28.0,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-merrick-commodities\"}",
+       "ok": true,
+       "ms": 23.8,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-merrick-commodities\",\"acct-delmar-shipping\",\"acct-lindell-energy\",\"acct-810186000\"]}",
+       "ok": true,
+       "ms": 13.9,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-merrick-commodities\",\"acct-delmar-shipping\",\"acct-lindell-energy\",\"acct-810186000\"],\"policy_id\":\"pol-aml-sec-4\",\"approver_id\":\"emp-priya-na...",
+       "ok": true,
+       "ms": 26.3,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 60,
+      "ms": 493.1,
+      "entities": 39,
+      "edges": 20,
+      "bytes": 9401
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-wexford-commodities",
+     "hops": 3,
+     "route": [
+      "acct-merrick-commodities",
+      "acct-delmar-shipping",
+      "acct-lindell-energy",
+      "acct-wexford-commodities"
+     ],
+     "qualified": false,
+     "tool_calls": 10,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 43822.3,
+     "llm": {
+      "requests": 9,
+      "ms": 10177.9,
+      "wait_ms": 33076.3,
+      "tokens": {
+       "prompt": 55146,
+       "completion": 736
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-b8732ecf",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-merrick-commodities",
+       "acct-delmar-shipping",
+       "acct-lindell-energy",
+       "acct-810186000"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T14:01:54Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c04",
+     "subject_id": "acct-medway-seafood",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "double_device_bridge",
+     "split": "heldout",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-5050321",
+      "hops": 5
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-medway-seafood\"}",
+       "ok": true,
+       "ms": 1.2,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-medway-seafood\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.4,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-medway-seafood\",\"depth\":6}",
+       "ok": true,
+       "ms": 75.0,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-solent-logistics\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 10.2,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-medway-seafood\",\"acct-ind-339131\",\"acct-solent-logistics\"],\"target_id\":\"acct-5050321\",\"include_shared_device_accounts\":true}",
+       "ok": true,
+       "ms": 148.4,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-medway-seafood\",\"runs\":1}",
+       "ok": true,
+       "ms": 171.0,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"acct-medway-seafood\",\"community_ids\":[\"acct-806CF7480\",\"acct-807DE8030\",\"acct-ind-339131\",\"acct-medway-seafood\",\"acct-solent-logistics\",\"dev-ac2d5...",
+       "ok": true,
+       "ms": 32.5,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-medway-seafood\"}",
+       "ok": true,
+       "ms": 14.3,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-medway-seafood\",\"acct-ind-339131\",\"acct-solent-logistics\",\"acct-806CF7480\",\"acct-807DE8030\"]}",
+       "ok": true,
+       "ms": 59.9,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-medway-seafood\",\"acct-ind-339131\",\"acct-solent-logistics\",\"acct-806CF7480\",\"acct-807DE8030\",\"dev-1f9e74d650\",\"dev-a7f92af541\",\"dev-01096ac9...",
+       "ok": false,
+       "ms": 4.9,
+       "error": "only accounts can be frozen; not accounts: ['dev-1f9e74d650', 'dev-a7f92af541', 'dev-01096ac934']"
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-medway-seafood\",\"acct-ind-339131\",\"acct-solent-logistics\",\"acct-806CF7480\",\"acct-807DE8030\"],\"policy_id\":\"pol-aml-sec-4\",\"approver_id\":\"emp...",
+       "ok": true,
+       "ms": 29.0,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 81,
+      "ms": 544.9,
+      "entities": 61,
+      "edges": 27,
+      "bytes": 11800
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-5050321",
+     "hops": 5,
+     "route": [
+      "acct-medway-seafood",
+      "dev-1f9e74d650",
+      "acct-ind-339131",
+      "dev-a7f92af541",
+      "acct-solent-logistics",
+      "acct-5050321"
+     ],
+     "qualified": false,
+     "tool_calls": 11,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 58732.1,
+     "llm": {
+      "requests": 10,
+      "ms": 31541.1,
+      "wait_ms": 26545.3,
+      "tokens": {
+       "prompt": 67878,
+       "completion": 1300
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-06f6e6b3",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-medway-seafood",
+       "acct-ind-339131",
+       "acct-solent-logistics",
+       "acct-806CF7480",
+       "acct-807DE8030"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T14:02:53Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c04",
+     "subject_id": "acct-medway-seafood",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "double_device_bridge",
+     "split": "heldout",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-5050321",
+      "hops": 5
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-medway-seafood\"}",
+       "ok": true,
+       "ms": 5.3,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-medway-seafood\",\"facts\":true}",
+       "ok": true,
+       "ms": 23.7,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-medway-seafood\"}",
+       "ok": true,
+       "ms": 11.7,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-medway-seafood\",\"acct-ind-339131\",\"acct-solent-logistics\",\"acct-806CF7480\",\"acct-807DE8030\"]}",
+       "ok": true,
+       "ms": 31.4,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 43,
+      "ms": 71.5,
+      "entities": 26,
+      "edges": 19,
+      "bytes": 12055
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_from_memory",
+     "target": "acct-5050321",
+     "hops": 5,
+     "route": [
+      "acct-medway-seafood",
+      "dev-1f9e74d650",
+      "acct-ind-339131",
+      "dev-a7f92af541",
+      "acct-solent-logistics",
+      "acct-5050321"
+     ],
+     "qualified": false,
+     "tool_calls": 4,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 15139.0,
+     "llm": {
+      "requests": 3,
+      "ms": 5049.6,
+      "wait_ms": 9968.9,
+      "tokens": {
+       "prompt": 23488,
+       "completion": 421
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:03:09Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c04",
+     "subject_id": "acct-medway-seafood",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "double_device_bridge",
+     "split": "heldout",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-5050321",
+      "hops": 5
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-medway-seafood\"}",
+       "ok": true,
+       "ms": 1.7,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-medway-seafood\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.3,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-medway-seafood\",\"depth\":6}",
+       "ok": true,
+       "ms": 50.8,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-ind-339131\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 14.3,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-medway-seafood\",\"acct-ind-339131\",\"acct-solent-logistics\"],\"target_id\":\"acct-5050321\",\"include_shared_device_accounts\":true}",
+       "ok": true,
+       "ms": 158.3,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-medway-seafood\",\"runs\":1}",
+       "ok": true,
+       "ms": 207.4,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"acct-medway-seafood\"}",
+       "ok": true,
+       "ms": 168.2,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-medway-seafood\"}",
+       "ok": true,
+       "ms": 18.6,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-medway-seafood\",\"acct-ind-339131\",\"acct-solent-logistics\",\"acct-806CF7480\",\"acct-807DE8030\"]}",
+       "ok": true,
+       "ms": 57.5,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-medway-seafood\",\"acct-ind-339131\",\"acct-solent-logistics\",\"acct-806CF7480\",\"acct-807DE8030\",\"dev-1f9e74d650\",\"dev-a7f92af541\",\"dev-01096ac9...",
+       "ok": false,
+       "ms": 3.8,
+       "error": "only accounts can be frozen; not accounts: ['dev-1f9e74d650', 'dev-a7f92af541', 'dev-01096ac934']"
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-medway-seafood\",\"acct-ind-339131\",\"acct-solent-logistics\",\"acct-806CF7480\",\"acct-807DE8030\"],\"policy_id\":\"pol-aml-sec-4\",\"approver_id\":\"emp...",
+       "ok": true,
+       "ms": 28.6,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 80,
+      "ms": 708.6,
+      "entities": 60,
+      "edges": 26,
+      "bytes": 11269
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-5050321",
+     "hops": 5,
+     "route": [
+      "acct-medway-seafood",
+      "dev-1f9e74d650",
+      "acct-ind-339131",
+      "dev-a7f92af541",
+      "acct-solent-logistics",
+      "acct-5050321"
+     ],
+     "qualified": false,
+     "tool_calls": 11,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 50849.0,
+     "llm": {
+      "requests": 10,
+      "ms": 13713.8,
+      "wait_ms": 36322.5,
+      "tokens": {
+       "prompt": 65266,
+       "completion": 1109
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-1d6c2376",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-medway-seafood",
+       "acct-ind-339131",
+       "acct-solent-logistics",
+       "acct-806CF7480",
+       "acct-807DE8030"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T14:04:00Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c05",
+     "subject_id": "acct-6858107",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "ip_shortcut_with_device_route",
+     "split": "heldout",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-7192552",
+      "hops": 6
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-6858107\"}",
+       "ok": true,
+       "ms": 1.3,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-6858107\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.0,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-6858107\",\"depth\":6}",
+       "ok": true,
+       "ms": 49.0,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-6858107\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 14.1,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-6858107\",\"acct-8603630\",\"acct-northgate-ventures\",\"acct-4706382\",\"acct-4153951\"],\"target_id\":\"acct-7192552\",\"include_shared_device_accounts...",
+       "ok": true,
+       "ms": 198.9,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-6858107\",\"runs\":1}",
+       "ok": true,
+       "ms": 152.9,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"acct-6858107\",\"community_ids\":[\"acct-4153951\",\"acct-4706382\",\"acct-6858107\",\"acct-7192552\",\"acct-8603630\",\"acct-northgate-ventures\",\"acct-ormond-c...",
+       "ok": true,
+       "ms": 40.7,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-6858107\"}",
+       "ok": true,
+       "ms": 20.5,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-6858107\",\"acct-8603630\",\"acct-northgate-ventures\",\"acct-4706382\",\"acct-4153951\"]}",
+       "ok": true,
+       "ms": 18.6,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-6858107\",\"acct-8603630\",\"acct-northgate-ventures\",\"acct-4706382\",\"acct-4153951\",\"acct-ormond-consulting\"],\"policy_id\":\"pol-aml-sec-4\",\"appr...",
+       "ok": true,
+       "ms": 26.7,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 63,
+      "ms": 520.8,
+      "entities": 61,
+      "edges": 29,
+      "bytes": 10561
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-7192552",
+     "hops": 6,
+     "route": [
+      "acct-6858107",
+      "acct-8603630",
+      "dev-304febec70",
+      "acct-northgate-ventures",
+      "acct-4706382",
+      "acct-4153951",
+      "acct-7192552"
+     ],
+     "qualified": false,
+     "tool_calls": 10,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 42905.2,
+     "llm": {
+      "requests": 9,
+      "ms": 18709.3,
+      "wait_ms": 23570.6,
+      "tokens": {
+       "prompt": 58420,
+       "completion": 998
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-7ad05589",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-6858107",
+       "acct-8603630",
+       "acct-northgate-ventures",
+       "acct-4706382",
+       "acct-4153951",
+       "acct-ormond-consulting"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T14:04:44Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c05",
+     "subject_id": "acct-6858107",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "ip_shortcut_with_device_route",
+     "split": "heldout",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-7192552",
+      "hops": 6
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-6858107\"}",
+       "ok": true,
+       "ms": 2.9,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-6858107\",\"facts\":true}",
+       "ok": true,
+       "ms": 24.2,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-6858107\"}",
+       "ok": true,
+       "ms": 13.6,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-6858107\",\"acct-8603630\",\"acct-northgate-ventures\",\"acct-4706382\",\"acct-4153951\",\"acct-ormond-consulting\"]}",
+       "ok": true,
+       "ms": 12.6,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 23,
+      "ms": 52.4,
+      "entities": 24,
+      "edges": 20,
+      "bytes": 10192
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_from_memory",
+     "target": "acct-7192552",
+     "hops": 6,
+     "route": [
+      "acct-6858107",
+      "acct-8603630",
+      "dev-304febec70",
+      "acct-northgate-ventures",
+      "acct-4706382",
+      "acct-4153951",
+      "acct-7192552"
+     ],
+     "qualified": false,
+     "tool_calls": 4,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 18205.5,
+     "llm": {
+      "requests": 3,
+      "ms": 12645.5,
+      "wait_ms": 5459.9,
+      "tokens": {
+       "prompt": 22174,
+       "completion": 480
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:05:02Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c05",
+     "subject_id": "acct-6858107",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "ip_shortcut_with_device_route",
+     "split": "heldout",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-7192552",
+      "hops": 6
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-6858107\"}",
+       "ok": true,
+       "ms": 1.3,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-6858107\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.2,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-6858107\",\"depth\":1}",
+       "ok": true,
+       "ms": 3.1,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-6858107\",\"depth\":6}",
+       "ok": true,
+       "ms": 16.0,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-northgate-ventures\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 2.8,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-8603630\",\"acct-northgate-ventures\"],\"target_id\":\"acct-7192552\",\"include_shared_device_accounts\":true}",
+       "ok": true,
+       "ms": 81.0,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-northgate-ventures\",\"runs\":1}",
+       "ok": true,
+       "ms": 127.7,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"acct-northgate-ventures\",\"community_ids\":[\"acct-4153951\",\"acct-4706382\",\"acct-6858107\",\"acct-7192552\",\"acct-8603630\",\"acct-northgate-ventures\",\"ac...",
+       "ok": true,
+       "ms": 7.8,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-6858107\"}",
+       "ok": true,
+       "ms": 2.7,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-6858107\",\"acct-8603630\",\"acct-northgate-ventures\",\"acct-4706382\",\"acct-4153951\",\"acct-ormond-consulting\"]}",
+       "ok": true,
+       "ms": 2.2,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-6858107\",\"acct-8603630\",\"acct-northgate-ventures\",\"acct-4706382\",\"acct-4153951\",\"acct-ormond-consulting\"],\"policy_id\":\"pol-aml-sec-4\",\"appr...",
+       "ok": true,
+       "ms": 11.2,
+       "error": null
+      }
+     ],
+     "notices": [
+      "Playbook pb-8a52dedaf8 (device-linked sanctions exposure) matches this alert's topology. It was learned from ep-d53647964f on merch-nova-pay, whose freeze emp-priya-nair approved. Its steps run on acct-6858107's own evidence, and any freeze is decided afresh."
+     ],
+     "db": {
+      "queries": 67,
+      "ms": 257.3,
+      "entities": 65,
+      "edges": 33,
+      "bytes": 13846
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-7192552",
+     "hops": 6,
+     "route": [
+      "acct-6858107",
+      "acct-8603630",
+      "dev-304febec70",
+      "acct-northgate-ventures",
+      "acct-4706382",
+      "acct-4153951",
+      "acct-7192552"
+     ],
+     "qualified": false,
+     "tool_calls": 11,
+     "verdict_step": 4,
+     "budget_exhausted": false,
+     "elapsed_ms": 12543.9,
+     "llm": {
+      "requests": 2,
+      "ms": 8422.9,
+      "wait_ms": 3801.3,
+      "tokens": {
+       "prompt": 18768,
+       "completion": 702
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": {
+      "id": "pb-8a52dedaf8",
+      "ran": 8,
+      "stopped": "step 9 (request_action) is an action, so it is left to the planner"
+     },
+     "request": {
+      "id": "apr-cba70f09",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-6858107",
+       "acct-8603630",
+       "acct-northgate-ventures",
+       "acct-4706382",
+       "acct-4153951",
+       "acct-ormond-consulting"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T14:05:16Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c06",
+     "subject_id": "acct-jardine-optics",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "fan_out_aggregator",
+     "split": "dev",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-6225531",
+      "hops": 3
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-jardine-optics\"}",
+       "ok": true,
+       "ms": 1.4,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-jardine-optics\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.5,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-jardine-optics\",\"depth\":6}",
+       "ok": true,
+       "ms": 35.1,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-jardine-optics\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 15.1,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-jardine-optics\",\"acct-ind-939650\",\"acct-6895067\"],\"target_id\":\"acct-6225531\",\"include_shared_device_accounts\":true}",
+       "ok": true,
+       "ms": 149.2,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-jardine-optics\",\"runs\":1}",
+       "ok": true,
+       "ms": 154.8,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"acct-jardine-optics\",\"community_ids\":[\"acct-6895067\",\"acct-jardine-optics\"]}",
+       "ok": true,
+       "ms": 35.2,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-jardine-optics\"}",
+       "ok": true,
+       "ms": 36.3,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-jardine-optics\",\"acct-ind-939650\",\"acct-6895067\",\"acct-ind-808103\",\"acct-ind-575325\",\"acct-ind-822976\"]}",
+       "ok": true,
+       "ms": 11.3,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-jardine-optics\",\"acct-ind-939650\",\"acct-6895067\",\"acct-ind-808103\",\"acct-ind-575325\",\"acct-ind-822976\"],\"policy_id\":\"pol-aml-sec-4\",\"approv...",
+       "ok": true,
+       "ms": 19.5,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 59,
+      "ms": 455.5,
+      "entities": 46,
+      "edges": 29,
+      "bytes": 9835
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-6225531",
+     "hops": 3,
+     "route": [
+      "acct-jardine-optics",
+      "acct-ind-939650",
+      "acct-6895067",
+      "acct-6225531"
+     ],
+     "qualified": false,
+     "tool_calls": 10,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 42858.9,
+     "llm": {
+      "requests": 9,
+      "ms": 16640.1,
+      "wait_ms": 25676.6,
+      "tokens": {
+       "prompt": 59856,
+       "completion": 867
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-c66121ea",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-jardine-optics",
+       "acct-ind-939650",
+       "acct-6895067",
+       "acct-ind-808103",
+       "acct-ind-575325",
+       "acct-ind-822976"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T14:06:00Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c06",
+     "subject_id": "acct-jardine-optics",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "fan_out_aggregator",
+     "split": "dev",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-6225531",
+      "hops": 3
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-jardine-optics\"}",
+       "ok": true,
+       "ms": 4.4,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-jardine-optics\",\"facts\":true}",
+       "ok": true,
+       "ms": 19.7,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-jardine-optics\"}",
+       "ok": true,
+       "ms": 12.0,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-jardine-optics\",\"acct-ind-939650\",\"acct-6895067\"]}",
+       "ok": true,
+       "ms": 9.3,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 24,
+      "ms": 44.7,
+      "entities": 17,
+      "edges": 7,
+      "bytes": 8606
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_from_memory",
+     "target": "acct-6225531",
+     "hops": 3,
+     "route": [
+      "acct-jardine-optics",
+      "acct-ind-939650",
+      "acct-6895067",
+      "acct-6225531"
+     ],
+     "qualified": false,
+     "tool_calls": 4,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 13494.8,
+     "llm": {
+      "requests": 3,
+      "ms": 3671.5,
+      "wait_ms": 9731.5,
+      "tokens": {
+       "prompt": 20846,
+       "completion": 293
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:06:13Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c06",
+     "subject_id": "acct-jardine-optics",
+     "group": "positive",
+     "category": "positive",
+     "pattern": "fan_out_aggregator",
+     "split": "dev",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-6225531",
+      "hops": 3
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-jardine-optics\"}",
+       "ok": true,
+       "ms": 1.2,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-jardine-optics\",\"facts\":false}",
+       "ok": true,
+       "ms": 2.9,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-jardine-optics\",\"depth\":6}",
+       "ok": true,
+       "ms": 30.5,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-jardine-optics\",\"direction\":\"out\",\"max_hops\":6}",
+       "ok": true,
+       "ms": 12.9,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-jardine-optics\",\"acct-ind-939650\",\"acct-6895067\"],\"target_id\":\"acct-6225531\",\"include_shared_device_accounts\":true}",
+       "ok": true,
+       "ms": 144.6,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-jardine-optics\",\"runs\":1}",
+       "ok": true,
+       "ms": 162.7,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"acct-jardine-optics\",\"community_ids\":[\"acct-6895067\",\"acct-jardine-optics\"]}",
+       "ok": true,
+       "ms": 28.9,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-jardine-optics\"}",
+       "ok": true,
+       "ms": 24.1,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-jardine-optics\",\"acct-ind-939650\",\"acct-6895067\"]}",
+       "ok": true,
+       "ms": 10.0,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-jardine-optics\",\"acct-ind-939650\",\"acct-6895067\"],\"policy_id\":\"pol-aml-sec-4\",\"approver_id\":\"emp-priya-nair\",\"reason\":\"Jardine Optics s.r.o...",
+       "ok": true,
+       "ms": 20.6,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 59,
+      "ms": 434.1,
+      "entities": 40,
+      "edges": 26,
+      "bytes": 9381
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-6225531",
+     "hops": 3,
+     "route": [
+      "acct-jardine-optics",
+      "acct-ind-939650",
+      "acct-6895067",
+      "acct-6225531"
+     ],
+     "qualified": false,
+     "tool_calls": 10,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 44284.5,
+     "llm": {
+      "requests": 9,
+      "ms": 17648.7,
+      "wait_ms": 26112.7,
+      "tokens": {
+       "prompt": 59397,
+       "completion": 750
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-3221019c",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-jardine-optics",
+       "acct-ind-939650",
+       "acct-6895067"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T14:06:58Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c07",
+     "subject_id": "acct-thorne-freight",
+     "group": "positive",
+     "category": "coordination",
+     "pattern": "shared_route_second_alert",
+     "split": "dev",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-5131326",
+      "hops": 2
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-thorne-freight\"}",
+       "ok": true,
+       "ms": 1.3,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.1,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"depth\":6}",
+       "ok": true,
+       "ms": 40.5,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 12.9,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-thorne-freight\"],\"target_id\":\"acct-5131326\",\"include_shared_device_accounts\":true}",
+       "ok": true,
+       "ms": 103.1,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"runs\":1}",
+       "ok": true,
+       "ms": 148.8,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"community_ids\":[\"acct-5131326\",\"acct-9330192\",\"acct-brantham-print\",\"acct-thorne-freight\"]}",
+       "ok": true,
+       "ms": 39.6,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-thorne-freight\"}",
+       "ok": true,
+       "ms": 9.8,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-thorne-freight\",\"acct-9330192\",\"acct-brantham-print\"]}",
+       "ok": true,
+       "ms": 49.2,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-thorne-freight\",\"acct-9330192\",\"acct-brantham-print\",\"acct-calloway-ticketing-payouts\"],\"policy_id\":\"pol-aml-sec-4\",\"approver_id\":\"emp-priy...",
+       "ok": true,
+       "ms": 45.3,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 68,
+      "ms": 448.7,
+      "entities": 41,
+      "edges": 22,
+      "bytes": 9205
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-5131326",
+     "hops": 2,
+     "route": [
+      "acct-thorne-freight",
+      "acct-9330192",
+      "acct-5131326"
+     ],
+     "qualified": false,
+     "tool_calls": 10,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 44019.6,
+     "llm": {
+      "requests": 9,
+      "ms": 9203.4,
+      "wait_ms": 34273.3,
+      "tokens": {
+       "prompt": 54204,
+       "completion": 737
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-f932ad47",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-thorne-freight",
+       "acct-9330192",
+       "acct-brantham-print",
+       "acct-calloway-ticketing-payouts"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T14:07:43Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c07",
+     "subject_id": "acct-thorne-freight",
+     "group": "positive",
+     "category": "coordination",
+     "pattern": "shared_route_second_alert",
+     "split": "dev",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-5131326",
+      "hops": 2
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-thorne-freight\"}",
+       "ok": true,
+       "ms": 14.7,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"facts\":true}",
+       "ok": true,
+       "ms": 19.8,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-thorne-freight\"}",
+       "ok": true,
+       "ms": 12.1,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-thorne-freight\",\"acct-9330192\",\"acct-brantham-print\",\"acct-calloway-ticketing-payouts\"]}",
+       "ok": true,
+       "ms": 9.0,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 24,
+      "ms": 55.1,
+      "entities": 17,
+      "edges": 9,
+      "bytes": 8802
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_from_memory",
+     "target": "acct-5131326",
+     "hops": 2,
+     "route": [
+      "acct-thorne-freight",
+      "acct-9330192",
+      "acct-5131326"
+     ],
+     "qualified": false,
+     "tool_calls": 4,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 14968.5,
+     "llm": {
+      "requests": 3,
+      "ms": 3605.1,
+      "wait_ms": 11257.8,
+      "tokens": {
+       "prompt": 19673,
+       "completion": 327
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:07:58Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c07",
+     "subject_id": "acct-thorne-freight",
+     "group": "positive",
+     "category": "coordination",
+     "pattern": "shared_route_second_alert",
+     "split": "dev",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-5131326",
+      "hops": 2
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-thorne-freight\"}",
+       "ok": true,
+       "ms": 1.8,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.6,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"depth\":6}",
+       "ok": true,
+       "ms": 44.8,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 14.1,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"acct-thorne-freight\"],\"target_id\":\"acct-5131326\",\"include_shared_device_accounts\":true}",
+       "ok": true,
+       "ms": 107.0,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"runs\":1}",
+       "ok": true,
+       "ms": 212.7,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"acct-thorne-freight\",\"community_ids\":[\"acct-5131326\",\"acct-9330192\",\"acct-brantham-print\",\"acct-thorne-freight\"]}",
+       "ok": true,
+       "ms": 50.2,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"acct-thorne-freight\"}",
+       "ok": true,
+       "ms": 50.4,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"acct-thorne-freight\",\"acct-9330192\",\"acct-brantham-print\"]}",
+       "ok": true,
+       "ms": 40.7,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"acct-thorne-freight\",\"acct-9330192\",\"acct-brantham-print\",\"acct-calloway-ticketing-payouts\"],\"policy_id\":\"pol-aml-sec-4\",\"approver_id\":\"emp-priy...",
+       "ok": true,
+       "ms": 31.5,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 68,
+      "ms": 552.0,
+      "entities": 41,
+      "edges": 22,
+      "bytes": 9207
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-5131326",
+     "hops": 2,
+     "route": [
+      "acct-thorne-freight",
+      "acct-9330192",
+      "acct-5131326"
+     ],
+     "qualified": false,
+     "tool_calls": 10,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 70019.0,
+     "llm": {
+      "requests": 9,
+      "ms": 62452.8,
+      "wait_ms": 6912.3,
+      "tokens": {
+       "prompt": 54218,
+       "completion": 746
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-9052e263",
+      "status": "PENDING_L3",
+      "targets": [
+       "acct-thorne-freight",
+       "acct-9330192",
+       "acct-brantham-print",
+       "acct-calloway-ticketing-payouts"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T14:09:09Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c08",
+     "subject_id": "acct-stanmore-ventures",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "ip_only_association",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-stanmore-ventures\"}",
+       "ok": true,
+       "ms": 1.3,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-stanmore-ventures\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.4,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-stanmore-ventures\",\"depth\":6}",
+       "ok": true,
+       "ms": 27.1,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 22,
+      "ms": 31.5,
+      "entities": 6,
+      "edges": 3,
+      "bytes": 2743
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 7378.1,
+     "llm": {
+      "requests": 2,
+      "ms": 2492.2,
+      "wait_ms": 4805.5,
+      "tokens": {
+       "prompt": 8513,
+       "completion": 139
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:09:17Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c08",
+     "subject_id": "acct-stanmore-ventures",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "ip_only_association",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-stanmore-ventures\"}",
+       "ok": true,
+       "ms": 1.1,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-stanmore-ventures\",\"facts\":true}",
+       "ok": true,
+       "ms": 9.3,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 11,
+      "ms": 10.4,
+      "entities": 5,
+      "edges": 3,
+      "bytes": 3306
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "answered_from_memory",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 2,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 15284.8,
+     "llm": {
+      "requests": 1,
+      "ms": 11621.5,
+      "wait_ms": 3597.5,
+      "tokens": {
+       "prompt": 4891,
+       "completion": 114
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:09:33Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c08",
+     "subject_id": "acct-stanmore-ventures",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "ip_only_association",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-stanmore-ventures\"}",
+       "ok": true,
+       "ms": 5.9,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-stanmore-ventures\",\"facts\":false}",
+       "ok": true,
+       "ms": 8.1,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-stanmore-ventures\",\"depth\":6}",
+       "ok": true,
+       "ms": 38.1,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 22,
+      "ms": 51.3,
+      "entities": 6,
+      "edges": 3,
+      "bytes": 2743
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 6294.5,
+     "llm": {
+      "requests": 2,
+      "ms": 2155.2,
+      "wait_ms": 4017.1,
+      "tokens": {
+       "prompt": 8511,
+       "completion": 134
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:09:40Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c09",
+     "subject_id": "acct-kemble-grain",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "reverse_direction_association",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-kemble-grain\"}",
+       "ok": true,
+       "ms": 1.3,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-kemble-grain\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.0,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-kemble-grain\",\"depth\":6}",
+       "ok": true,
+       "ms": 34.6,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 24,
+      "ms": 38.2,
+      "entities": 6,
+      "edges": 3,
+      "bytes": 2630
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 18166.8,
+     "llm": {
+      "requests": 2,
+      "ms": 15127.4,
+      "wait_ms": 2964.2,
+      "tokens": {
+       "prompt": 8425,
+       "completion": 148
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:09:59Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c09",
+     "subject_id": "acct-kemble-grain",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "reverse_direction_association",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-kemble-grain\"}",
+       "ok": true,
+       "ms": 3.9,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-kemble-grain\",\"facts\":true}",
+       "ok": true,
+       "ms": 18.8,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 11,
+      "ms": 22.4,
+      "entities": 5,
+      "edges": 3,
+      "bytes": 3581
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "answered_from_memory",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 2,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 1559.5,
+     "llm": {
+      "requests": 1,
+      "ms": 1504.8,
+      "wait_ms": 0.0,
+      "tokens": {
+       "prompt": 4909,
+       "completion": 131
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:10:00Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c09",
+     "subject_id": "acct-kemble-grain",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "reverse_direction_association",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-kemble-grain\"}",
+       "ok": true,
+       "ms": 1.9,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-kemble-grain\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.9,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-kemble-grain\",\"depth\":6}",
+       "ok": true,
+       "ms": 41.1,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-kemble-grain\",\"depth\":6}",
+       "ok": true,
+       "ms": 35.3,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 43,
+      "ms": 80.5,
+      "entities": 10,
+      "edges": 6,
+      "bytes": 4497
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 4,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 15379.3,
+     "llm": {
+      "requests": 3,
+      "ms": 10213.7,
+      "wait_ms": 5046.3,
+      "tokens": {
+       "prompt": 13674,
+       "completion": 179
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:10:16Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c10",
+     "subject_id": "merch-juniper-home-goods",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "busy_legit_merchant",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-juniper-home-goods\"}",
+       "ok": true,
+       "ms": 1.2,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-juniper-home-goods\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.1,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-juniper-home-goods\",\"depth\":6}",
+       "ok": true,
+       "ms": 137.4,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 23,
+      "ms": 139.4,
+      "entities": 9,
+      "edges": 6,
+      "bytes": 3370
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 7994.6,
+     "llm": {
+      "requests": 2,
+      "ms": 2365.2,
+      "wait_ms": 5454.6,
+      "tokens": {
+       "prompt": 8830,
+       "completion": 132
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:10:25Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c10",
+     "subject_id": "merch-juniper-home-goods",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "busy_legit_merchant",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-juniper-home-goods\"}",
+       "ok": true,
+       "ms": 3.9,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-juniper-home-goods\",\"facts\":true}",
+       "ok": true,
+       "ms": 14.2,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 9,
+      "ms": 17.9,
+      "entities": 2,
+      "edges": 0,
+      "bytes": 1796
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "answered_from_memory",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 2,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 6223.9,
+     "llm": {
+      "requests": 1,
+      "ms": 2376.1,
+      "wait_ms": 3796.4,
+      "tokens": {
+       "prompt": 4213,
+       "completion": 108
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:10:31Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c10",
+     "subject_id": "merch-juniper-home-goods",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "busy_legit_merchant",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-juniper-home-goods\"}",
+       "ok": true,
+       "ms": 1.4,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-juniper-home-goods\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.5,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-juniper-home-goods\",\"depth\":6}",
+       "ok": true,
+       "ms": 237.1,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 23,
+      "ms": 240.7,
+      "entities": 9,
+      "edges": 6,
+      "bytes": 3370
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 10390.7,
+     "llm": {
+      "requests": 2,
+      "ms": 8291.8,
+      "wait_ms": 1822.4,
+      "tokens": {
+       "prompt": 8832,
+       "completion": 132
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:10:43Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c11",
+     "subject_id": "acct-4337834",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "benign_shared_device",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-4337834\"}",
+       "ok": true,
+       "ms": 1.4,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-4337834\",\"facts\":false}",
+       "ok": true,
+       "ms": 2.8,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-4337834\",\"depth\":6}",
+       "ok": true,
+       "ms": 101.0,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 28,
+      "ms": 103.7,
+      "entities": 4,
+      "edges": 1,
+      "bytes": 2393
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 9595.1,
+     "llm": {
+      "requests": 2,
+      "ms": 2800.8,
+      "wait_ms": 6659.9,
+      "tokens": {
+       "prompt": 8401,
+       "completion": 146
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:10:53Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c11",
+     "subject_id": "acct-4337834",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "benign_shared_device",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-4337834\"}",
+       "ok": true,
+       "ms": 2.9,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-4337834\",\"facts\":true}",
+       "ok": true,
+       "ms": 12.3,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 9,
+      "ms": 15.1,
+      "entities": 2,
+      "edges": 0,
+      "bytes": 1703
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "answered_from_memory",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 2,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 5011.1,
+     "llm": {
+      "requests": 1,
+      "ms": 1429.2,
+      "wait_ms": 3536.6,
+      "tokens": {
+       "prompt": 4212,
+       "completion": 113
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:10:58Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c11",
+     "subject_id": "acct-4337834",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "benign_shared_device",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-4337834\"}",
+       "ok": true,
+       "ms": 1.1,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-4337834\",\"facts\":false}",
+       "ok": true,
+       "ms": 2.7,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-4337834\",\"depth\":6}",
+       "ok": true,
+       "ms": 107.6,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 28,
+      "ms": 109.8,
+      "entities": 4,
+      "edges": 1,
+      "bytes": 2393
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 9304.6,
+     "llm": {
+      "requests": 2,
+      "ms": 2605.6,
+      "wait_ms": 6555.0,
+      "tokens": {
+       "prompt": 8399,
+       "completion": 137
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:11:08Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c12",
+     "subject_id": "acct-ind-743733",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "ip_then_device_association",
+     "split": "heldout",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-ind-743733\"}",
+       "ok": true,
+       "ms": 1.4,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-ind-743733\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.0,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-ind-743733\",\"depth\":6}",
+       "ok": true,
+       "ms": 54.8,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 25,
+      "ms": 57.9,
+      "entities": 8,
+      "edges": 5,
+      "bytes": 3834
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 9023.0,
+     "llm": {
+      "requests": 2,
+      "ms": 2533.9,
+      "wait_ms": 6392.2,
+      "tokens": {
+       "prompt": 9046,
+       "completion": 167
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:11:18Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c12",
+     "subject_id": "acct-ind-743733",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "ip_then_device_association",
+     "split": "heldout",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-ind-743733\"}",
+       "ok": true,
+       "ms": 3.8,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-ind-743733\",\"facts\":true}",
+       "ok": true,
+       "ms": 16.0,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 11,
+      "ms": 19.4,
+      "entities": 7,
+      "edges": 5,
+      "bytes": 3813
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "answered_from_memory",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 2,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 5277.7,
+     "llm": {
+      "requests": 1,
+      "ms": 1545.8,
+      "wait_ms": 3681.2,
+      "tokens": {
+       "prompt": 5149,
+       "completion": 132
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:11:23Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c12",
+     "subject_id": "acct-ind-743733",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "ip_then_device_association",
+     "split": "heldout",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-ind-743733\"}",
+       "ok": true,
+       "ms": 1.2,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-ind-743733\",\"facts\":false}",
+       "ok": true,
+       "ms": 2.9,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-ind-743733\",\"depth\":6}",
+       "ok": true,
+       "ms": 43.3,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 25,
+      "ms": 46.2,
+      "entities": 8,
+      "edges": 5,
+      "bytes": 3834
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 8953.6,
+     "llm": {
+      "requests": 2,
+      "ms": 2143.5,
+      "wait_ms": 6726.0,
+      "tokens": {
+       "prompt": 9048,
+       "completion": 140
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:11:33Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c13",
+     "subject_id": "acct-ind-533404",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "isolated_new_account",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-ind-533404\"}",
+       "ok": true,
+       "ms": 3.9,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-ind-533404\",\"facts\":false}",
+       "ok": true,
+       "ms": 5.6,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-ind-533404\",\"depth\":6}",
+       "ok": true,
+       "ms": 6.1,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 10,
+      "ms": 15.6,
+      "entities": 3,
+      "edges": 0,
+      "bytes": 1630
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 9728.2,
+     "llm": {
+      "requests": 2,
+      "ms": 2750.3,
+      "wait_ms": 6934.3,
+      "tokens": {
+       "prompt": 8060,
+       "completion": 147
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:11:43Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c13",
+     "subject_id": "acct-ind-533404",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "isolated_new_account",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-ind-533404\"}",
+       "ok": true,
+       "ms": 3.5,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-ind-533404\",\"facts\":true}",
+       "ok": true,
+       "ms": 16.7,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 9,
+      "ms": 19.9,
+      "entities": 2,
+      "edges": 0,
+      "bytes": 1691
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "answered_from_memory",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 2,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 4714.9,
+     "llm": {
+      "requests": 1,
+      "ms": 1509.7,
+      "wait_ms": 3141.2,
+      "tokens": {
+       "prompt": 4204,
+       "completion": 111
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:11:48Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c13",
+     "subject_id": "acct-ind-533404",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "isolated_new_account",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-ind-533404\"}",
+       "ok": true,
+       "ms": 1.3,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-ind-533404\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.1,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-ind-533404\",\"depth\":6}",
+       "ok": true,
+       "ms": 12.3,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 10,
+      "ms": 16.2,
+      "entities": 3,
+      "edges": 0,
+      "bytes": 1630
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 9745.0,
+     "llm": {
+      "requests": 2,
+      "ms": 5659.5,
+      "wait_ms": 4032.5,
+      "tokens": {
+       "prompt": 8056,
+       "completion": 150
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 1,
+     "at": "2026-10-17T14:11:59Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c14",
+     "subject_id": "merch-nesbit-mobile-top-up",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "device_bridge_lookalike",
+     "split": "heldout",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-nesbit-mobile-top-up\"}",
+       "ok": true,
+       "ms": 1.2,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-nesbit-mobile-top-up\",\"facts\":false}",
+       "ok": true,
+       "ms": 2.8,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-nesbit-mobile-top-up\",\"depth\":6}",
+       "ok": true,
+       "ms": 106.0,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 25,
+      "ms": 108.2,
+      "entities": 5,
+      "edges": 2,
+      "bytes": 2782
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 8078.4,
+     "llm": {
+      "requests": 2,
+      "ms": 3077.4,
+      "wait_ms": 4858.9,
+      "tokens": {
+       "prompt": 8524,
+       "completion": 129
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:12:08Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c14",
+     "subject_id": "merch-nesbit-mobile-top-up",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "device_bridge_lookalike",
+     "split": "heldout",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-nesbit-mobile-top-up\"}",
+       "ok": true,
+       "ms": 1.7,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-nesbit-mobile-top-up\",\"facts\":true}",
+       "ok": true,
+       "ms": 11.0,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 9,
+      "ms": 12.6,
+      "entities": 2,
+      "edges": 0,
+      "bytes": 1830
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "answered_from_memory",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 2,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 10360.5,
+     "llm": {
+      "requests": 1,
+      "ms": 6391.0,
+      "wait_ms": 3925.5,
+      "tokens": {
+       "prompt": 4228,
+       "completion": 105
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:12:18Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c14",
+     "subject_id": "merch-nesbit-mobile-top-up",
+     "group": "negative",
+     "category": "negative_control",
+     "pattern": "device_bridge_lookalike",
+     "split": "heldout",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-nesbit-mobile-top-up\"}",
+       "ok": true,
+       "ms": 1.1,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-nesbit-mobile-top-up\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.6,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-nesbit-mobile-top-up\",\"depth\":1}",
+       "ok": true,
+       "ms": 3.6,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-nesbit-mobile-top-up\",\"depth\":6}",
+       "ok": true,
+       "ms": 35.8,
+       "error": null
+      }
+     ],
+     "notices": [
+      "Playbook pb-8a52dedaf8 (device-linked sanctions exposure) matches this alert's topology. It was learned from ep-d53647964f on merch-nova-pay, whose freeze emp-priya-nair approved. Its steps run on merch-nesbit-mobile-top-up's own evidence, and any freeze is decided afresh.",
+      "Playbook pb-8a52dedaf8 stops: step 3 (trace_money_flow) needs the account just past the route's shared device, which merch-nesbit-mobile-top-up's evidence does not establish."
+     ],
+     "db": {
+      "queries": 32,
+      "ms": 43.2,
+      "entities": 12,
+      "edges": 8,
+      "bytes": 6191
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 4,
+     "verdict_step": 4,
+     "budget_exhausted": false,
+     "elapsed_ms": 2181.4,
+     "llm": {
+      "requests": 1,
+      "ms": 2108.8,
+      "wait_ms": 0.0,
+      "tokens": {
+       "prompt": 5876,
+       "completion": 101
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": {
+      "id": "pb-8a52dedaf8",
+      "ran": 2,
+      "stopped": "step 3 (trace_money_flow) needs the account just past the route's shared device, which merch-nesbit-mobile-top-up's evidence does not establish"
+     },
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:12:21Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c15",
+     "subject_id": "merch-yardley-gift-cards",
+     "group": "negative",
+     "category": "out_of_scope_positive",
+     "pattern": "device_bridge_beyond_depth",
+     "split": "heldout",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-yardley-gift-cards\"}",
+       "ok": true,
+       "ms": 2.0,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-yardley-gift-cards\",\"facts\":false}",
+       "ok": true,
+       "ms": 4.3,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-yardley-gift-cards\",\"depth\":6}",
+       "ok": true,
+       "ms": 84.9,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 20,
+      "ms": 89.9,
+      "entities": 3,
+      "edges": 0,
+      "bytes": 2084
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 8528.6,
+     "llm": {
+      "requests": 2,
+      "ms": 4183.5,
+      "wait_ms": 4160.1,
+      "tokens": {
+       "prompt": 8229,
+       "completion": 129
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:12:30Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c15",
+     "subject_id": "merch-yardley-gift-cards",
+     "group": "negative",
+     "category": "out_of_scope_positive",
+     "pattern": "device_bridge_beyond_depth",
+     "split": "heldout",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-yardley-gift-cards\"}",
+       "ok": true,
+       "ms": 5.2,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-yardley-gift-cards\",\"facts\":true}",
+       "ok": true,
+       "ms": 13.0,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 9,
+      "ms": 18.1,
+      "entities": 2,
+      "edges": 0,
+      "bytes": 1812
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "answered_from_memory",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 2,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 49480.1,
+     "llm": {
+      "requests": 1,
+      "ms": 45765.1,
+      "wait_ms": 3660.0,
+      "tokens": {
+       "prompt": 4207,
+       "completion": 115
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 1,
+     "at": "2026-10-17T14:13:20Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c15",
+     "subject_id": "merch-yardley-gift-cards",
+     "group": "negative",
+     "category": "out_of_scope_positive",
+     "pattern": "device_bridge_beyond_depth",
+     "split": "heldout",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-yardley-gift-cards\"}",
+       "ok": true,
+       "ms": 1.8,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-yardley-gift-cards\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.9,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-yardley-gift-cards\",\"depth\":1}",
+       "ok": true,
+       "ms": 4.0,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-yardley-gift-cards\",\"depth\":6}",
+       "ok": true,
+       "ms": 37.2,
+       "error": null
+      }
+     ],
+     "notices": [
+      "Playbook pb-8a52dedaf8 (device-linked sanctions exposure) matches this alert's topology. It was learned from ep-d53647964f on merch-nova-pay, whose freeze emp-priya-nair approved. Its steps run on merch-yardley-gift-cards's own evidence, and any freeze is decided afresh.",
+      "Playbook pb-8a52dedaf8 stops: step 3 (trace_money_flow) needs the account just past the route's shared device, which merch-yardley-gift-cards's evidence does not establish."
+     ],
+     "db": {
+      "queries": 27,
+      "ms": 46.2,
+      "entities": 8,
+      "edges": 4,
+      "bytes": 5117
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 4,
+     "verdict_step": 4,
+     "budget_exhausted": false,
+     "elapsed_ms": 1798.4,
+     "llm": {
+      "requests": 1,
+      "ms": 1714.9,
+      "wait_ms": 0.0,
+      "tokens": {
+       "prompt": 5442,
+       "completion": 113
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": {
+      "id": "pb-8a52dedaf8",
+      "ran": 2,
+      "stopped": "step 3 (trace_money_flow) needs the account just past the route's shared device, which merch-yardley-gift-cards's evidence does not establish"
+     },
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:13:22Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "c16",
+     "subject_id": "acct-9292238",
+     "group": "negative",
+     "category": "out_of_scope_positive",
+     "pattern": "peel_chain_beyond_depth",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-9292238\"}",
+       "ok": true,
+       "ms": 1.1,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-9292238\",\"facts\":false}",
+       "ok": true,
+       "ms": 2.8,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-9292238\",\"depth\":6}",
+       "ok": true,
+       "ms": 34.5,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 20,
+      "ms": 37.6,
+      "entities": 3,
+      "edges": 0,
+      "bytes": 1977
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 9271.9,
+     "llm": {
+      "requests": 2,
+      "ms": 3076.5,
+      "wait_ms": 6123.6,
+      "tokens": {
+       "prompt": 8190,
+       "completion": 145
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:13:32Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "c16",
+     "subject_id": "acct-9292238",
+     "group": "negative",
+     "category": "out_of_scope_positive",
+     "pattern": "peel_chain_beyond_depth",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-9292238\"}",
+       "ok": true,
+       "ms": 3.3,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-9292238\",\"facts\":true}",
+       "ok": true,
+       "ms": 12.7,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 9,
+      "ms": 16.0,
+      "entities": 2,
+      "edges": 0,
+      "bytes": 1690
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "answered_from_memory",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 2,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 5101.8,
+     "llm": {
+      "requests": 1,
+      "ms": 1698.2,
+      "wait_ms": 3355.9,
+      "tokens": {
+       "prompt": 4199,
+       "completion": 104
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:13:37Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "warm",
+     "repeat": 2,
+     "case_id": "c16",
+     "subject_id": "acct-9292238",
+     "group": "negative",
+     "category": "out_of_scope_positive",
+     "pattern": "peel_chain_beyond_depth",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-9292238\"}",
+       "ok": true,
+       "ms": 5.7,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-9292238\",\"facts\":false}",
+       "ok": true,
+       "ms": 5.4,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-9292238\",\"depth\":6}",
+       "ok": true,
+       "ms": 56.5,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 20,
+      "ms": 66.3,
+      "entities": 3,
+      "edges": 0,
+      "bytes": 1978
+     },
+     "failure": null,
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 8764.1,
+     "llm": {
+      "requests": 2,
+      "ms": 2630.4,
+      "wait_ms": 5999.2,
+      "tokens": {
+       "prompt": 8193,
+       "completion": 132
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "CLEAR",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:13:47Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "u01",
+     "subject_id": "acct-ghost-999",
+     "group": "unknown",
+     "category": "unknown_id",
+     "pattern": "unknown_id",
+     "split": null,
+     "expected": {
+      "verdict": "INSUFFICIENT",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "unknown_state": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-ghost-999\"}",
+       "ok": true,
+       "ms": 1.0,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 1,
+      "ms": 1.0,
+      "entities": 0,
+      "edges": 0,
+      "bytes": 120
+     },
+     "failure": null,
+     "verdict": "INSUFFICIENT",
+     "answer_state": "unknown_entity",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": false,
+     "tool_calls": 1,
+     "verdict_step": null,
+     "budget_exhausted": false,
+     "elapsed_ms": 25.4,
+     "llm": null,
+     "planner_used": "llm",
+     "model_proposed": null,
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:13:48Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "u02",
+     "subject_id": "merch-harrow-fresh-foods",
+     "group": "unknown",
+     "category": "unknown_id",
+     "pattern": "unknown_id",
+     "split": null,
+     "expected": {
+      "verdict": "INSUFFICIENT",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "unknown_state": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-harrow-fresh-foods\"}",
+       "ok": true,
+       "ms": 1.1,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 1,
+      "ms": 1.1,
+      "entities": 0,
+      "edges": 0,
+      "bytes": 130
+     },
+     "failure": null,
+     "verdict": "INSUFFICIENT",
+     "answer_state": "unknown_entity",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": false,
+     "tool_calls": 1,
+     "verdict_step": null,
+     "budget_exhausted": false,
+     "elapsed_ms": 27.1,
+     "llm": null,
+     "planner_used": "llm",
+     "model_proposed": null,
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:13:49Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "i01",
+     "subject_id": "merch-calloway-ticketing",
+     "group": "incomplete",
+     "category": "incomplete",
+     "pattern": "three_call_budget",
+     "split": null,
+     "expected": {
+      "verdict": "INSUFFICIENT",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-5131326",
+      "hops": 5
+     },
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\"}",
+       "ok": true,
+       "ms": 1.2,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\",\"facts\":false}",
+       "ok": true,
+       "ms": 2.8,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-calloway-ticketing\",\"depth\":6}",
+       "ok": true,
+       "ms": 88.5,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 28,
+      "ms": 91.0,
+      "entities": 8,
+      "edges": 5,
+      "bytes": 4599
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-5131326",
+     "hops": 5,
+     "route": [
+      "merch-calloway-ticketing",
+      "acct-calloway-ticketing-payouts",
+      "dev-732577c324",
+      "acct-thorne-freight",
+      "acct-9330192",
+      "acct-5131326"
+     ],
+     "qualified": false,
+     "tool_calls": 3,
+     "verdict_step": 3,
+     "budget_exhausted": true,
+     "elapsed_ms": 17093.7,
+     "llm": {
+      "requests": 2,
+      "ms": 11553.7,
+      "wait_ms": 5411.6,
+      "tokens": {
+       "prompt": 6718,
+       "completion": 250
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:14:06Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "i02",
+     "subject_id": "acct-100428660",
+     "group": "incomplete",
+     "category": "incomplete",
+     "pattern": "search_node_budget",
+     "split": null,
+     "expected": {
+      "verdict": "INSUFFICIENT",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-100428660\"}",
+       "ok": true,
+       "ms": 1.9,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-100428660\",\"facts\":false}",
+       "ok": true,
+       "ms": 5.7,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-100428660\",\"depth\":6}",
+       "ok": true,
+       "ms": 125.3,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-100428660\",\"depth\":6}",
+       "ok": true,
+       "ms": 210.2,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-100428660\",\"depth\":6}",
+       "ok": true,
+       "ms": 95.1,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-100428660\",\"depth\":6}",
+       "ok": true,
+       "ms": 138.9,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-100428660\",\"depth\":6}",
+       "ok": true,
+       "ms": 158.3,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-100428660\",\"depth\":6}",
+       "ok": true,
+       "ms": 175.2,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-100428660\",\"depth\":6}",
+       "ok": true,
+       "ms": 134.0,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-100428660\",\"depth\":6}",
+       "ok": true,
+       "ms": 148.3,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-100428660\",\"depth\":6}",
+       "ok": true,
+       "ms": 149.8,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-100428660\",\"depth\":6}",
+       "ok": true,
+       "ms": 149.5,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-100428660\",\"depth\":6}",
+       "ok": true,
+       "ms": 186.2,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-100428660\",\"depth\":6}",
+       "ok": true,
+       "ms": 156.1,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 113,
+      "ms": 1811.2,
+      "entities": 14,
+      "edges": 0,
+      "bytes": 12706
+     },
+     "failure": null,
+     "verdict": "INSUFFICIENT",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": false,
+     "tool_calls": 14,
+     "verdict_step": null,
+     "budget_exhausted": true,
+     "elapsed_ms": 62833.4,
+     "llm": {
+      "requests": 13,
+      "ms": 20802.7,
+      "wait_ms": 40113.8,
+      "tokens": {
+       "prompt": 77376,
+       "completion": 534
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "INSUFFICIENT",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:15:10Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "d01",
+     "subject_id": "merch-nova-pay",
+     "group": "demo",
+     "category": "demo",
+     "pattern": "demo_subject",
+     "split": "dev",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-vortex-holdings",
+      "hops": 5
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-nova-pay\"}",
+       "ok": true,
+       "ms": 1.6,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-nova-pay\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.6,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"merch-nova-pay\",\"depth\":6}",
+       "ok": true,
+       "ms": 595.8,
+       "error": null
+      },
+      {
+       "tool": "trace_money_flow",
+       "args": "{\"entity_id\":\"acct-volkov-clearing\",\"direction\":\"out\",\"max_hops\":4}",
+       "ok": true,
+       "ms": 15.1,
+       "error": null
+      },
+      {
+       "tool": "exposure_flow",
+       "args": "{\"source_ids\":[\"merch-nova-pay\",\"acct-nova-ops\",\"acct-volkov-clearing\",\"acct-baltic-trade\"],\"target_id\":\"acct-vortex-holdings\",\"include_shared_device_accounts\":...",
+       "ok": true,
+       "ms": 203.4,
+       "error": null
+      },
+      {
+       "tool": "detect_ring",
+       "args": "{\"entity_id\":\"acct-volkov-clearing\",\"runs\":1}",
+       "ok": true,
+       "ms": 164.6,
+       "error": null
+      },
+      {
+       "tool": "find_brokers",
+       "args": "{\"entity_id\":\"acct-volkov-clearing\",\"community_ids\":[\"acct-baltic-trade\",\"acct-orion-logistics\",\"acct-volkov-clearing\",\"acct-vortex-holdings\"]}",
+       "ok": true,
+       "ms": 41.5,
+       "error": null
+      },
+      {
+       "tool": "trace_governance",
+       "args": "{\"entity_id\":\"merch-nova-pay\"}",
+       "ok": true,
+       "ms": 46.8,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"merch-nova-pay\",\"acct-nova-ops\",\"acct-volkov-clearing\",\"acct-baltic-trade\",\"acct-orion-logistics\"]}",
+       "ok": true,
+       "ms": 33.5,
+       "error": null
+      },
+      {
+       "tool": "request_action",
+       "args": "{\"target_ids\":[\"merch-nova-pay\",\"acct-nova-ops\",\"acct-volkov-clearing\",\"acct-baltic-trade\",\"acct-orion-logistics\"],\"policy_id\":\"pol-aml-sec-4\",\"approver_id\":\"em...",
+       "ok": true,
+       "ms": 27.8,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 75,
+      "ms": 1122.0,
+      "entities": 56,
+      "edges": 35,
+      "bytes": 13469
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_with_path",
+     "target": "acct-vortex-holdings",
+     "hops": 5,
+     "route": [
+      "merch-nova-pay",
+      "acct-nova-ops",
+      "dev-fp-8821",
+      "acct-volkov-clearing",
+      "acct-baltic-trade",
+      "acct-vortex-holdings"
+     ],
+     "qualified": false,
+     "tool_calls": 10,
+     "verdict_step": 3,
+     "budget_exhausted": false,
+     "elapsed_ms": 43076.7,
+     "llm": {
+      "requests": 9,
+      "ms": 9712.5,
+      "wait_ms": 32137.5,
+      "tokens": {
+       "prompt": 59289,
+       "completion": 918
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": {
+      "id": "apr-215652cd",
+      "status": "PENDING_L3",
+      "targets": [
+       "merch-nova-pay",
+       "acct-nova-ops",
+       "acct-volkov-clearing",
+       "acct-baltic-trade",
+       "acct-orion-logistics"
+      ]
+     },
+     "provider_retries": 0,
+     "at": "2026-10-17T14:15:54Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "revisit",
+     "repeat": 2,
+     "case_id": "d01",
+     "subject_id": "merch-nova-pay",
+     "group": "demo",
+     "category": "demo",
+     "pattern": "demo_subject",
+     "split": "dev",
+     "expected": {
+      "verdict": "SUSPICIOUS",
+      "target": "acct-vortex-holdings",
+      "hops": 5
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "route": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"merch-nova-pay\"}",
+       "ok": true,
+       "ms": 4.2,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"merch-nova-pay\",\"facts\":true}",
+       "ok": true,
+       "ms": 25.3,
+       "error": null
+      },
+      {
+       "tool": "freeze_impact",
+       "args": "{\"target_ids\":[\"merch-nova-pay\",\"acct-nova-ops\",\"acct-volkov-clearing\",\"acct-baltic-trade\",\"acct-orion-logistics\"]}",
+       "ok": true,
+       "ms": 30.3,
+       "error": null
+      }
+     ],
+     "notices": [],
+     "db": {
+      "queries": 31,
+      "ms": 58.8,
+      "entities": 23,
+      "edges": 14,
+      "bytes": 12267
+     },
+     "failure": null,
+     "verdict": "SUSPICIOUS",
+     "answer_state": "answered_from_memory",
+     "target": "acct-vortex-holdings",
+     "hops": 5,
+     "route": [
+      "merch-nova-pay",
+      "acct-nova-ops",
+      "dev-fp-8821",
+      "acct-volkov-clearing",
+      "acct-baltic-trade",
+      "acct-vortex-holdings"
+     ],
+     "qualified": false,
+     "tool_calls": 3,
+     "verdict_step": 2,
+     "budget_exhausted": false,
+     "elapsed_ms": 10054.2,
+     "llm": {
+      "requests": 2,
+      "ms": 3171.8,
+      "wait_ms": 6776.0,
+      "tokens": {
+       "prompt": 15434,
+       "completion": 339
+      }
+     },
+     "planner_used": "llm",
+     "model_proposed": "SUSPICIOUS",
+     "playbook": null,
+     "request": null,
+     "provider_retries": 0,
+     "at": "2026-10-17T14:16:04Z"
+    },
+    {
+     "planner": "llm",
+     "condition": "cold",
+     "repeat": 2,
+     "case_id": "d02",
+     "subject_id": "acct-tier1-payroll",
+     "group": "demo",
+     "category": "demo",
+     "pattern": "demo_subject",
+     "split": "dev",
+     "expected": {
+      "verdict": "CLEAR",
+      "target": null,
+      "hops": null
+     },
+     "also_correct": null,
+     "correct": true,
+     "checks": {
+      "verdict": true,
+      "qualified": true
+     },
+     "trace": [
+      {
+       "tool": "resolve_entity",
+       "args": "{\"entity_id\":\"acct-tier1-payroll\"}",
+       "ok": true,
+       "ms": 1.3,
+       "error": null
+      },
+      {
+       "tool": "recall_memory",
+       "args": "{\"entity_id\":\"acct-tier1-payroll\",\"facts\":false}",
+       "ok": true,
+       "ms": 3.5,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-tier1-payroll\",\"depth\":1}",
+       "ok": true,
+       "ms": 20.6,
+       "error": null
+      },
+      {
+       "tool": "explore_neighborhood",
+       "args": "{\"entity_id\":\"acct-tier1-payroll\",\"depth\":6}",
+       "ok": true,
+       "ms": 549.6,
+       "error": null
+      }
+     ],
+     "notices": [
+      "The LLM failed (daily quota reached: GenerateRequestsPerDayPerProjectPerModel-FreeTier). The deterministic planner continues from the 2 tool results so far.",
+      "A sanctioned entity is within reach, but no eligible route leads there, so the investigation stops at association."
+     ],
+     "db": {
+      "queries": 36,
+      "ms": 566.5,
+      "entities": 32,
+      "edges": 28,
+      "bytes": 8383
+     },
+     "failure": "The LLM failed (daily quota reached: GenerateRequestsPerDayPerProjectPerModel-FreeTier). The deterministic planner continues from the 2 tool results so far.",
+     "verdict": "CLEAR",
+     "answer_state": "not_in_graph",
+     "target": null,
+     "hops": null,
+     "route": null,
+     "qualified": true,
+     "tool_calls": 4,
+     "verdict_step": 4,
+     "budget_exhausted": false,
+     "elapsed_ms": 11414.7,
+     "llm": null,
+     "planner_used": "llm+fallback",
+     "model_proposed": null,
+     "playbook": null,
+     "request": null,
+     "provider_retries": 4,
+     "at": "2026-10-17T14:16:16Z"
     }
    ]
   }
  },
- "updated_at": "2026-10-17T13:55:44Z",
+ "updated_at": "2026-10-17T14:16:16Z",
  "contention": {
   "at": "2026-10-17T13:20:53Z",
   "config": {
