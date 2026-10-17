@@ -3,6 +3,7 @@
 Usage (from the repo root):
     python -m backend.app.seed_data --reset
     python -m backend.app.seed_data --tenant globex-eu --profile small --reset
+    python -m backend.app.seed_data --if-missing      # what the container runs at start
 """
 
 from __future__ import annotations
@@ -244,7 +245,17 @@ def main() -> None:
     parser.add_argument("--profile", choices=["full", "small"], default="full",
                         help="small: a second tenant's fixture without the IBM slice")
     parser.add_argument("--no-snapshot", action="store_true", help="skip the pristine copy that resets restore")
+    parser.add_argument("--if-missing", action="store_true",
+                        help="leave a complete load alone (the pristine copy is its last step); rebuild a partial one")
     args = parser.parse_args()
+    if args.if_missing:
+        from .tenants import pristine_key
+
+        graphs = get_db().list_graphs()
+        if graph_key(args.tenant) in graphs and (args.no_snapshot or pristine_key(args.tenant) in graphs):
+            print(f"{graph_key(args.tenant)} is already loaded")
+            return
+        args.reset = True
     seed(args.tenant, args.reset, args.profile, snapshot=not args.no_snapshot)
 
 
