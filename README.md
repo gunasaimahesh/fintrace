@@ -514,7 +514,7 @@ deterministic planner.
 
 ## FalkorDB issues we hit
 
-Found while building (reports drafted for upstream; links added once filed):
+Found while building (reports drafted for upstream, not filed yet):
 
 - A `WHERE` on a `WITH` right after an `OPTIONAL MATCH` is planned inside the optional match (v4.22.1), so a
   failing test keeps the row with the variable set to NULL instead of dropping it:
