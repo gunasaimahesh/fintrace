@@ -389,12 +389,13 @@ provider latency and our 12-requests-a-minute limit, fell on 11 of the 12 runs a
 43.9 s cold, 64.9 s warm). With the deterministic planner the playbook runs the same tools as cold, by
 construction.
 
-The LLM runs predate `bf9e615`, which scopes verdicts to the subject's own facts, treats a sanctioned subject as
-direct exposure, and fences sign-off and hunters' writes. No saved run explored an account other than its subject
-or had a sanctioned subject, so none of their verdicts would change, and the prompt and tool outputs the model
-sees are unchanged.
+The LLM runs predate two sets of fixes: `bf9e615` scopes verdicts to the subject's own facts, treats a sanctioned
+subject as direct exposure, and fences sign-off and hunters' writes; `eb7b3df` files each freeze request complete,
+with the evidence it rests on, in one write. No saved run explored an account other than its subject or had a
+sanctioned subject, so none of their verdicts would change, and the prompt and tool outputs the model sees are
+unchanged.
 
-**Deterministic planner** (3 repeats, on `bf9e615`):
+**Deterministic planner** (3 repeats, on `eb7b3df`, the deployed code):
 
 | Condition | Detection | Positives | Negatives | Unknown IDs | Out of budget | Demo | Tool calls | Verdict at call | Failures |
 |---|---|---|---|---|---|---|---|---|---|

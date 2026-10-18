@@ -13,7 +13,8 @@ type LaneItem = {
   outcome?: AlertOutcome;
 };
 
-type Props = { tenant: string; board: Board | null; rules: string[]; llm: boolean; refresh: () => void };
+// llmOff says why the LLM planner can't be picked (null when it can); resets counts tenant resets made from this page.
+type Props = { tenant: string; resets: number; board: Board | null; rules: string[]; llmOff: string | null; refresh: () => void };
 
 function Lane({ worker, items }: { worker: string; items: LaneItem[] }) {
   return (
@@ -198,7 +199,7 @@ function Handoffs({ episodes }: { episodes: EpisodeRow[] }) {
   );
 }
 
-export function HuntersView({ tenant, board, rules, llm, refresh }: Props) {
+export function HuntersView({ tenant, resets, board, rules, llmOff, refresh }: Props) {
   const [workers, setWorkers] = useState(3);
   const [mode, setMode] = useState<"fallback" | "auto">("fallback");
   const [running, setRunning] = useState(false);
@@ -216,7 +217,7 @@ export function HuntersView({ tenant, board, rules, llm, refresh }: Props) {
     setLanes({});
     setSummary(null);
     setRunning(false);
-  }, [tenant]);
+  }, [tenant, resets]);
 
   function onEvent(event: DrainEvent) {
     if (event.type === "error") {
@@ -292,8 +293,8 @@ export function HuntersView({ tenant, board, rules, llm, refresh }: Props) {
         </select>
         <select className={field} value={mode} onChange={(e) => setMode(e.target.value as "fallback" | "auto")} disabled={running}>
           <option value="fallback">Planner: deterministic</option>
-          <option value="auto" disabled={!llm}>
-            Planner: LLM{llm ? "" : " (no key)"}
+          <option value="auto" disabled={!!llmOff}>
+            Planner: LLM{llmOff ? ` (${llmOff})` : ""}
           </option>
         </select>
         <button className={secondary} disabled={running} onClick={() => act(() => postJSON(api("/api/queue/reset", tenant)))}>

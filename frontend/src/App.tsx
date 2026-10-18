@@ -30,6 +30,7 @@ export default function App() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [resetting, setResetting] = useState(false);
+  const [resets, setResets] = useState(0);
 
   useEffect(() => {
     getJSON<{ default: string; tenants: string[] }>("/api/tenants")
@@ -63,6 +64,7 @@ export default function App() {
     setResetting(true);
     try {
       await postJSON(api("/api/reset", tenant));
+      setResets((n) => n + 1);
       refresh();
     } catch (e) {
       setApiError((e as Error).message);
@@ -145,10 +147,17 @@ export default function App() {
       {tenant && (
         <>
           <div className={shown("investigate")}>
-            <InvestigateView tenant={tenant} scenarios={scenarios} onError={setApiError} onFinished={refresh} />
+            <InvestigateView tenant={tenant} resets={resets} scenarios={scenarios} onError={setApiError} onFinished={refresh} />
           </div>
           <div className={`${shown("hunters")} overflow-y-auto`}>
-            <HuntersView tenant={tenant} board={board} rules={health?.alert_rules ?? []} llm={(health?.llm.enabled ?? false) && !demo} refresh={refresh} />
+            <HuntersView
+              tenant={tenant}
+              resets={resets}
+              board={board}
+              rules={health?.alert_rules ?? []}
+              llmOff={!health?.llm.enabled ? "no key" : demo ? "off in the public demo" : null}
+              refresh={refresh}
+            />
           </div>
           <div className={`${shown("memory")} overflow-y-auto`}>
             <MemoryView tenant={tenant} board={board} refresh={refresh} />

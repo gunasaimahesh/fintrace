@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getJSON } from "../api";
-import type { Condition, ContentionResult, ControlledResult, EvalResults, RetrievalResult, Score, Spread } from "../types";
+import type { Condition, ContentionResult, ControlledResult, EvalResults, RetrievalResult, Score, Spread, Stage } from "../types";
 import { Empty, Section, VerdictBadge, secondary } from "./ui";
 
 const CONDITIONS: { id: Condition; about: string }[] = [
@@ -73,12 +73,19 @@ function Toggle<T extends string>({ options, value, onChange }: { options: { id:
   );
 }
 
+function stageName({ repeats: [first, last], conditions }: Stage) {
+  return `${first === last ? `Repeat ${first}` : `Repeats ${first}–${last}`} (${conditions.join(", ")})`;
+}
+
 function Controlled({ result }: { result: ControlledResult }) {
   const { config, summary } = result;
   const rows = CONDITIONS.filter((c) => summary.conditions[c.id]);
   const llm = config.planner === "llm";
   const repeats = Array.isArray(config.repeats) ? config.repeats : [1, config.repeats];
-  const stopped = [...(result.stages ?? []).map((s) => s.stopped_early), result.stopped_early].filter(Boolean);
+  const stopped = [
+    ...(result.stages ?? []).flatMap((s) => (s.stopped_early ? [`${stageName(s)} stopped early ${s.stopped_early}`] : [])),
+    ...(result.stopped_early ? [`Stopped early ${result.stopped_early}`] : []),
+  ];
   const stageCommits = (result.stages ?? []).flatMap((s) => (s.commit ? [`${s.commit}${s.uncommitted_backend_changes ? " (with uncommitted backend changes)" : ""}`] : []));
   const commits = stageCommits.length ? [...new Set(stageCommits)] : [String(config.commit)];
   const misses = Object.entries(summary.cases).filter(([, c]) => rows.some((r) => c[r.id] && ratio(c[r.id]!.correct).correct < ratio(c[r.id]!.correct).runs));
@@ -153,7 +160,7 @@ function Controlled({ result }: { result: ControlledResult }) {
       </p>
       {stopped.map((s) => (
         <p key={s} className="text-xs text-amber-300">
-          Stopped early {s}
+          {s}
         </p>
       ))}
       {warm.playbook_used_on.length > 0 && (
@@ -371,7 +378,8 @@ export function EvalView({ active }: { active: boolean }) {
   if (!results) return <div className="p-5">{error ? <Empty>{error}</Empty> : <Empty>Loading the saved results…</Empty>}</div>;
 
   const planners = (["llm", "fallback"] as const).filter((p) => results.controlled?.[p]);
-  const controlled = results.controlled?.[planners.includes(planner) ? planner : planners[0]];
+  const shownPlanner = planners.includes(planner) ? planner : (planners[0] ?? planner);
+  const controlled = results.controlled?.[shownPlanner];
   const scopes = (["all", "pilot"] as const).filter((s) => results.retrieval?.[s]);
   const retrieval = results.retrieval?.[scopes.includes(scope) ? scope : scopes[0]];
 
@@ -393,7 +401,7 @@ export function EvalView({ active }: { active: boolean }) {
           planners.length > 1 && (
             <Toggle
               options={planners.map((p) => ({ id: p, label: p === "llm" ? "LLM planner" : "Deterministic planner" }))}
-              value={planners.includes(planner) ? planner : planners[0]}
+              value={shownPlanner}
               onChange={setPlanner}
             />
           )
@@ -402,7 +410,8 @@ export function EvalView({ active }: { active: boolean }) {
         <p className="text-xs leading-relaxed text-zinc-400">
           Sixteen labelled alerts on a seeded overlay outside the demo neighbourhood: seven positives with an eligible route to a sanctioned account within six
           hops, and nine look-alikes without one (IP-only links, money flowing the wrong way, routes longer than six hops). Then unknown IDs, runs starved of
-          budget, and the two demo subjects. LLM and deterministic runs are reported separately. <Command text="python -m backend.eval.run_eval --planner llm --repeats 3" />
+          budget, and the two demo subjects. LLM and deterministic runs are reported separately.{" "}
+          <Command text={`python -m backend.eval.run_eval --planner ${shownPlanner} --repeats 3`} />
         </p>
         {controlled ? <Controlled result={controlled} /> : <Empty>No controlled runs saved yet.</Empty>}
       </Section>

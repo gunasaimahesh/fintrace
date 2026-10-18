@@ -41,9 +41,10 @@ function Legend() {
   );
 }
 
-type Props = { tenant: string; scenarios: Scenario[]; onError: (message: string) => void; onFinished: () => void };
+// resets counts the tenant resets made from this page: the last run and the neighbourhoods are dropped with the data.
+type Props = { tenant: string; resets: number; scenarios: Scenario[]; onError: (message: string) => void; onFinished: () => void };
 
-export function InvestigateView({ tenant, scenarios, onError, onFinished }: Props) {
+export function InvestigateView({ tenant, resets, scenarios, onError, onFinished }: Props) {
   const [input, setInput] = useState("merch-nova-pay");
   const [entityId, setEntityId] = useState("merch-nova-pay");
   const [planner, setPlanner] = useState<"auto" | "fallback">("auto");
@@ -69,9 +70,12 @@ export function InvestigateView({ tenant, scenarios, onError, onFinished }: Prop
     return () => {
       cancelled = true;
     };
-  }, [entityId, tenant, onError]);
+  }, [entityId, tenant, resets, onError]);
 
-  useEffect(() => resetRun(), [tenant]);
+  useEffect(() => {
+    resetRun();
+    setView(1);
+  }, [tenant, resets]);
 
   function resetRun() {
     stopStream.current?.();
