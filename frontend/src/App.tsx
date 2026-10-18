@@ -17,6 +17,8 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "eval", label: "Eval" },
 ];
 
+const DEMO_NOTE_DISMISSED = "fintrace.demoNoteDismissed";
+
 function initialTenant() {
   return new URLSearchParams(window.location.search).get("tenant") ?? "";
 }
@@ -31,6 +33,7 @@ export default function App() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [resetting, setResetting] = useState(false);
   const [resets, setResets] = useState(0);
+  const [demoNote, setDemoNote] = useState(() => localStorage.getItem(DEMO_NOTE_DISMISSED) !== "1");
 
   useEffect(() => {
     getJSON<{ default: string; tenants: string[] }>("/api/tenants")
@@ -136,11 +139,24 @@ export default function App() {
         </div>
       </header>
       {apiError && health && <div className="border-b border-rose-500/30 bg-rose-500/10 px-5 py-1.5 text-xs text-rose-300">{apiError}</div>}
-      {demo && (
-        <div className="border-b border-sky-500/20 bg-sky-500/5 px-5 py-1.5 text-xs text-sky-200/80">
-          Public demo: every visitor shares these graphs, so changes are applied one at a time and everyone sees them. Reset tenant restores the seeded data.
-          {health?.llm.enabled &&
-            ` Model runs are capped at ${demo.llm_runs_per_hour} an hour (${demo.llm_runs_left} left) and ${demo.llm_runs_per_visitor_per_hour} per visitor; past that, investigations use the deterministic planner, as hunters always do here.`}
+      {demo && demoNote && (
+        <div className="flex items-start gap-3 border-b border-sky-500/20 bg-sky-500/5 px-5 py-1.5 text-xs text-sky-200/80">
+          <span>
+            Public demo: every visitor shares these graphs, so changes are applied one at a time and everyone sees them. Reset tenant restores the seeded data.
+            {health?.llm.enabled &&
+              ` Model runs are capped at ${demo.llm_runs_per_hour} an hour (${demo.llm_runs_left} left) and ${demo.llm_runs_per_visitor_per_hour} per visitor; past that, investigations use the deterministic planner, as hunters always do here.`}
+          </span>
+          <button
+            onClick={() => {
+              localStorage.setItem(DEMO_NOTE_DISMISSED, "1");
+              setDemoNote(false);
+            }}
+            title="Dismiss"
+            aria-label="Dismiss the public demo note"
+            className="ml-auto px-1 text-sm leading-none text-sky-200/60 hover:text-sky-100"
+          >
+            ×
+          </button>
         </div>
       )}
 
