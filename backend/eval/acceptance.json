@@ -1,7 +1,7 @@
 {
- "started_at": "2026-10-17T15:32:35Z",
- "finished_at": "2026-10-17T15:35:19Z",
- "commit": "7fd8413",
+ "started_at": "2026-10-18T05:37:59Z",
+ "finished_at": "2026-10-18T05:41:09Z",
+ "commit": "d196052",
  "uncommitted_changes": [],
  "graph": {
   "key": "fintrace:acme-pay",
@@ -9,8 +9,8 @@
   "rev": 0
  },
  "suite": {
-  "seconds": 70.6,
-  "passed": 108
+  "seconds": 84.3,
+  "passed": 137
  },
  "summary": {
   "pending": 2,
@@ -55,7 +55,7 @@
     {
      "check": "model_runs",
      "ok": true,
-     "evidence": "93 controlled runs with gemini-3.1-flash-lite (92 llm, 1 llm+fallback); 14 live run logs in backend/eval/runs/"
+     "evidence": "215 controlled runs with gemini-3.1-flash-lite (148 llm, 66 lookup-llm, 1 llm+fallback); 14 live run logs in backend/eval/runs/"
     },
     {
      "check": "failures_visible",
@@ -110,6 +110,18 @@
     },
     {
      "test": "test_guardrails.py::test_the_card_states_the_scope_behind_clear_and_insufficient",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_agent.py::test_a_route_the_model_found_from_another_account_does_not_decide_the_subject",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_agent.py::test_a_complete_search_the_model_ran_from_another_account_does_not_clear_the_subject",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_agent.py::test_a_sanctioned_subject_is_suspicious_without_a_route_and_is_not_put_up_for_freezing",
      "outcome": "passed"
     }
    ],
@@ -220,7 +232,31 @@
      "outcome": "passed"
     },
     {
+     "test": "test_memory.py::test_evidence_removed_while_sign_off_checks_it_freezes_nothing",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_racing_sign_offs_approve_once",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_a_request_is_complete_from_the_moment_it_can_be_signed_off",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_a_request_missing_a_target_link_freezes_nothing",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_memory.py::test_a_request_rests_on_its_route_from_the_moment_it_is_filed",
+     "outcome": "passed"
+    },
+    {
      "test": "test_coordination.py::test_an_expired_claim_goes_back_to_the_queue_and_its_token_can_no_longer_commit",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_coordination.py::test_a_lapsed_lease_cannot_renew_complete_or_fail_even_before_the_sweep",
      "outcome": "passed"
     },
     {
@@ -292,6 +328,26 @@
      "outcome": "passed"
     },
     {
+     "test": "test_coordination.py::test_a_hunter_whose_claim_passed_on_mid_run_publishes_nothing_and_the_new_owner_finishes",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_coordination.py::test_a_hunter_whose_claim_passes_on_just_after_it_files_leaves_one_complete_request",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_demo.py::test_a_reset_behind_a_mutation_holds_off_new_work_until_it_ends",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_demo.py::test_a_reset_waits_for_a_write_admitted_before_it",
+     "outcome": "passed"
+    },
+    {
+     "test": "test_demo.py::test_an_alert_raised_while_the_graph_is_restored_is_refused_and_lands_once_it_is_back",
+     "outcome": "passed"
+    },
+    {
      "test": "test_tenants.py::test_memory_queue_approvals_revision_and_reset_stay_inside_their_tenant",
      "outcome": "passed"
     },
@@ -304,7 +360,7 @@
     {
      "check": "contention_sound",
      "ok": true,
-     "evidence": "5 runs: 0 invariant violations, 69 late commits refused and 0 accepted, 101 crashed claims recovered"
+     "evidence": "5 runs: 0 invariant violations, 69 late commits refused and 0 accepted, 102 crashed claims recovered"
     }
    ],
    "manual": []
@@ -387,7 +443,7 @@
     {
      "check": "eval_recorded",
      "ok": true,
-     "evidence": "controlled (per planner) and IBM retrieval saved separately, each with graph, dataset version, commit, output limits, seed rule, failures and, for the LLM, requests and tokens; recorded with uncommitted backend changes: controlled.llm"
+     "evidence": "controlled (per planner) and IBM retrieval saved separately, each with graph, dataset version, commit, output limits, seed rule, failures and, for the LLM, requests and tokens; recorded with uncommitted backend changes: controlled.llm repeat 1 at d1384dd, controlled.llm repeat 2 at d1384dd"
     }
    ],
    "manual": []
@@ -406,12 +462,12 @@
     {
      "check": "repository_clean",
      "ok": true,
-     "evidence": "none of 113 tracked files is a planning doc, .env, raw data, virtualenv, node_modules, build output or tsbuildinfo"
+     "evidence": "none of 119 tracked files is a planning doc, .env, raw data, virtualenv, node_modules, build output or tsbuildinfo"
     },
     {
      "check": "clean_start",
      "ok": true,
-     "evidence": "fresh clone of git@github.com:gunasaimahesh/fintrace.git at 7fd8413: up and seeded in 23 s (59,149 nodes), NovaPay investigated as SUSPICIOUS by the deterministic planner, container tests: 108 passed in 67.38s (0:01:07)"
+     "evidence": "fresh clone of git@github.com:gunasaimahesh/fintrace.git at d196052: up and seeded in 25 s (59,149 nodes), NovaPay investigated as SUSPICIOUS by the deterministic planner, container tests: 137 passed in 77.20s (0:01:17)"
     },
     {
      "check": "links_ready",
