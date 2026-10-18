@@ -536,7 +536,7 @@ Found while building (reports drafted for upstream; links added once filed):
 backend/app/        agent, tools, queries, guardrails, memory, playbook, coordination, company, mutations, API
 backend/data/       IBM slice, scenario anchors, company source files, data license
 backend/eval/       cases, labels, evaluators, results.json and run logs
-backend/tests/      108 tests (pytest), run against throwaway copies of the seeded graph
+backend/tests/      137 tests (pytest), run against throwaway copies of the seeded graph
 frontend/           React + Vite UI
 scripts/            how the IBM slice was built from the published dataset
 ```
