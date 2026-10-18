@@ -9,9 +9,8 @@ find that route, show what it rests on, check who in the company waived the cont
 caught it, ask the right on-call officer to approve a surgical freeze, and remember all of it, so the next
 investigation starts from what is already known and notices when the evidence changes.
 
-**Hackathon:** WeMakeDevs × FalkorDB *Graph Hacks: Context for AI Agents*. **Tracks entered:**
-[Track 1: Connected Data](#track-1-connected-data), [Track 2: Memory & Coordination](#track-2-memory--coordination)
-and [Track 3: Company Brain](#track-3-company-brain).
+The work falls into three parts: [acting on connected data](#acting-on-connected-data),
+[memory and coordination](#memory-and-coordination) and [company knowledge](#company-knowledge).
 
 - **Demo video:** *link added at submission*
 - **Live demo:** [app-production-1451.up.railway.app](https://app-production-1451.up.railway.app) (shared demo graph; see [Public demo](#public-demo))
@@ -238,7 +237,7 @@ its device returns **$132,000**. That is an upper bound over `FLOWS_TO` capaciti
 timing ignored), with the device as an identity link: it is not proof that $132,000 moved from NovaPay to the
 sanctioned account.
 
-## Track 1: Connected Data
+## Acting on connected data
 
 | Claim | Evidence |
 |---|---|
@@ -252,7 +251,7 @@ sanctioned account.
 | Nothing in the graph, tool schemas or prompt gives the answer away | `test_no_ground_truth_in_graph`, `test_tool_schemas_and_the_prompt_name_nothing_from_the_scenario` |
 | On 16 labelled cases the agent's verdict and route were right on every run (48 with the real model, 48 with the deterministic planner); one-entity lookups with the same budget and verdict rule ended INSUFFICIENT on 12 of 48 with either planner, never with a wrong verdict | [Evaluation](#evaluation) |
 
-## Track 2: Memory & Coordination
+## Memory and coordination
 
 **Memory lives in the graph, next to the evidence it rests on.** Every investigation opens a `:Case`, writes an
 `:Episode` with its `:Step`s, and records typed `:SemanticFact`s with `DERIVED_FROM` links to the entities and
@@ -303,7 +302,7 @@ injected crashes, stalls and failures, nothing is lost or completed twice ([Cont
 reset stay inside it through the API (`test_memory_queue_approvals_revision_and_reset_stay_inside_their_tenant`).
 This is demo data isolation, not access control.
 
-## Track 3: Company Brain
+## Company knowledge
 
 The company's own knowledge is part of the graph, built from source files in `backend/data/company/` (synthetic):
 the org chart (`org.toml`), policies (`policies/*.md`, TOML front matter), tickets, chat messages and approval
@@ -548,10 +547,10 @@ FinTrace was built with substantial AI assistance:
 - Most of the code, tests and documentation were written by Claude Opus 5.5 working as a coding agent in Cursor.
 - The plans were drafted and reviewed across several AI models (Claude Opus 5.5, GPT-6 Astra and Codex), each
   reviewing the others' proposals.
-- The participant chose the problem and the track strategy, set the scope and constraints, ran the review rounds
+- The author chose the problem and what to build, set the scope and constraints, ran the review rounds
   between the models and decided between their proposals, and set up the environment (FalkorDB, the LLM provider,
   the MCP server in Cursor).
-<!-- Participant: check the line above and add anything you did (testing, recording, reviewing code), in your own words. -->
+<!-- Author: check the line above and add anything you did (testing, recording, reviewing code), in your own words. -->
 
 Every measured number in this README is produced by a command in this repository, and the saved results keep the
 failures.

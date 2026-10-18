@@ -41,9 +41,9 @@ PLANNING_DOCS = {"MASTER_PLAN.md", "BUILD_PLAN.md", "FINAL_PLAN.md", "PRIZE_EXEC
                  "PRIZE_EXECUTION_PLAN_REVIEW.md", "CODEX_IMPLEMENTATION_REVIEW.md"}
 NEVER_TRACKED = (".env", "data/raw/", ".venv/", "frontend/node_modules/", "frontend/dist/")
 BANNED_WORDS = ("100%", "undeniable")
-TRACKS = ("Track 1: Connected Data", "Track 2: Memory & Coordination", "Track 3: Company Brain")
-README_SECTIONS = ("## Verify our claims", "## Graph data model", "## Core Cypher", "## Evaluation",
-                   "## Limitations", "## AI assistance", "## Data and license")
+README_SECTIONS = ("## Verify our claims", "## Graph data model", "## Core Cypher", "## Acting on connected data",
+                   "## Memory and coordination", "## Company knowledge", "## Evaluation", "## Limitations",
+                   "## AI assistance", "## Data and license")
 PLACEHOLDER = "link added at submission"
 CLEAN_START_PORTS = {"APP_PORT": 8100, "FALKORDB_PUBLISHED_PORT": 6390, "FALKORDB_BROWSER_PORT": 3100}
 
@@ -168,10 +168,10 @@ def eval_recorded(ctx: Context) -> tuple[bool, str]:
 
 def readme_complete(ctx: Context) -> tuple[bool, str]:
     text = ctx.readme
-    missing = [t for t in TRACKS if t not in text] + [s for s in README_SECTIONS if s not in text]
+    missing = [s for s in README_SECTIONS if s not in text]
     banned = [w for w in BANNED_WORDS if w.lower() in text.lower()]
     ok = bool(text) and not missing and not banned
-    return ok, ("README names all three tracks and has every required section; none of "
+    return ok, ("README has every required section; none of "
                 f"{', '.join(BANNED_WORDS)}" if ok else f"missing: {missing}; banned words: {banned}")
 
 
@@ -316,10 +316,10 @@ ROWS = [
         [eval_recorded]),
     Row("Submission",
         "Clean-start reproduction, usable repository/video links, required README/AI disclosure, accurate "
-        "selected-track claims, and saved submission confirmation.",
+        "claims, and saved submission confirmation.",
         [],
         [readme_complete, repository_clean, clean_start, links_ready],
-        {"ai-disclosure": "The participant has reviewed the AI-assistance section and their contributions in it",
+        {"ai-disclosure": "The author has reviewed the AI-assistance section and their contributions in it",
          "video": "The demo video is public and linked from the README and the submission",
          "submitted": "The submission form is filed and its confirmation saved"}),
 ]
