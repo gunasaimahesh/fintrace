@@ -544,13 +544,11 @@ scripts/            how the IBM slice was built from the published dataset
 
 FinTrace was built with substantial AI assistance:
 
-- Most of the code, tests and documentation were written by Claude Opus 5.5 working as a coding agent in Cursor.
-- The plans were drafted and reviewed across several AI models (Claude Opus 5.5, GPT-6 Astra and Codex), each
-  reviewing the others' proposals.
+- Most of the code, tests and documentation were written by LLMs working as coding agents in Cursor.
+- The plans were drafted and reviewed across several LLMs, each reviewing the others' proposals.
 - The author chose the problem and what to build, set the scope and constraints, ran the review rounds
   between the models and decided between their proposals, and set up the environment (FalkorDB, the LLM provider,
   the MCP server in Cursor).
-<!-- Author: check the line above and add anything you did (testing, recording, reviewing code), in your own words. -->
 
 Every measured number in this README is produced by a command in this repository, and the saved results keep the
 failures.
