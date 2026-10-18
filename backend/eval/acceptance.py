@@ -132,6 +132,10 @@ def approval_labelled(ctx: Context) -> tuple[bool, str]:
     return ok, "the Approval Inbox and its sign-off button say sign-off is simulated; so does the README"
 
 
+def _repeats(span: list[int]) -> str:
+    return f"repeat {span[0]}" if span[0] == span[1] else f"repeats {span[0]}–{span[1]}"
+
+
 def eval_recorded(ctx: Context) -> tuple[bool, str]:
     r, problems = ctx.results, []
     if not (r.get("controlled") and r.get("retrieval", {}).get("all")):
@@ -152,6 +156,8 @@ def eval_recorded(ctx: Context) -> tuple[bool, str]:
     problems += [f"retrieval config lacks {', '.join(missing)}"] if missing else []
     dirty = [name for name, cfg in [*((f"controlled.{p}", v["config"]) for p, v in r["controlled"].items()),
                                     ("retrieval.all", retrieval)] if cfg.get("uncommitted_backend_changes")]
+    dirty += [f"controlled.{p} {_repeats(s['repeats'])} at {s.get('commit')}"
+              for p, v in r["controlled"].items() for s in v.get("stages", []) if s.get("uncommitted_backend_changes")]
     note = (f"; recorded with uncommitted backend changes: {', '.join(dirty)}" if dirty
             else "; every result was recorded from a committed backend")
     return not problems, ("; ".join(problems) if problems else
@@ -222,7 +228,10 @@ ROWS = [
          "test_agent.py::test_sharing_only_a_proxy_ip_with_a_sanctioned_route_is_association_not_exposure",
          "test_guardrails.py::test_clear_needs_the_prescribed_depth_or_an_exhausted_frontier",
          "test_guardrails.py::test_an_eligible_route_is_suspicious_even_when_another_search_was_cut_short",
-         "test_guardrails.py::test_the_card_states_the_scope_behind_clear_and_insufficient"]),
+         "test_guardrails.py::test_the_card_states_the_scope_behind_clear_and_insufficient",
+         "test_agent.py::test_a_route_the_model_found_from_another_account_does_not_decide_the_subject",
+         "test_agent.py::test_a_complete_search_the_model_ran_from_another_account_does_not_clear_the_subject",
+         "test_agent.py::test_a_sanctioned_subject_is_suspicious_without_a_route_and_is_not_put_up_for_freezing"]),
     Row("Bound claims",
         "Swapping monthly volume with exposure, another subject's path length, or another approval's status is "
         "rejected. Authoritative output cites the right structured result.",
@@ -252,7 +261,10 @@ ROWS = [
          "test_guardrails.py::test_stale_memory_says_what_changed_and_fresh_facts_decide",
          "test_memory.py::test_a_change_during_the_investigation_is_not_cached",
          "test_memory.py::test_sign_off_is_refused_once_the_evidence_changed",
+         "test_memory.py::test_evidence_removed_while_sign_off_checks_it_freezes_nothing",
+         "test_memory.py::test_racing_sign_offs_approve_once",
          "test_coordination.py::test_an_expired_claim_goes_back_to_the_queue_and_its_token_can_no_longer_commit",
+         "test_coordination.py::test_a_lapsed_lease_cannot_renew_complete_or_fail_even_before_the_sweep",
          "test_coordination.py::test_twenty_claimants_and_a_sweeper_lose_nothing_and_complete_each_alert_once",
          "test_coordination.py::test_two_cases_racing_to_freeze_the_same_accounts_cannot_both_file"]),
     Row("Procedural memory",
@@ -271,6 +283,8 @@ ROWS = [
          "test_coordination.py::test_a_later_hunter_reuses_an_earlier_hunters_route_and_defers_to_its_freeze",
          "test_coordination.py::test_cases_merge_only_on_a_high_risk_entity_or_two_shared_entities",
          "test_coordination.py::test_failed_alerts_are_retried_until_the_last_attempt_then_stay_failed_and_visible",
+         "test_coordination.py::test_a_hunter_whose_claim_passed_on_mid_run_publishes_nothing_and_the_new_owner_finishes",
+         "test_demo.py::test_a_reset_behind_a_mutation_holds_off_new_work_until_it_ends",
          "test_tenants.py::test_memory_queue_approvals_revision_and_reset_stay_inside_their_tenant",
          "test_tenants.py::test_tenant_names_are_checked_before_any_graph_is_touched"],
         [contention_sound]),
