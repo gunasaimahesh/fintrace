@@ -529,6 +529,14 @@ def model_answer(answer: dict, verdict: Verdict, facts: list, inv: Investigation
     }
 
 
+def request_evidence(inv: Investigation) -> tuple[int | None, list[str]]:
+    """What a freeze request filed now rests on: the dependencies of the facts the verdict rests on so far, to be
+    unchanged since the revision the investigation started from."""
+    facts = gr.extract_facts(inv.results, inv.rev)
+    _, _, basis = gr.derive(facts, inv.unknown, inv.entity_id)
+    return inv.rev, [d for f in facts if f.id in basis for d in f.depends_on]
+
+
 def finalize(inv: Investigation, answer: dict | None, model: str | None, started: float,
              statuses: dict[str, str] | None = None) -> dict:
     facts = gr.extract_facts(inv.results, inv.rev)
@@ -590,7 +598,8 @@ async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: 
     start_rev = await asyncio.to_thread(current_rev, graph)
     if remember and not await asyncio.to_thread(memory.open_case, graph, case_id, entity_id, worker_id, claim=claim):
         raise ClaimLost(f"{worker_id} no longer holds the claim on {claim.alert_id}, so it did not start")
-    async with Client(build_server(key, worker_id, claim)) as client:
+    inv: Investigation | None = None
+    async with Client(build_server(key, worker_id, claim, evidence=lambda: request_evidence(inv))) as client:
         inv = Investigation(entity_id=entity_id, case_id=case_id, max_steps=max_steps, worker_id=worker_id,
                             planner="llm" if use_llm else "fallback", client=client, emit=emit, rev=start_rev)
         model = settings.llm_model if use_llm else None
@@ -627,12 +636,6 @@ async def _run(emit: Emit, entity_id: str, key: str, worker_id: str, max_steps: 
         final = finalize(inv, answer, model, started, statuses)
         final["memory"] = None
         if remember:
-            request = inv.latest("request_action")
-            if request:
-                basis = [f for f in final["facts"] if f["id"] in final["verdict_basis"]]
-                await asyncio.to_thread(memory.attach_request_evidence, graph, request["request_id"], start_rev,
-                                        request["target_ids"] + [d for f in basis for d in f["depends_on"]],
-                                        claim=claim)
             final["memory"] = await asyncio.to_thread(
                 memory.persist_run, graph, case_id=case_id, entity_id=entity_id, worker_id=worker_id,
                 planner=inv.planner, model=model, start_rev=start_rev, results=inv.results, final=final,

@@ -6,13 +6,18 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+import threading
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from backend.app import coordination as co
 from backend.app import demo, main
 from backend.app.config import get_settings
+from backend.app.db import get_db
+
+ALERT = {"subject_id": "acct-ind-20118", "rule": "large_outbound_wire", "priority": 3}
 
 
 @pytest.fixture
@@ -62,16 +67,25 @@ def investigate_unknown(client: TestClient, tenant: str) -> list[dict]:
         return [json.loads(line[5:]) for line in response.iter_lines() if line.startswith("data:")]
 
 
+def alerts_on(key: str, subject: str) -> list[str]:
+    return [a["id"] for a in co.queue_state(get_db().select_graph(key)) if a["subject_id"] == subject]
+
+
+def api() -> httpx.AsyncClient:
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://fintrace")
+
+
 @pytest.mark.graph
 def test_a_reset_behind_a_mutation_holds_off_new_work_until_it_ends(small_tenant, monkeypatch):
     guard, key, params = demo.Guard(), f"fintrace:{small_tenant}", {"tenant": small_tenant}
     monkeypatch.setattr(main, "guard", guard)
     monkeypatch.setattr(main, "_locks", {})
+    before = alerts_on(key, ALERT["subject_id"])
 
     async def scenario():
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://fintrace") as client:
-            mutation = main._lock(key, "mutation")
-            await mutation.acquire()
+        async with api() as client:
+            write = main._lock(key, "write")
+            await write.acquire()
             reset = asyncio.create_task(client.post("/api/reset", params=params))
             while key not in guard.resetting:
                 await asyncio.sleep(0.01)
@@ -82,22 +96,101 @@ def test_a_reset_behind_a_mutation_holds_off_new_work_until_it_ends(small_tenant
                                          json={"kind": "set_sanctioned", "account": "acct-ind-20118", "sanctioned": True}),
                        await client.post("/api/approvals/apr-00000000/approve", params=params,
                                          json={"approver_id": "emp-priya-nair"}),
+                       await client.post("/api/alerts", params=params, json=ALERT),
                        await client.post("/api/reset", params=params)]
-            assert not reset.done(), "the reset did not wait for the mutation"
-            mutation.release()
+            assert not reset.done(), "the reset did not wait for the write under way"
+            assert alerts_on(key, ALERT["subject_id"]) == before, "an alert was raised while the reset was waiting"
+            write.release()
             return refused, await reset
 
     refused, done = asyncio.run(scenario())
-    assert [r.status_code for r in refused] == [409] * 6
+    assert [r.status_code for r in refused] == [409] * 7
     assert all("being reset" in r.json()["detail"] for r in refused)
     assert done.status_code == 200 and not guard.resetting
     assert investigate_unknown(TestClient(main.app), small_tenant)[-1]["answer_state"] == "unknown_entity"
 
 
 @pytest.mark.graph
+def test_an_alert_raised_while_the_graph_is_restored_is_refused_and_lands_once_it_is_back(small_tenant, monkeypatch):
+    guard, key, params = demo.Guard(), f"fintrace:{small_tenant}", {"tenant": small_tenant}
+    monkeypatch.setattr(main, "guard", guard)
+    monkeypatch.setattr(main, "_locks", {})
+    restore, restoring, go = main.tenants.reset, threading.Event(), threading.Event()
+
+    def slow_restore(tenant):
+        restoring.set()
+        go.wait(10)
+        return restore(tenant)
+
+    monkeypatch.setattr(main.tenants, "reset", slow_restore)
+
+    async def scenario():
+        async with api() as client:
+            reset = asyncio.create_task(client.post("/api/reset", params=params))
+            await asyncio.to_thread(restoring.wait, 10)
+            during = await client.post("/api/alerts", params=params, json=ALERT)
+            go.set()
+            done = await reset
+            return during, done, await client.post("/api/alerts", params=params, json=ALERT)
+
+    during, done, after = asyncio.run(scenario())
+    assert during.status_code == 409 and "being reset" in during.json()["detail"]
+    assert done.status_code == 200 and after.status_code == 200
+    assert after.json()["id"] in alerts_on(key, ALERT["subject_id"])
+
+
+@pytest.mark.graph
+@pytest.mark.parametrize(("path", "body", "module", "name", "status"), [
+    ("/api/alerts", ALERT, co, "raise_alert", 200),
+    ("/api/approvals/apr-00000000/approve", {"approver_id": "emp-priya-nair"}, main.q, "approve_action", 409),
+    ("/api/queue/reset", None, co, "reset_queue", 200),
+], ids=["alert", "approval", "queue-reset"])
+def test_a_reset_waits_for_a_write_admitted_before_it(small_tenant, monkeypatch, path, body, module, name, status):
+    guard, key, params = demo.Guard(), f"fintrace:{small_tenant}", {"tenant": small_tenant}
+    monkeypatch.setattr(main, "guard", guard)
+    monkeypatch.setattr(main, "_locks", {})
+    write, restore = getattr(module, name), main.tenants.reset
+    order, admitted, go = [], threading.Event(), threading.Event()
+
+    def held(*args, **kwargs):
+        admitted.set()
+        go.wait(10)
+        try:
+            return write(*args, **kwargs)
+        finally:
+            order.append("write")
+
+    def restore_after(tenant):
+        order.append("restore")
+        return restore(tenant)
+
+    monkeypatch.setattr(module, name, held)
+    monkeypatch.setattr(main.tenants, "reset", restore_after)
+
+    async def scenario():
+        async with api() as client:
+            pending = asyncio.create_task(client.post(path, params=params, json=body))
+            await asyncio.to_thread(admitted.wait, 10)
+            reset = asyncio.create_task(client.post("/api/reset", params=params))
+            while key not in guard.resetting:
+                await asyncio.sleep(0.01)
+            refused = await client.post("/api/alerts", params=params, json=ALERT)
+            await asyncio.sleep(0.2)
+            waited = not reset.done()
+            go.set()
+            return await pending, await reset, refused, waited
+
+    written, reset, refused, waited = asyncio.run(scenario())
+    assert written.status_code == status and reset.status_code == 200
+    assert refused.status_code == 409 and waited, "the reset did not wait for the write admitted before it"
+    assert order == ["write", "restore"]
+
+
+@pytest.mark.graph
 def test_a_failed_reset_lifts_its_hold(small_tenant, monkeypatch):
     guard = demo.Guard()
     monkeypatch.setattr(main, "guard", guard)
+    monkeypatch.setattr(main, "_locks", {})
 
     def broken(_):
         raise RuntimeError("the copy failed")
@@ -107,6 +200,8 @@ def test_a_failed_reset_lifts_its_hold(small_tenant, monkeypatch):
     assert client.post("/api/reset", params={"tenant": small_tenant}).status_code == 500
     assert not guard.resetting
     assert investigate_unknown(client, small_tenant)[-1]["answer_state"] == "unknown_entity"
+    raised = client.post("/api/alerts", params={"tenant": small_tenant}, json=ALERT)
+    assert raised.status_code == 200 and raised.json()["id"] in alerts_on(f"fintrace:{small_tenant}", ALERT["subject_id"])
 
 
 @pytest.mark.graph

@@ -288,6 +288,80 @@ def test_racing_sign_offs_approve_once(fresh_key, monkeypatch):
     assert signed_off(graph, request)[:2] == ("APPROVED", 1)
 
 
+class SignsOffOnSight:
+    """A graph through which another client signs off the request as soon as any write has made it visible."""
+
+    def __init__(self, graph, case: str):
+        self.graph, self.case, self.outcome = graph, case, None
+
+    def ro_query(self, *args, **kwargs):
+        return self.graph.ro_query(*args, **kwargs)
+
+    def query(self, *args, **kwargs):
+        result = self.graph.query(*args, **kwargs)
+        visible = self.graph.ro_query("MATCH (r:ApprovalRequest)-[:FOR_CASE]->(:Case {id: $c}) RETURN r.id",
+                                      {"c": self.case}).result_set
+        if visible and self.outcome is None:
+            self.outcome = q.approve_action(self.graph, visible[0][0], s.PRIYA)
+        return result
+
+
+def test_a_request_is_complete_from_the_moment_it_can_be_signed_off(fresh_key):
+    graph = get_db().select_graph(fresh_key)
+    eager = SignsOffOnSight(graph, "case-eager")
+    request = q.request_action(eager, "case-eager", [s.VOLKOV, s.BALTIC], [s.VIP], "FREEZE", s.POLICY, s.PRIYA,
+                               "test", requested_by="tester")["request_id"]
+    assert (eager.outcome["frozen"], eager.outcome["spared"]) == (sorted([s.VOLKOV, s.BALTIC]), [s.VIP])
+    assert signed_off(graph, request) == ("APPROVED", 1, sorted([s.VOLKOV, s.BALTIC]))
+    status = graph.ro_query("MATCH (a:Entity {id: $id}) RETURN a.status", {"id": s.VIP}).result_set[0][0]
+    assert status != "FROZEN"
+
+
+@pytest.mark.parametrize("when", ["before sign-off", "while sign-off checks"])
+def test_a_request_missing_a_target_link_freezes_nothing(fresh_key, monkeypatch, when):
+    """Deleting the link directly doesn't bump the revision, so while sign-off checks, only the write's own
+    target check can stop it."""
+    graph = get_db().select_graph(fresh_key)
+    request = q.request_action(graph, "case-partial", [s.VOLKOV, s.BALTIC], [], "FREEZE", s.POLICY, s.PRIYA, "test",
+                               requested_by="tester")["request_id"]
+
+    def unlink(g) -> None:
+        g.query("MATCH (:ApprovalRequest {id: $r})-[t:TARGETS]->(:Entity {id: $a}) DELETE t",
+                {"r": request, "a": s.BALTIC})
+
+    if when == "before sign-off":
+        unlink(graph)
+    else:
+        during_check(monkeypatch, unlink)
+    with pytest.raises(ValueError, match=f"is now STALE: its link to target {s.BALTIC} is missing"):
+        q.approve_action(graph, request, s.PRIYA)
+    assert signed_off(graph, request) == ("STALE", 0, [])
+
+
+@pytest.mark.parametrize("memory_mode", ["on", "off"])
+def test_a_request_rests_on_its_route_from_the_moment_it_is_filed(fresh_key, monkeypatch, memory_mode):
+    """The approver signs off while the investigation that filed the request is still running, just after the
+    route's sanctioned account was delisted. Vortex is on the route but is no freeze target."""
+    graph = get_db().select_graph(fresh_key)
+    call, outcome = agent.Investigation.call, {}
+
+    async def call_then_sign_off(inv, tool, args, thought=None):
+        envelope = await call(inv, tool, args, thought)
+        if tool == "request_action" and envelope["ok"]:
+            await asyncio.to_thread(m.set_sanctioned, graph, s.VORTEX, False)
+            try:
+                await asyncio.to_thread(q.approve_action, graph, envelope["data"]["request_id"], s.PRIYA)
+            except ValueError as exc:
+                outcome["refused"] = str(exc)
+        return envelope
+
+    monkeypatch.setattr(agent.Investigation, "call", call_then_sign_off)
+    _, final = run(s.NOVAPAY, fresh_key, memory_mode=memory_mode)
+    assert s.VORTEX not in final["approval_request"]["target_ids"]
+    assert "is now STALE" in outcome.get("refused", "") and s.VORTEX in outcome["refused"]
+    assert signed_off(graph, final["approval_request"]["request_id"]) == ("STALE", 0, [])
+
+
 def test_transfer_writes_keep_raw_and_summary_edges_consistent(fresh_key):
     graph = get_db().select_graph(fresh_key)
     before = current_rev(graph)

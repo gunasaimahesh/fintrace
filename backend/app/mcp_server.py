@@ -8,6 +8,7 @@ point it at a graph other than the default tenant's.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import MCPServer
@@ -35,9 +36,10 @@ SCOPED = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempoten
 WRITE = ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=False)
 
 
-def build_server(key: str | None = None, worker_id: str = "mcp-client", claim: Claim | None = None) -> MCPServer:
+def build_server(key: str | None = None, worker_id: str = "mcp-client", claim: Claim | None = None,
+                 evidence: Callable[[], tuple[int | None, list[str]]] | None = None) -> MCPServer:
     ctx = t.ToolContext(graph=get_db().select_graph(key or graph_key(get_settings().default_tenant)),
-                        worker_id=worker_id, claim=claim)
+                        worker_id=worker_id, claim=claim, evidence=evidence)
     server = MCPServer("FinTrace", instructions=INSTRUCTIONS)
 
     @server.tool(annotations=READ)

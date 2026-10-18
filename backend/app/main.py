@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Annotated, Literal
+from collections.abc import Callable
+from typing import Annotated, Any, Literal, TypeVar
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -53,6 +54,7 @@ EVAL_RESULTS = ROOT / "backend" / "eval" / "results.json"
 BULKY = {"runs", "instances", "seeds"}
 
 Tenant = Annotated[str | None, Query(description="Tenant whose graph to use; defaults to DEFAULT_TENANT")]
+T = TypeVar("T")
 _locks: dict[tuple[str, str], asyncio.Lock] = {}
 
 
@@ -95,6 +97,16 @@ def _graph(tenant: str | None):
 
 def _lock(key: str, purpose: str) -> asyncio.Lock:
     return _locks.setdefault((key, purpose), asyncio.Lock())
+
+
+async def _write(key: str, work: Callable[..., T], *args: Any) -> T:
+    """Run one write on the tenant's graph, one at a time per tenant, refused while a reset holds the graph."""
+    if refusal := guard.refuse_admission(key):
+        raise HTTPException(*refusal)
+    # No await between the check and queueing on the lock, and the lock is first come, first served: a reset
+    # accepted after this check queues behind this write, so the write finishes before the graph is replaced.
+    async with _lock(key, "write"):
+        return await asyncio.to_thread(work, *args)
 
 
 def _entity_id(value: str) -> str:
@@ -198,16 +210,18 @@ def approvals(tenant: Tenant = None, status: Literal["PENDING_L3", "APPROVED", "
 
 
 @app.post("/api/approvals/{request_id}/approve")
-def approve(request_id: str, body: Approval, tenant: Tenant = None) -> dict:
-    key = _key(tenant)
-    if refusal := guard.refuse_admission(key):
-        raise HTTPException(*refusal)
-    graph, rid = get_db().select_graph(key), _entity_id(request_id)
-    try:
-        approved = q.approve_action(graph, rid, _entity_id(body.approver_id))
-    except ValueError as exc:
-        raise HTTPException(409, str(exc)) from None
-    return {**approved, "playbook": memory.learn_playbook(graph, rid)}
+async def approve(request_id: str, body: Approval, tenant: Tenant = None) -> dict:
+    key, rid, approver = _key(tenant), _entity_id(request_id), _entity_id(body.approver_id)
+    graph = get_db().select_graph(key)
+
+    def sign_off() -> dict:
+        try:
+            approved = q.approve_action(graph, rid, approver)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+        return {**approved, "playbook": memory.learn_playbook(graph, rid)}
+
+    return await _write(key, sign_off)
 
 
 @app.get("/api/queue")
@@ -236,9 +250,10 @@ def eval_results() -> dict:
 
 
 @app.post("/api/alerts")
-def raise_alert(body: NewAlert, tenant: Tenant = None) -> dict:
+async def raise_alert(body: NewAlert, tenant: Tenant = None) -> dict:
+    key, subject = _key(tenant), _entity_id(body.subject_id)
     try:
-        return co.raise_alert(_graph(tenant), _entity_id(body.subject_id), body.rule, body.priority)
+        return await _write(key, co.raise_alert, get_db().select_graph(key), subject, body.rule, body.priority)
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from None
 
@@ -248,9 +263,7 @@ async def reset_queue(tenant: Tenant = None) -> dict:
     key = _key(tenant)
     if _lock(key, "drain").locked():
         raise HTTPException(409, "hunters are draining this tenant's queue")
-    if refusal := guard.refuse_admission(key):
-        raise HTTPException(*refusal)
-    return {"reset": await asyncio.to_thread(co.reset_queue, get_db().select_graph(key))}
+    return {"reset": await _write(key, co.reset_queue, get_db().select_graph(key))}
 
 
 @app.get("/api/queue/drain")
@@ -302,27 +315,24 @@ async def mutate(body: Mutation, tenant: Tenant = None) -> dict:
         raise HTTPException(422, f"{body.kind} needs {', '.join(missing)}")
     args = [_entity_id(v) if f in ID_FIELDS else round(v * 100) if f == "amount_usd" else v
             for f in fields for v in [getattr(body, f)]]
-    if refusal := guard.refuse_admission(key):
-        raise HTTPException(*refusal)
-    async with _lock(key, "mutation"):
-        try:
-            return {"kind": body.kind, **await asyncio.to_thread(write, get_db().select_graph(key), *args)}
-        except ValueError as exc:
-            raise HTTPException(404, str(exc)) from None
+    try:
+        return {"kind": body.kind, **await _write(key, write, get_db().select_graph(key), *args)}
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from None
 
 
 @app.post("/api/reset")
 async def reset(tenant: Tenant = None) -> dict:
     """Restore the tenant's graph from its pristine copy, once nothing is using it. From the moment it is accepted
-    until it ends, no investigation, drain, mutation or approval starts on that graph; a mutation already under way
-    finishes first."""
+    until it ends, no investigation, drain or write (mutation, approval, alert, queue reset) starts on that graph;
+    a write admitted before it finishes first."""
     key = _key(tenant)
     if _lock(key, "drain").locked():
         raise HTTPException(409, "hunters are draining this tenant's queue")
     if refusal := guard.refuse_reset(key):
         raise HTTPException(*refusal)
     with guard.reset(key):
-        async with _lock(key, "mutation"):
+        async with _lock(key, "write"):
             try:
                 restored = await asyncio.to_thread(tenants.reset, key.split(":", 1)[1])
             except LookupError as exc:

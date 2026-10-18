@@ -38,7 +38,7 @@ open http://localhost:8000            # or visit it in a browser
 5. **Eval** tab: every measured result below, read from `backend/eval/results.json`.
 
 ```bash
-docker compose exec app python -m pytest backend/tests -q     # 127 tests, about a minute
+docker compose exec app python -m pytest backend/tests -q     # 137 tests, about a minute
 ```
 
 ## How it works
@@ -267,7 +267,12 @@ started from (`test_a_change_during_the_investigation_is_not_cached`), and a sig
 under the request changed (`test_sign_off_is_refused_once_the_evidence_changed`). The sign-off commits in one
 write that requires the graph to still be at the revision whose evidence it checked, so neither a change during
 the check nor a second approver racing it can freeze on stale evidence or twice
-(`test_evidence_removed_while_sign_off_checks_it_freezes_nothing`, `test_racing_sign_offs_approve_once`).
+(`test_evidence_removed_while_sign_off_checks_it_freezes_nothing`, `test_racing_sign_offs_approve_once`). The
+request itself is created in one write, with its target and exclusion links and the evidence it rests on: what
+the verdict's facts depend on, unchanged since the investigation started. So it can't be signed off half-built
+or with only its targets checked (`test_a_request_is_complete_from_the_moment_it_can_be_signed_off`,
+`test_a_request_rests_on_its_route_from_the_moment_it_is_filed`), and a request missing a target link freezes
+nothing (`test_a_request_missing_a_target_link_freezes_nothing`).
 
 **Procedural memory: playbooks.** When a human approves a freeze, the run's tool steps become a `:Playbook` with
 each argument replaced by the role it played (the subject, the sanctioned end of the route, the accounts around
@@ -478,9 +483,11 @@ agent can call the same 11 tools (`python -m backend.app.mcp_server`; set `FINTR
 ### Public demo
 
 The live demo runs with `PUBLIC_DEMO=1`. Every visitor shares each tenant's graph, so changes are applied one at a
-time and everyone sees them; *Reset tenant* restores the seeded data. It waits until no investigation or change is
-using the graph, and until it is done the tenant refuses new investigations, drains, changes and approvals
-(`test_a_reset_behind_a_mutation_holds_off_new_work_until_it_ends`). Model investigations are capped per hour, overall and per visitor (a count of investigations, not of tokens or
+time and everyone sees them; *Reset tenant* restores the seeded data. It waits until no investigation is running
+and any write it accepted earlier has finished, and until it is done the tenant refuses new investigations,
+drains and writes: changes, approvals, alerts and queue resets
+(`test_a_reset_behind_a_mutation_holds_off_new_work_until_it_ends`,
+`test_a_reset_waits_for_a_write_admitted_before_it`). Model investigations are capped per hour, overall and per visitor (a count of investigations, not of tokens or
 spend: one can make several model requests; past the cap an investigation uses the
 deterministic planner and says so), concurrent investigations are bounded, and hunters stay deterministic. See
 `backend/app/demo.py` and the `DEMO_*` settings in `.env.example`.
@@ -496,6 +503,9 @@ deterministic planner.
 - **Simulated roles.** The approver is chosen in the browser; nothing here authenticates a compliance officer or
   should be read as production authorization.
 - **Tenants are demo data isolation, not access control**, and the public demo shares one graph per tenant.
+- **Outside the agent.** A freeze request filed by another MCP client, such as Cursor, rests on its target
+  accounts only, because the server doesn't know which results that client relied on. The reset hold covers the
+  HTTP API, not a local MCP client writing to the same graph.
 - **Planted cases.** The controlled cases were designed for this evaluation; 16 cases is a small sample, and the
   LLM numbers come from one model at temperature 0, which still varies run to run.
 - **Retrieval.** See above: on IBM instances the graph tools' output limits cost recall against plain lookups.

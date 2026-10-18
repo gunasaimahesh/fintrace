@@ -796,13 +796,18 @@ def pending_requests(graph: Graph, target_ids: list[str]) -> list[dict]:
 
 def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_ids: list[str], action_type: str,
                    policy_id: str, approver_id: str, reason: str, requested_by: str,
-                   now: int | None = None, claim: Claim | None = None) -> dict:
-    """Create a pending approval request. Raises ValueError with an explanation if it can't be routed, or if
-    `claim` (the hunter's hold on its alert) no longer holds."""
+                   now: int | None = None, claim: Claim | None = None, evidence_rev: int | None = None,
+                   depends_on: list[str] | None = None) -> dict:
+    """Create a pending approval request, complete in one write: its case, policy, approver, target and exclusion
+    links, and the evidence sign-off will check (the targets plus `depends_on`, unchanged since `evidence_rev`, by
+    default the current revision). Raises ValueError with an explanation if it can't be routed, or if `claim` (the
+    hunter's hold on its alert) no longer holds."""
     now = now or int(time.time())
     action_type = action_type.upper()
     if action_type not in FREEZE_ACTIONS:
         raise ValueError(f"action_type must be one of {list(FREEZE_ACTIONS)}")
+    if not target_ids:
+        raise ValueError("a request needs at least one account to freeze")
     if overlap := sorted(set(target_ids) & set(excluded_ids)):
         raise ValueError(f"{overlap} are both targeted and excluded")
     entities = describe_entities(graph, [*target_ids, *excluded_ids])
@@ -842,7 +847,8 @@ def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_i
     rid = f"apr-{uuid.uuid4().hex[:8]}"
     fence, owned = claim_fence(claim)
     # Checks and CREATE stay in one write query: FalkorDB runs writes one at a time, so two investigations
-    # racing to freeze the same account cannot both file, and a hunter whose claim lapsed files nothing.
+    # racing to freeze the same account cannot both file, a hunter whose claim lapsed files nothing, and no
+    # one can sign off a request before its links and evidence are there.
     rows = graph.query(fence + """
         MATCH (p:Entity {id: $policy}), (e:Entity {id: $approver})
         OPTIONAL MATCH (other:ApprovalRequest)
@@ -850,35 +856,41 @@ def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_i
         OPTIONAL MATCH (other)-[:FOR_CASE]->(oc:Case)
         WITH p, e, collect(CASE WHEN other IS NULL THEN NULL
                                 ELSE [other.id, oc.id, [t IN other.target_ids WHERE t IN $targets]] END) AS clashes
-        FOREACH (_ IN CASE WHEN size(clashes) = 0 THEN [1] ELSE [] END |
+        UNWIND $targets AS tid
+        OPTIONAL MATCH (t:Entity {id: tid}) WHERE t:Account
+        WITH p, e, clashes, collect(t) AS targets
+        UNWIND CASE WHEN size($excluded) = 0 THEN [NULL] ELSE $excluded END AS xid
+        OPTIONAL MATCH (x:Entity {id: xid})
+        WITH p, e, clashes, targets, collect(x) AS excluded
+        FOREACH (_ IN CASE WHEN size(clashes) = 0 AND size(targets) = size($targets)
+                                AND size(excluded) = size($excluded) THEN [1] ELSE [] END |
             MERGE (c:Entity:Case {id: $case})
             ON CREATE SET c.status = 'OPEN', c.created_at = $now, c.subject_id = $subject
             CREATE (r:Entity:ApprovalRequest {id: $rid, status: 'PENDING_L3', action_type: $action, reason: $reason,
                                               created_at: $now, requested_by: $by, target_ids: $targets,
                                               excluded_ids: $excluded, required_clearance: $required,
-                                              evidence_rev: $rev, depends_on: $targets})
-            CREATE (r)-[:FOR_CASE]->(c), (r)-[:UNDER_POLICY]->(p), (r)-[:ROUTED_TO]->(e))
-        RETURN clashes
+                                              evidence_rev: $rev, depends_on: $deps})
+            CREATE (r)-[:FOR_CASE]->(c), (r)-[:UNDER_POLICY]->(p), (r)-[:ROUTED_TO]->(e)
+            FOREACH (t IN targets | CREATE (r)-[:TARGETS]->(t))
+            FOREACH (x IN excluded | CREATE (r)-[:EXCLUDES]->(x)))
+        RETURN clashes, size(targets) = size($targets) AND size(excluded) = size($excluded)
     """, {"case": case_id, "now": now, "subject": target_ids[0], "policy": policy_id, "approver": approver_id,
           "rid": rid, "action": action_type, "reason": reason, "by": requested_by, "targets": target_ids,
-          "excluded": excluded_ids, "required": required, "rev": current_rev(graph), **owned}).result_set
+          "excluded": excluded_ids, "required": required,
+          "rev": current_rev(graph) if evidence_rev is None else evidence_rev,
+          "deps": list(dict.fromkeys([*target_ids, *(depends_on or [])])), **owned}).result_set
     if not rows:
         raise ValueError(f"{requested_by} no longer holds the claim on {claim.alert_id} (its lease ran out or another "
                          f"hunter took the alert over), so no request was filed" if claim
                          else f"{policy_id} or {approver_id} is no longer in the graph")
-    clashes = rows[0][0]
+    clashes, all_there = rows[0]
     if clashes:
         listed = "; ".join(f"{', '.join(overlap)} in {other} ({case})" for other, case, overlap in clashes)
         raise ValueError(f"already awaiting sign-off: {listed}. An account can be in only one pending request: "
                          f"leave those out and request the rest, if any.")
-    for rel, ids in (("TARGETS", target_ids), ("EXCLUDES", excluded_ids)):
-        if ids:
-            graph.query(f"""
-                MATCH (r:Entity {{id: $rid}})
-                UNWIND $ids AS eid
-                MATCH (t:Entity {{id: eid}})
-                CREATE (r)-[:{rel}]->(t)
-            """, {"rid": rid, "ids": ids})
+    if not all_there:
+        raise ValueError("some target accounts or excluded entities left the graph while the request was filed, "
+                         "so nothing was filed")
     return {"request_id": rid, "status": "PENDING_L3", "created": True, "case_id": case_id,
             "target_ids": target_ids, "excluded_ids": excluded_ids, "policy_id": policy_id,
             "approver": {"id": approver_id, "name": name, "clearance": clearance}, "entities": entities}
@@ -887,10 +899,11 @@ def request_action(graph: Graph, case_id: str, target_ids: list[str], excluded_i
 def approve_action(graph: Graph, request_id: str, approver_id: str, now: int | None = None) -> dict:
     """An approver signs off a pending request; its target accounts are frozen.
 
-    A request whose evidence changed after it was raised becomes STALE instead. The evidence is checked at the
-    current revision, and the sign-off commits in one write only if the graph is still at that revision, the request
-    is still pending and the approver still has the clearance the policy requires; otherwise everything is read and
-    checked again. Freezing changes status only, so it is not evidence and doesn't bump the revision.
+    A request whose evidence changed after it was raised, or that is missing a link to one of its targets, becomes
+    STALE instead. The evidence is checked at the current revision, and the sign-off commits in one write only if
+    the graph is still at that revision, the request is still pending with every target linked, and the approver
+    still has the clearance the policy requires; otherwise everything is read and checked again. Freezing changes
+    status only, so it is not evidence and doesn't bump the revision.
     """
     now = now or int(time.time())
     for _ in range(APPROVAL_TRIES):
@@ -898,27 +911,36 @@ def approve_action(graph: Graph, request_id: str, approver_id: str, now: int | N
             MATCH (r:Entity {id: $rid})-[:UNDER_POLICY]->(p:Entity)
             MATCH (e:Entity {id: $approver}) WHERE e:Employee
             OPTIONAL MATCH (meta:Meta {key: 'dataset'})
+            OPTIONAL MATCH (r)-[:TARGETS]->(t:Account)
             RETURN r:ApprovalRequest, r.status, p.required_clearance_level_for_freeze, p.required_clearance_for_freeze,
-                   e.clearance_level, e.clearance, r.depends_on, r.evidence_rev, coalesce(meta.rev, 0)
+                   e.clearance_level, e.clearance, r.depends_on, r.evidence_rev, coalesce(meta.rev, 0),
+                   r.target_ids, collect(t.id)
         """, {"rid": request_id, "approver": approver_id}).result_set
         if not rows or not rows[0][0]:
             raise ValueError(f"no approval request {request_id} (or {approver_id} is not an employee)")
-        _, status, required_level, required, level, clearance, depends_on, evidence_rev, rev = rows[0]
+        _, status, required_level, required, level, clearance, depends_on, evidence_rev, rev, targets, linked = rows[0]
         if status != "PENDING_L3":
             raise ValueError(f"{request_id} is already {status}")
         if (level or 0) < (required_level or 0):
             raise ValueError(f"{approver_id} has {clearance}; this action requires {required}")
+        reasons = []
+        if unlinked := [t for t in targets or [] if t not in linked]:
+            several = len(unlinked) > 1
+            reasons.append(f"its link{'s' if several else ''} to target{'s' if several else ''} {_listed(unlinked)} "
+                           f"{'are' if several else 'is'} missing")
         if depends_on and evidence_rev is not None:
             missing, touched = changed_dependencies(graph, depends_on, evidence_rev)
             if missing or touched:
-                reason = describe_change(missing, touched, evidence_rev)
-                if graph.query("""
-                    MATCH (r:Entity {id: $rid}) WHERE r.status = 'PENDING_L3'
-                    SET r.status = 'STALE', r.stale_reason = $reason, r.stale_at = $now
-                    RETURN r.id
-                """, {"rid": request_id, "reason": reason, "now": now}).result_set:
-                    raise ValueError(f"{request_id} is now STALE: {reason}. Re-investigate before freezing.")
-                continue
+                reasons.append(describe_change(missing, touched, evidence_rev))
+        if reasons:
+            reason = "; ".join(reasons)
+            if graph.query("""
+                MATCH (r:Entity {id: $rid}) WHERE r.status = 'PENDING_L3'
+                SET r.status = 'STALE', r.stale_reason = $reason, r.stale_at = $now
+                RETURN r.id
+            """, {"rid": request_id, "reason": reason, "now": now}).result_set:
+                raise ValueError(f"{request_id} is now STALE: {reason}. Re-investigate before freezing.")
+            continue
         # The revision is filtered as a projected value: FalkorDB 4.22 moves `WITH meta WHERE <test on meta>`
         # inside the OPTIONAL MATCH, which then keeps the row with meta = NULL instead of dropping it.
         signed = graph.query("""
@@ -928,13 +950,13 @@ def approve_action(graph: Graph, request_id: str, approver_id: str, now: int | N
             MATCH (e:Entity {id: $approver})
             WHERE r:ApprovalRequest AND r.status = 'PENDING_L3' AND e:Employee
               AND coalesce(e.clearance_level, 0) >= coalesce(p.required_clearance_level_for_freeze, 0)
+            OPTIONAL MATCH (r)-[:TARGETS]->(t:Account)
+            WITH r, e, collect(DISTINCT t) AS targets
+            WHERE size(targets) = size(r.target_ids) AND all(id IN r.target_ids WHERE any(t IN targets WHERE t.id = id))
             SET r.status = 'APPROVED', r.approved_by = $approver, r.approved_at = $now, r.approved_rev = $rev
             CREATE (e)-[:SIGNED_OFF {at: $now}]->(r)
-            WITH r
-            OPTIONAL MATCH (r)-[:TARGETS]->(t:Account)
-            FOREACH (_ IN CASE WHEN t IS NULL THEN [] ELSE [1] END |
-                SET t.status = 'FROZEN', t.frozen_at = $now, t.frozen_by = $rid)
-            RETURN r.id, collect(t.id)
+            FOREACH (t IN targets | SET t.status = 'FROZEN', t.frozen_at = $now, t.frozen_by = $rid)
+            RETURN r.id, [t IN targets | t.id]
         """, {"rid": request_id, "approver": approver_id, "now": now, "rev": rev}).result_set
         if signed:
             spared = graph.ro_query("MATCH (r:Entity {id: $rid})-[:EXCLUDES]->(x) RETURN collect(x.id)",

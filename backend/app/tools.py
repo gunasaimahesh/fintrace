@@ -41,9 +41,13 @@ class ToolError(ValueError):
 
 @dataclass
 class ToolContext:
+    """`evidence`, set by the agent, says what a freeze request filed now rests on: the revision the investigation
+    started from and the dependencies of the facts its verdict rests on so far. Other MCP clients' requests rest on
+    their target accounts."""
     graph: Graph
     worker_id: str = "analyst"
     claim: Claim | None = None
+    evidence: Callable[[], tuple[int | None, list[str]]] | None = None
 
 
 class RecordingGraph:
@@ -545,9 +549,10 @@ def request_action(ctx: ToolContext, g: RecordingGraph, ev: Evidence, target_ids
     reason = str(reason or "").strip()[:1000]
     if not reason:
         raise ToolError("reason is required")
+    rev, depends_on = ctx.evidence() if ctx.evidence else (None, [])
     try:
         result = q.request_action(g, case_id, targets, excluded, action_type, policy_id, approver_id, reason,
-                                  requested_by=ctx.worker_id, claim=ctx.claim)
+                                  requested_by=ctx.worker_id, claim=ctx.claim, evidence_rev=rev, depends_on=depends_on)
     except ValueError as exc:
         raise ToolError(str(exc)) from None
     rid = result["request_id"]

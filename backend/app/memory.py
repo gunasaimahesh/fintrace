@@ -415,15 +415,3 @@ def learn_playbook(graph: Graph, request_id: str, now: float | None = None) -> d
           "required": required, "fingerprint": json.dumps(procedure["fingerprint"]), "now": now or time.time(),
           "rid": request_id, "approver": approver})
     return next(p for p in q.playbooks_for(graph, required) if p["id"] == playbook_id)
-
-
-def attach_request_evidence(graph: Graph, request_id: str, rev: int, depends_on: list[str],
-                            claim: Claim | None = None) -> bool:
-    """Pin an approval request to the evidence behind it, so sign-off can refuse it once that evidence changes.
-    False, changing nothing, if `claim` no longer holds."""
-    fence, owned = claim_fence(claim)
-    return bool(graph.query(fence + """
-        MATCH (r:ApprovalRequest {id: $rid})
-        SET r.evidence_rev = $rev, r.depends_on = $deps
-        RETURN r.id
-    """, {"rid": request_id, "rev": rev, "deps": list(dict.fromkeys(depends_on)), **owned}).result_set)

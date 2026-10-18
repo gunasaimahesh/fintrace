@@ -100,9 +100,8 @@ def test_writes_under_a_claim_that_passed_to_another_hunter_change_nothing(fresh
         q.request_action(graph, "case-lost", [s.NOVA_OPS], [], "FREEZE", s.POLICY, s.PRIYA, "late", requested_by="old",
                          claim=lost)
     assert memory.link_case(graph, "case-held", [s.VORTEX], "old", claim=lost) is None
-    filed = q.request_action(graph, "case-held", [s.NOVA_OPS], [], "FREEZE", s.POLICY, s.PRIYA, "held",
-                             requested_by="new", claim=held)
-    assert not memory.attach_request_evidence(graph, filed["request_id"], 0, [s.VORTEX], claim=lost)
+    q.request_action(graph, "case-held", [s.NOVA_OPS], [], "FREEZE", s.POLICY, s.PRIYA, "held", requested_by="new",
+                     claim=held)
     assert graph.ro_query("""
         OPTIONAL MATCH (c:Case {id: 'case-lost'})
         OPTIONAL MATCH (:Case {id: 'case-held'})-[e:EVIDENCE]->()
@@ -157,6 +156,43 @@ def test_a_hunter_whose_claim_passed_on_mid_run_publishes_nothing_and_the_new_ow
                              "RETURN collect(DISTINCT f.episode_id)", {"x": alert["subject_id"]}).result_set[0][0]
     assert current == [second["episode_id"]]
     assert [e["id"] for e in memory.recall(graph, alert["subject_id"])["episodes"]] == [second["episode_id"]]
+
+
+def test_a_hunter_whose_claim_passes_on_just_after_it_files_leaves_one_complete_request(fresh_key, monkeypatch):
+    graph = get_db().select_graph(fresh_key)
+    call, gate = agent.Investigation.call, {}
+
+    async def call_then_pause(inv, tool, args, thought=None):
+        envelope = await call(inv, tool, args, thought)
+        if tool == "request_action" and inv.worker_id == "old":
+            gate["filed"].set()
+            await gate["resume"].wait()
+        return envelope
+
+    monkeypatch.setattr(agent.Investigation, "call", call_then_pause)
+
+    async def scenario():
+        gate.update(filed=asyncio.Event(), resume=asyncio.Event())
+        alert = await asyncio.to_thread(co.claim, graph, "old")
+        old = asyncio.create_task(co.work(fresh_key, "old", alert))
+        await gate["filed"].wait()
+        await asyncio.to_thread(co.sweep, graph, time.time() + LEASE_SECONDS + 1)
+        taken = await asyncio.to_thread(co.claim, graph, "new")
+        gate["resume"].set()
+        return await old, await co.work(fresh_key, "new", taken)
+
+    first, second = asyncio.run(scenario())
+    assert not first["committed"] and second["committed"] and second["verdict"] == "SUSPICIOUS"
+    [(request, by, targets, linked, depends_on)] = graph.ro_query("""
+        MATCH (r:ApprovalRequest)
+        OPTIONAL MATCH (r)-[:TARGETS]->(t:Account)
+        RETURN r.id, r.requested_by, r.target_ids, collect(t.id), r.depends_on
+    """).result_set
+    assert by == "old" and sorted(linked) == sorted(targets)
+    pinned = graph.ro_query("MATCH (n:Sanctioned) WHERE n.id IN $deps RETURN collect(n.id)",
+                            {"deps": depends_on}).result_set[0][0]
+    assert pinned and any("|" in d for d in depends_on), "the request does not rest on the route it was filed on"
+    assert q.approve_action(graph, request, s.PRIYA)["frozen"] == sorted(targets)
 
 
 def test_a_hunter_stops_once_it_notices_its_lease_is_gone(fresh_key, monkeypatch):
