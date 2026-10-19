@@ -358,8 +358,8 @@ python -m backend.eval.run_eval --planner fallback --repeats 3
 LLM_REQUESTS_PER_MINUTE=12 python -m backend.eval.run_eval --planner llm --repeats 3
 ```
 
-**LLM planner** (3 repeats. Repeats 1 and 2 ran on commit `d1384dd` with uncommitted backend changes, on the
-provider's free tier; repeat 3 and all three baseline repeats ran on `3b3c5c7`. Revisit was added from repeat 2,
+**LLM planner** (3 repeats. Repeats 1 and 2 ran on commit `05505f5` with uncommitted backend changes, on the
+provider's free tier; repeat 3 and all three baseline repeats ran on `7502e3e`. Revisit was added from repeat 2,
 and repeat 2 stopped at the free-tier daily quota before its last Revisit run, a demo subject):
 
 | Condition | Detection | Positives | Negatives | Unknown IDs | Out of budget | Demo | Tool calls | Verdict at call | LLM requests | LLM tokens | Failures |
@@ -389,13 +389,13 @@ provider latency and our 12-requests-a-minute limit, fell on 11 of the 12 runs a
 43.9 s cold, 64.9 s warm). With the deterministic planner the playbook runs the same tools as cold, by
 construction.
 
-The LLM runs predate two sets of fixes: `bf9e615` scopes verdicts to the subject's own facts, treats a sanctioned
-subject as direct exposure, and fences sign-off and hunters' writes; `eb7b3df` files each freeze request complete,
+The LLM runs predate two sets of fixes: `89f0591` scopes verdicts to the subject's own facts, treats a sanctioned
+subject as direct exposure, and fences sign-off and hunters' writes; `e923d14` files each freeze request complete,
 with the evidence it rests on, in one write. No saved run explored an account other than its subject or had a
 sanctioned subject, so none of their verdicts would change, and the prompt and tool outputs the model sees are
 unchanged.
 
-**Deterministic planner** (3 repeats, on `eb7b3df`, the deployed code):
+**Deterministic planner** (3 repeats, on `e923d14`, the deployed code):
 
 | Condition | Detection | Positives | Negatives | Unknown IDs | Out of budget | Demo | Tool calls | Verdict at call | Failures |
 |---|---|---|---|---|---|---|---|---|---|
@@ -454,7 +454,7 @@ python -m backend.eval.contention --runs 5
 5 runs of 20 hunters racing for 200 alerts (0.3 s leases, 8% of claims crash, 6% stall past their lease, 6% fail):
 **0 invariant violations** (no alert lost, none completed twice, attempt numbers unbroken), 69 late commits
 refused and 0 accepted, 102 crashed claims recovered, 235.1 (174.1–239.9) alerts/s; final statuses: 993
-completed, 7 failed after three attempts. Measured on `bf9e615`, with the lease checks and claim fencing.
+completed, 7 failed after three attempts. Measured on `89f0591`, with the lease checks and claim fencing.
 
 ## Running it
 

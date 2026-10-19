@@ -51,7 +51,7 @@
     },
     "nodes": 59149,
     "edges": 513116,
-    "commit": "eb7b3df",
+    "commit": "e923d14",
     "uncommitted_backend_changes": false
    },
    "stages": [
@@ -73,7 +73,7 @@
      ],
      "runs": 234,
      "stopped_early": null,
-     "commit": "eb7b3df",
+     "commit": "e923d14",
      "uncommitted_backend_changes": false
     }
    ],
@@ -25241,12 +25241,12 @@
     },
     "nodes": 59149,
     "edges": 513116,
-    "commit": "3b3c5c7",
+    "commit": "7502e3e",
     "uncommitted_backend_changes": false
    },
    "stages": [
     {
-     "commit": "d1384dd",
+     "commit": "05505f5",
      "uncommitted_backend_changes": true,
      "started_at": "2026-10-17T13:33:57Z",
      "finished_at": "2026-10-17T13:53:23Z",
@@ -25265,7 +25265,7 @@
      "stopped_early": null
     },
     {
-     "commit": "d1384dd",
+     "commit": "05505f5",
      "uncommitted_backend_changes": true,
      "started_at": "2026-10-17T13:56:59Z",
      "finished_at": "2026-10-17T14:16:16Z",
@@ -25285,7 +25285,7 @@
      "stopped_early": "after 55 runs: The LLM failed (daily quota reached: GenerateRequestsPerDayPerProjectPerModel-FreeTier). The deterministic planner continues from the 2 tool results so far."
     },
     {
-     "commit": "3b3c5c7",
+     "commit": "7502e3e",
      "uncommitted_backend_changes": false,
      "started_at": "2026-10-17T16:41:07Z",
      "finished_at": "2026-10-17T16:58:47Z",
@@ -25319,7 +25319,7 @@
      ],
      "runs": 66,
      "stopped_early": null,
-     "commit": "3b3c5c7",
+     "commit": "7502e3e",
      "uncommitted_backend_changes": false
     }
    ],
@@ -51505,7 +51505,7 @@
     },
     "nodes": 59149,
     "edges": 513116,
-    "commit": "990abfa",
+    "commit": "4b20902",
     "uncommitted_backend_changes": false
    },
    "seeds": {
@@ -54555,7 +54555,7 @@
     },
     "nodes": 59149,
     "edges": 513116,
-    "commit": "990abfa",
+    "commit": "4b20902",
     "uncommitted_backend_changes": false
    },
    "seeds": {
