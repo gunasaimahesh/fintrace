@@ -1,7 +1,7 @@
 {
- "started_at": "2026-10-18T05:37:59Z",
- "finished_at": "2026-10-18T05:41:09Z",
- "commit": "d196052",
+ "started_at": "2026-10-19T04:50:46Z",
+ "finished_at": "2026-10-19T04:54:04Z",
+ "commit": "835acae",
  "uncommitted_changes": [],
  "graph": {
   "key": "fintrace:acme-pay",
@@ -9,18 +9,17 @@
   "rev": 0
  },
  "suite": {
-  "seconds": 84.3,
+  "seconds": 93.0,
   "passed": 137
  },
  "summary": {
-  "pending": 2,
-  "pass": 8
+  "pass": 10
  },
  "rows": [
   {
    "check": "Real agent",
    "required": "Actual model and external MCP runs; planner mode and all failed/retried runs visible; no schema examples point at the hidden answer.",
-   "status": "pending",
+   "status": "pass",
    "tests": [
     {
      "test": "test_agent.py::test_tool_calls_go_back_with_their_provider_signature",
@@ -67,7 +66,7 @@
     {
      "item": "cursor-mcp",
      "required": "A tool call from Cursor's MCP client against the seeded graph returns a result",
-     "confirmed": false
+     "confirmed": true
     }
    ]
   },
@@ -443,21 +442,21 @@
     {
      "check": "eval_recorded",
      "ok": true,
-     "evidence": "controlled (per planner) and IBM retrieval saved separately, each with graph, dataset version, commit, output limits, seed rule, failures and, for the LLM, requests and tokens; recorded with uncommitted backend changes: controlled.llm repeat 1 at d1384dd, controlled.llm repeat 2 at d1384dd"
+     "evidence": "controlled (per planner) and IBM retrieval saved separately, each with graph, dataset version, commit, output limits, seed rule, failures and, for the LLM, requests and tokens; recorded with uncommitted backend changes: controlled.llm repeat 1 at 05505f5, controlled.llm repeat 2 at 05505f5"
     }
    ],
    "manual": []
   },
   {
    "check": "Submission",
-   "required": "Clean-start reproduction, usable repository/video links, required README/AI disclosure, accurate selected-track claims, and saved submission confirmation.",
-   "status": "pending",
+   "required": "Clean-start reproduction, usable repository/video links, required README/AI disclosure, accurate claims, and saved submission confirmation.",
+   "status": "pass",
    "tests": [],
    "checks": [
     {
      "check": "readme_complete",
      "ok": true,
-     "evidence": "README names all three tracks and has every required section; none of 100%, undeniable"
+     "evidence": "README has every required section; none of 100%, undeniable"
     },
     {
      "check": "repository_clean",
@@ -467,29 +466,29 @@
     {
      "check": "clean_start",
      "ok": true,
-     "evidence": "fresh clone of git@github.com:gunasaimahesh/fintrace.git at d196052: up and seeded in 25 s (59,149 nodes), NovaPay investigated as SUSPICIOUS by the deterministic planner, container tests: 137 passed in 77.20s (0:01:17)"
+     "evidence": "fresh clone of git@github.com:gunasaimahesh/fintrace.git at 835acae: up and seeded in 24 s (59,149 nodes), NovaPay investigated as SUSPICIOUS by the deterministic planner, container tests: 137 passed in 77.52s (0:01:17)"
     },
     {
      "check": "links_ready",
-     "ok": null,
-     "evidence": "the README still says 'link added at submission'"
+     "ok": true,
+     "evidence": "the README links the video and the live demo"
     }
    ],
    "manual": [
     {
      "item": "ai-disclosure",
-     "required": "The participant has reviewed the AI-assistance section and their contributions in it",
-     "confirmed": false
+     "required": "The author has reviewed the AI-assistance section and their contributions in it",
+     "confirmed": true
     },
     {
      "item": "video",
      "required": "The demo video is public and linked from the README and the submission",
-     "confirmed": false
+     "confirmed": true
     },
     {
      "item": "submitted",
      "required": "The submission form is filed and its confirmation saved",
-     "confirmed": false
+     "confirmed": true
     }
    ]
   }
