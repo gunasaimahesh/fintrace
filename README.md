@@ -508,10 +508,10 @@ LLM_REQUESTS_PER_MINUTE=12 python -m backend.eval.run_eval --planner llm --repea
 
 | Condition | Correct, LLM | Correct, deterministic | LLM requests | LLM tokens |
 |---|---|---|---|---|
-| Cold: the agent on a fresh graph | 48/48 | 48/48 | 2 (2–10) | 9,198 (8,199–69,178) |
-| Warm: after learning the NovaPay playbook | 48/48 | 48/48 | 2 (1–10) | 9,203.5 (5,543–66,404) |
-| Revisit: same subject, right after cold | 32/32 | 48/48 | 1 (1–6) | 5,281.5 (4,303–45,376) |
-| Baseline: one-entity lookups, same budget | 36/48 | 36/48 | 8 (2–14) | 11,149 (1,502–31,203) |
+| Cold | 48/48 | 48/48 | 2 (2–10) | 9,198 (8,199–69,178) |
+| Warm | 48/48 | 48/48 | 2 (1–10) | 9,203.5 (5,543–66,404) |
+| Revisit | 32/32 | 48/48 | 1 (1–6) | 5,281.5 (4,303–45,376) |
+| Baseline | 36/48 | 36/48 | 8 (2–14) | 11,149 (1,502–31,203) |
 
 - These are 16 cases designed for this evaluation, on synthetic data, with three repeats per planner. The LLM
   numbers come from one model (`gemini-3.1-flash-lite`) at temperature 0.
