@@ -735,18 +735,26 @@ frontend/           React + Vite UI
 scripts/            how the IBM slice was built from the published dataset
 ```
 
-## AI assistance
+## AI assistance and my contribution
 
-FinTrace was built with substantial AI assistance:
+I used AI coding agents extensively throughout FinTrace's development. They wrote most of the implementation, tests
+and documentation, and assisted with planning, debugging and technical reviews.
 
-- Most of the code, tests and documentation were written by LLMs working as coding agents in Cursor.
-- The plans were drafted and reviewed across several LLMs, each reviewing the others' proposals.
-- The author chose the problem and what to build, set the scope and constraints, ran the review rounds
-  between the models and decided between their proposals, and set up the environment (FalkorDB, the LLM provider,
-  the MCP server in Cursor).
+My contribution was directing the project and taking it through repeated review, repair and demonstration:
 
-Every measured number in this README is produced by a command in this repository, and the saved results keep the
-failures.
+- I chose the problem and set the scope and priorities across all three parts: acting on connected data, memory and
+  coordination, and company knowledge.
+- I set model-call cost constraints and made decisions about where the demo should use the LLM or the deterministic
+  planner.
+- I had other LLMs review the plans and the implementation, decided between their proposals, asked for additional
+  edge-case checks, and directed the follow-up fixes and verification.
+- I worked through the application myself, questioned unclear behavior, and recorded the end-to-end demonstration in
+  my own voice.
+- I reviewed and refined the submission materials so the demonstrated behavior, measured results and limitations
+  were presented accurately.
+
+Technical verification was also AI-assisted. The repository includes tests, saved evaluation results, failures and
+reproduction commands so reviewers can inspect the evidence behind its claims.
 
 ## Data and license
 
