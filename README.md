@@ -12,7 +12,8 @@ investigation starts from what is already known and notices when the evidence ch
 The work falls into three parts: [acting on connected data](#acting-on-connected-data),
 [memory and coordination](#memory-and-coordination) and [company knowledge](#company-knowledge).
 
-- **Demo video:** *link added at submission*
+- **Demo video:** [Watch on YouTube](https://www.youtube.com/watch?v=zV04hk4sivE)
+- **Blog post:** [How FinTrace detects stale agent memory with FalkorDB](https://medium.com/@gunasaimahesh/how-fintrace-detects-stale-agent-memory-with-falkordb-c1125c90627c)
 - **Live demo:** [app-production-1451.up.railway.app](https://app-production-1451.up.railway.app) (shared demo graph; see [Public demo](#public-demo))
 - **Repository:** https://github.com/gunasaimahesh/fintrace
 
